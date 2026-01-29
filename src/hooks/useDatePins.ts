@@ -11,10 +11,10 @@ export function useDatePins() {
       title: formData.title,
       notes: formData.notes,
       link: formData.link,
-      location: formData.locationName ? {
+      location: formData.locationName && formData.locationLat && formData.locationLng ? {
         name: formData.locationName,
-        lat: 40.7128 + (Math.random() - 0.5) * 0.1,
-        lng: -74.0060 + (Math.random() - 0.5) * 0.1,
+        lat: formData.locationLat,
+        lng: formData.locationLng,
       } : undefined,
       type: formData.type,
       status: 'saved',

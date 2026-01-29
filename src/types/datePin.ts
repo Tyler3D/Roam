@@ -24,6 +24,8 @@ export interface DatePinFormData {
   notes?: string;
   link?: string;
   locationName?: string;
+  locationLat?: number;
+  locationLng?: number;
   type: DatePinType;
   tags?: string[];
 }
