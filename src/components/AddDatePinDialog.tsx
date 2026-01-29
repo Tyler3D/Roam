@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { DatePinFormData, DatePinType } from '@/types/datePin';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { UtensilsCrossed, Trees, Home, CalendarDays, MapPin, Link, Tag } from 'lucide-react';
+import { UtensilsCrossed, Trees, Home, CalendarDays, Link, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 
 interface AddDatePinDialogProps {
   open: boolean;
@@ -26,6 +28,12 @@ const typeOptions: { value: DatePinType; label: string; icon: typeof UtensilsCro
   { value: 'event', label: 'Event', icon: CalendarDays },
 ];
 
+interface LocationData {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
 export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialogProps) {
   const [formData, setFormData] = useState<DatePinFormData>({
     title: '',
@@ -35,12 +43,39 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
     type: 'restaurant',
     tags: [],
   });
+  const [location, setLocation] = useState<LocationData | null>(null);
   const [tagInput, setTagInput] = useState('');
+  const [locationError, setLocationError] = useState(false);
+
+  const handleLocationChange = useCallback((loc: LocationData | null) => {
+    setLocation(loc);
+    setFormData(prev => ({ ...prev, locationName: loc?.name || '' }));
+    if (loc) {
+      setLocationError(false);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
-    onSave(formData);
+    
+    // Validate location is set
+    if (!location) {
+      setLocationError(true);
+      return;
+    }
+
+    // Include full location data
+    const dataToSave: DatePinFormData = {
+      ...formData,
+      locationName: location.name,
+      locationLat: location.lat,
+      locationLng: location.lng,
+    };
+
+    onSave(dataToSave);
+    
+    // Reset form
     setFormData({
       title: '',
       notes: '',
@@ -49,7 +84,9 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
       type: 'restaurant',
       tags: [],
     });
+    setLocation(null);
     setTagInput('');
+    setLocationError(false);
     onOpenChange(false);
   };
 
@@ -70,22 +107,41 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
     }));
   };
 
+  const handleClose = () => {
+    setFormData({
+      title: '',
+      notes: '',
+      link: '',
+      locationName: '',
+      type: 'restaurant',
+      tags: [],
+    });
+    setLocation(null);
+    setTagInput('');
+    setLocationError(false);
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px] bg-card border-border/50">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Save a Date Idea</DialogTitle>
+          <DialogDescription>
+            Add a new date idea with a location to see it on the map.
+          </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-5 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="title">What's the idea?</Label>
+            <Label htmlFor="title">What's the idea? *</Label>
             <Input
               id="title"
               placeholder="e.g., Rooftop bar at sunset"
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               className="bg-background/50"
+              required
             />
           </div>
 
@@ -112,6 +168,22 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="location">
+              Location *
+              <span className="text-xs text-muted-foreground ml-1">(required)</span>
+            </Label>
+            <LocationAutocomplete
+              value={location?.name || ''}
+              onChange={handleLocationChange}
+              placeholder="Search for a place..."
+              required
+            />
+            {locationError && (
+              <p className="text-xs text-destructive">Please select a location from the dropdown</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
@@ -122,34 +194,18 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="location" className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5" />
-                Location
-              </Label>
-              <Input
-                id="location"
-                placeholder="Place name"
-                value={formData.locationName}
-                onChange={(e) => setFormData(prev => ({ ...prev, locationName: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="link" className="flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5" />
-                Link
-              </Label>
-              <Input
-                id="link"
-                placeholder="TikTok, website..."
-                value={formData.link}
-                onChange={(e) => setFormData(prev => ({ ...prev, link: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="link" className="flex items-center gap-1.5">
+              <Link className="w-3.5 h-3.5" />
+              Link
+            </Label>
+            <Input
+              id="link"
+              placeholder="TikTok, website..."
+              value={formData.link}
+              onChange={(e) => setFormData(prev => ({ ...prev, link: e.target.value }))}
+              className="bg-background/50"
+            />
           </div>
 
           <div className="space-y-2">
@@ -190,7 +246,7 @@ export function AddDatePinDialog({ open, onOpenChange, onSave }: AddDatePinDialo
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!formData.title.trim()}>

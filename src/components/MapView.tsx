@@ -1,119 +1,215 @@
+import { useState, useCallback, useMemo } from 'react';
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { DatePin } from '@/types/datePin';
-import { MapPin } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { MapPin, Loader2 } from 'lucide-react';
+import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_LIBRARIES, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '@/config/maps';
+import { MapPinPopup } from '@/components/MapPinPopup';
 
 interface MapViewProps {
   pins: DatePin[];
   onPinClick: (pin: DatePin) => void;
 }
 
-const typeColors = {
-  restaurant: 'bg-primary',
-  outdoor: 'bg-accent',
-  home: 'bg-highlight',
-  event: 'bg-secondary-foreground',
+const typeColors: Record<string, string> = {
+  restaurant: '#E11D48', // primary
+  outdoor: '#F97316', // accent/orange
+  home: '#8B5CF6', // purple
+  event: '#3B82F6', // blue
+};
+
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%',
+  minHeight: '500px',
+  borderRadius: '1rem',
+};
+
+const mapOptions: google.maps.MapOptions = {
+  disableDefaultUI: false,
+  zoomControl: true,
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: true,
+  styles: [
+    {
+      featureType: 'poi',
+      elementType: 'labels',
+      stylers: [{ visibility: 'off' }],
+    },
+  ],
 };
 
 export function MapView({ pins, onPinClick }: MapViewProps) {
-  // Simple visual map representation
-  // In production, you'd integrate with Mapbox or Google Maps
-  
+  const [selectedPin, setSelectedPin] = useState<DatePin | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  // Calculate center based on pins
+  const center = useMemo(() => {
+    if (pins.length === 0) return DEFAULT_MAP_CENTER;
+    
+    const validPins = pins.filter(pin => pin.location);
+    if (validPins.length === 0) return DEFAULT_MAP_CENTER;
+
+    const avgLat = validPins.reduce((sum, pin) => sum + (pin.location?.lat || 0), 0) / validPins.length;
+    const avgLng = validPins.reduce((sum, pin) => sum + (pin.location?.lng || 0), 0) / validPins.length;
+    
+    return { lat: avgLat, lng: avgLng };
+  }, [pins]);
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    setMap(map);
+    
+    // Fit bounds to show all pins
+    if (pins.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      pins.forEach(pin => {
+        if (pin.location) {
+          bounds.extend({ lat: pin.location.lat, lng: pin.location.lng });
+        }
+      });
+      map.fitBounds(bounds, 50);
+      
+      // Don't zoom in too much
+      const listener = google.maps.event.addListener(map, 'idle', () => {
+        const zoom = map.getZoom();
+        if (zoom && zoom > 15) {
+          map.setZoom(15);
+        }
+        google.maps.event.removeListener(listener);
+      });
+    }
+  }, [pins]);
+
+  const onUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
+
+  const handleMarkerClick = (pin: DatePin) => {
+    setSelectedPin(pin);
+  };
+
+  const handleInfoWindowClose = () => {
+    setSelectedPin(null);
+  };
+
+  const handleViewDetails = (pin: DatePin) => {
+    setSelectedPin(null);
+    onPinClick(pin);
+  };
+
+  // Create custom marker icon as data URL
+  const createMarkerIcon = (color: string) => {
+    const svg = `
+      <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 0C7.164 0 0 7.164 0 16c0 10 16 24 16 24s16-14 16-24c0-8.836-7.164-16-16-16z" fill="${color}"/>
+        <circle cx="16" cy="16" r="6" fill="white"/>
+      </svg>
+    `;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  };
+
+  if (loadError) {
+    return (
+      <div className="relative w-full h-full min-h-[500px] bg-muted/30 rounded-2xl overflow-hidden flex items-center justify-center">
+        <div className="text-center">
+          <MapPin className="w-12 h-12 text-destructive/50 mx-auto mb-3" />
+          <p className="text-muted-foreground">Failed to load Google Maps</p>
+          <p className="text-sm text-muted-foreground/60">Please check your API key</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="relative w-full h-full min-h-[500px] bg-muted/30 rounded-2xl overflow-hidden flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-3" />
+          <p className="text-muted-foreground">Loading map...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative w-full h-full min-h-[500px] bg-muted/30 rounded-2xl overflow-hidden">
-      {/* Map Background Pattern */}
-      <div className="absolute inset-0 opacity-20">
-        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-border" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      {/* Decorative Elements */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[20%] left-[15%] w-32 h-32 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-[30%] right-[20%] w-48 h-48 bg-primary/5 rounded-full blur-3xl" />
-      </div>
-
-      {/* Pins */}
-      <div className="relative w-full h-full">
-        {pins.map((pin, index) => {
-          // Distribute pins across the map area
-          const left = 10 + (index % 4) * 22 + (Math.random() * 10);
-          const top = 15 + Math.floor(index / 4) * 25 + (Math.random() * 10);
+    <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={center}
+        zoom={DEFAULT_MAP_ZOOM}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        options={mapOptions}
+        onClick={() => setSelectedPin(null)}
+      >
+        {pins.map((pin) => {
+          if (!pin.location) return null;
           
           return (
-            <button
+            <MarkerF
               key={pin.id}
-              onClick={() => onPinClick(pin)}
-              className={cn(
-                "absolute transform -translate-x-1/2 -translate-y-full",
-                "group cursor-pointer transition-all duration-300 hover:scale-110 hover:z-10",
-                "animate-fade-in"
-              )}
-              style={{ 
-                left: `${left}%`, 
-                top: `${top}%`,
-                animationDelay: `${index * 100}ms`
+              position={{ lat: pin.location.lat, lng: pin.location.lng }}
+              onClick={() => handleMarkerClick(pin)}
+              icon={{
+                url: createMarkerIcon(typeColors[pin.type] || typeColors.restaurant),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40),
               }}
-            >
-              {/* Pin Marker */}
-              <div className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-full shadow-lg",
-                "transition-all duration-300 group-hover:shadow-xl",
-                typeColors[pin.type]
-              )}>
-                <MapPin className="w-5 h-5 text-white" />
-              </div>
-              
-              {/* Pin Label */}
-              <div className={cn(
-                "absolute left-1/2 -translate-x-1/2 top-full mt-2",
-                "bg-card rounded-lg shadow-soft px-3 py-2 min-w-[120px]",
-                "opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-                "pointer-events-none"
-              )}>
-                <p className="text-sm font-medium text-foreground truncate text-center">
-                  {pin.title}
-                </p>
-                {pin.location && (
-                  <p className="text-xs text-muted-foreground truncate text-center">
-                    {pin.location.name}
-                  </p>
-                )}
-              </div>
-            </button>
+            />
           );
         })}
-      </div>
+
+        {selectedPin && selectedPin.location && (
+          <InfoWindowF
+            position={{ lat: selectedPin.location.lat, lng: selectedPin.location.lng }}
+            onCloseClick={handleInfoWindowClose}
+            options={{
+              pixelOffset: new google.maps.Size(0, -40),
+              disableAutoPan: false,
+            }}
+          >
+            <MapPinPopup
+              pin={selectedPin}
+              onClose={handleInfoWindowClose}
+              onViewDetails={() => handleViewDetails(selectedPin)}
+            />
+          </InfoWindowF>
+        )}
+      </GoogleMap>
 
       {/* Empty State */}
       {pins.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center bg-card/90 backdrop-blur-sm rounded-xl p-6 shadow-lg">
             <MapPin className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">No location-based dates yet</p>
-            <p className="text-sm text-muted-foreground/60">Add a location to see pins on the map</p>
+            <p className="text-sm text-muted-foreground/60">Add a date with a location to see it on the map</p>
           </div>
         </div>
       )}
 
       {/* Map Legend */}
-      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 shadow-soft">
-        <div className="flex gap-4">
+      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 shadow-lg">
+        <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-primary" />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.restaurant }} />
             <span className="text-xs text-muted-foreground">Restaurant</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-accent" />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.outdoor }} />
             <span className="text-xs text-muted-foreground">Outdoor</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-secondary-foreground" />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.home }} />
+            <span className="text-xs text-muted-foreground">Home</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.event }} />
             <span className="text-xs text-muted-foreground">Event</span>
           </div>
         </div>
