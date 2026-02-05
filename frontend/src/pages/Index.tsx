@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDatePins } from '@/hooks/useDatePins';
 import { DatePin } from '@/types/datePin';
 import { Header } from '@/components/Header';
@@ -8,6 +9,8 @@ import { MapView } from '@/components/MapView';
 import { ListView } from '@/components/ListView';
 import { AddDatePinDialog } from '@/components/AddDatePinDialog';
 import { DatePinDetail } from '@/components/DatePinDetail';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/auth/AuthContext';
 
 type ViewType = 'home' | 'map' | 'list';
 
@@ -18,6 +21,8 @@ const viewTitles: Record<ViewType, { title: string; subtitle?: string }> = {
 };
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { signOutUser } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('home');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedPin, setSelectedPin] = useState<DatePin | null>(null);
@@ -42,9 +47,22 @@ const Index = () => {
 
   const { title, subtitle } = viewTitles[currentView];
 
+  const handleSignOut = async () => {
+    await signOutUser();
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      <Header title={title} subtitle={subtitle} />
+      <Header
+        title={title}
+        subtitle={subtitle}
+        action={
+          <Button variant="ghost" onClick={handleSignOut}>
+            Log out
+          </Button>
+        }
+      />
 
       <main className="max-w-4xl mx-auto px-4 py-6">
         {currentView === 'home' && (
