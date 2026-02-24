@@ -11,12 +11,12 @@ export default function Login() {
   const { signIn, signInWithGoogle, syncBackendUser, isUserVerified } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError(null);
+    setError("");
     setLoading(true);
     try {
       const nextUser = await signIn(email, password);
@@ -34,7 +34,7 @@ export default function Login() {
   };
 
   const handleGoogleSignIn = async () => {
-    setError(null);
+    setError("");
     setLoading(true);
     try {
       const nextUser = await signInWithGoogle();

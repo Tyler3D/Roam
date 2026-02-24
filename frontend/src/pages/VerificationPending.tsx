@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 export default function VerificationPending() {
   const navigate = useNavigate();
   const { user, sendVerificationEmail } = useAuth();
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleResend = async () => {
     setLoading(true);
-    setStatus(null);
+    setStatus("");
     try {
       await sendVerificationEmail();
       setStatus("Verification email sent. Please check your inbox.");

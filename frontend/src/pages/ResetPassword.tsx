@@ -9,13 +9,13 @@ import { Label } from "@/components/ui/label";
 export default function ResetPassword() {
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
-    setStatus(null);
+    setStatus("");
     try {
       await resetPassword(email);
       setStatus("Password reset email sent. Check your inbox.");

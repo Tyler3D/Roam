@@ -15,10 +15,10 @@ export default function AuthAction() {
   const [searchParams] = useSearchParams();
   const { refreshUser, verifyBackendUser, isUserVerified } = useAuth();
   const [status, setStatus] = useState("Processing request...");
-  const [mode, setMode] = useState<string | null>(null);
-  const [oobCode, setOobCode] = useState<string | null>(null);
+  const [mode, setMode] = useState("");
+  const [oobCode, setOobCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
   const [resetComplete, setResetComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -26,8 +26,8 @@ export default function AuthAction() {
     const runAction = async () => {
       const modeParam = searchParams.get("mode");
       const codeParam = searchParams.get("oobCode");
-      setMode(modeParam);
-      setOobCode(codeParam);
+      setMode(modeParam ?? "");
+      setOobCode(codeParam ?? "");
       if (!modeParam || !codeParam) {
         setStatus("Invalid action link. Please request a new email.");
         return;
@@ -66,7 +66,7 @@ export default function AuthAction() {
 
   const handlePasswordReset = async (event: React.FormEvent) => {
     event.preventDefault();
-    setActionError(null);
+    setActionError("");
     if (!oobCode) {
       setActionError("Invalid reset link. Please request a new email.");
       return;

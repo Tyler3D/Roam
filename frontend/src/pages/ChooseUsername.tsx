@@ -6,23 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const buildSuggestedUsername = (displayName?: string | null) => {
-  if (!displayName) {
+const buildSuggestedUsername = (displayName: string) => {
+  const trimmedName = displayName.trim();
+  if (!trimmedName) {
     return "";
   }
-  const parts = displayName.trim().split(/\s+/);
+  const parts = trimmedName.split(/\s+/);
   if (parts.length >= 2) {
     return `${parts[0]}${parts[1]}`.toLowerCase();
   }
-  return displayName.replace(/\s+/g, "").toLowerCase();
+  return trimmedName.replace(/\s+/g, "").toLowerCase();
 };
 
 export default function ChooseUsername() {
   const navigate = useNavigate();
   const { user, ensureBackendUser, isUserVerified } = useAuth();
-  const suggested = useMemo(() => buildSuggestedUsername(user?.displayName), [user]);
+  const suggested = useMemo(() => buildSuggestedUsername(user?.displayName ?? ""), [user]);
   const [username, setUsername] = useState(suggested);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -32,7 +33,7 @@ export default function ChooseUsername() {
       setError("Please choose a username.");
       return;
     }
-    setError(null);
+    setError("");
     setLoading(true);
     try {
       await ensureBackendUser(trimmed);

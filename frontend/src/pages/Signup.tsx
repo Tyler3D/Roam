@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
+import { firebaseAuth } from "@/auth/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getPasswordValidationMessage, validatePassword } from "@/lib/password";
 import { Check } from "lucide-react";
+import { deleteUser } from "firebase/auth";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -14,13 +16,25 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
 
+  const getErrorInfo = (error: unknown) => {
+    if (error && typeof error === "object") {
+      const maybeError = error as { status?: number; message?: string; code?: string };
+      return {
+        status: typeof maybeError.status === "number" ? maybeError.status : null,
+        message: typeof maybeError.message === "string" ? maybeError.message : "",
+        code: typeof maybeError.code === "string" ? maybeError.code : null,
+      };
+    }
+    return { status: null, message: "", code: null };
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError(null);
+    setError("");
     setLoading(true);
     try {
       const trimmedUsername = username.trim();
@@ -35,12 +49,36 @@ export default function Signup() {
         setLoading(false);
         return;
       }
-      await signUp(email, password);
+      await signUp(trimmedEmail, password);
       await ensureBackendUser(trimmedUsername);
       await sendVerificationEmail();
       setVerificationSent(true);
       navigate("/verification");
     } catch (err) {
+      const apiError = getErrorInfo(err);
+      if (apiError.code === "auth/email-already-in-use") {
+        setError("Email already exists. Try a different email.");
+        return;
+      }
+      if (apiError.status === 409 && apiError.message) {
+        const message = apiError.message.toLowerCase();
+        if (message.includes("username")) {
+          setError("Username already exists. Try something else.");
+          const currentUser = firebaseAuth.currentUser;
+          if (currentUser) {
+            try {
+              await deleteUser(currentUser);
+            } catch {
+              // If deletion fails, leave the error message in place.
+            }
+          }
+          return;
+        }
+        if (message.includes("email")) {
+          setError("Email already exists. Try a different email.");
+          return;
+        }
+      }
       setError("Unable to create account. Try a different email.");
     } finally {
       setLoading(false);
@@ -48,7 +86,7 @@ export default function Signup() {
   };
 
   const handleGoogleSignIn = async () => {
-    setError(null);
+    setError("");
     setLoading(true);
     try {
       await signInWithGoogle();
@@ -61,6 +99,11 @@ export default function Signup() {
   };
 
   const passwordChecks = validatePassword(password);
+  const passwordError = getPasswordValidationMessage(password);
+  const trimmedUsername = username.trim();
+  const trimmedEmail = email.trim();
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+  const canSubmit = !loading && !passwordError && trimmedUsername.length > 0 && emailIsValid;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -128,7 +171,7 @@ export default function Signup() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={!canSubmit}>
             {loading ? "Creating account..." : "Create account"}
           </Button>
         </form>
