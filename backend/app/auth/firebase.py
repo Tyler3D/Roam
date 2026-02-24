@@ -55,6 +55,11 @@ def ensureFirebaseUser(
     displayName: str | None,
     photoUrl: str | None,
 ) -> None:
+    """
+    Ensure a user exists in Firebase Auth (get-or-create). Idempotent: safe to call
+    multiple times for the same uid. On retry after a failed DB commit, get_user will
+    find the user and we skip create_user, so the caller can safely retry the DB write.
+    """
     getFirebaseApp()
     try:
         firebaseAuth.get_user(firebaseUid)

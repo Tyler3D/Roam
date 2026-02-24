@@ -1,47 +1,27 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- ============================================================
+-- Enums
+-- ============================================================
+
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'pinStatus') THEN
-    CREATE TYPE "pinStatus" AS ENUM ('saved', 'planned', 'done');
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'jobStatus') THEN
+    CREATE TYPE "jobStatus" AS ENUM ('processing', 'done', 'failed');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'visitStatus') THEN
+    CREATE TYPE "visitStatus" AS ENUM ('want', 'been');
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'pinSource') THEN
-    CREATE TYPE "pinSource" AS ENUM ('manual', 'reelIngest');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shareRole') THEN
-    CREATE TYPE "shareRole" AS ENUM ('collaborator', 'viewer');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'activityType') THEN
-    CREATE TYPE "activityType" AS ENUM (
-      'dinner',
-      'walk',
-      'DIY',
-      'trip',
-      'event',
-      'cozyNight',
-      'chaoticNight'
-    );
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'effortLevel') THEN
-    CREATE TYPE "effortLevel" AS ENUM ('lowEffort', 'planned', 'saturday');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'contextType') THEN
-    CREATE TYPE "contextType" AS ENUM ('date', 'friends', 'solo', 'travel');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reelPlatform') THEN
-    CREATE TYPE "reelPlatform" AS ENUM ('tiktok', 'instagram');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reelJobStatus') THEN
-    CREATE TYPE "reelJobStatus" AS ENUM ('queued', 'processing', 'done', 'failed');
+    CREATE TYPE "pinSource" AS ENUM ('reel', 'manual');
   END IF;
 END $$;
+
+-- ============================================================
+-- Users (unchanged)
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS "users" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,61 +35,76 @@ CREATE TABLE IF NOT EXISTS "users" (
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS "datePins" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "ownerId" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "title" text NOT NULL,
-  "notes" text,
-  "link" text,
-  "status" "pinStatus" NOT NULL DEFAULT 'saved',
-  "tags" text[],
-  "locationName" text,
-  "locationLat" double precision,
-  "locationLng" double precision,
-  "createdAt" timestamptz NOT NULL DEFAULT now(),
-  "updatedAt" timestamptz NOT NULL DEFAULT now(),
-  "lastViewedAt" timestamptz,
-  "source" "pinSource" NOT NULL DEFAULT 'manual',
-  "sourceRef" text
-);
+-- ============================================================
+-- Ingestion Jobs
+-- ============================================================
 
-CREATE TABLE IF NOT EXISTS "pinShares" (
+CREATE TABLE IF NOT EXISTS "ingestion_jobs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "pinId" uuid NOT NULL REFERENCES "datePins"("id") ON DELETE CASCADE,
   "userId" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "role" "shareRole" NOT NULL,
-  "createdAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "pinSharesUniquePinUser" UNIQUE ("pinId", "userId")
-);
-
-CREATE TABLE IF NOT EXISTS "mlExtractions" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "pinId" uuid NOT NULL REFERENCES "datePins"("id") ON DELETE CASCADE,
-  "activityType" "activityType",
-  "effortLevel" "effortLevel",
-  "context" "contextType",
-  "constraints" jsonb,
-  "locationSuggestion" jsonb,
-  "suggestedTags" text[],
-  "confidence" jsonb,
-  "rawModelOutput" jsonb,
-  "createdAt" timestamptz NOT NULL DEFAULT now(),
-  "updatedAt" timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS "reelIngestJobs" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "platform" "reelPlatform" NOT NULL,
-  "senderUserId" uuid REFERENCES "users"("id") ON DELETE SET NULL,
   "reelUrl" text NOT NULL,
-  "rawPayload" jsonb,
-  "status" "reelJobStatus" NOT NULL DEFAULT 'queued',
+  "shareText" text,
+  "lpTitle" text,
+  "ogDescription" text,
+  "ogKeywords" text,
+  "status" "jobStatus" NOT NULL DEFAULT 'processing',
   "error" text,
   "createdAt" timestamptz NOT NULL DEFAULT now(),
   "updatedAt" timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS "datePinsOwnerIdIdx" ON "datePins" ("ownerId");
-CREATE INDEX IF NOT EXISTS "datePinsStatusIdx" ON "datePins" ("status");
-CREATE INDEX IF NOT EXISTS "pinSharesUserIdIdx" ON "pinShares" ("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_reel"
+  ON "ingestion_jobs" ("userId", "reelUrl");
 
+-- ============================================================
+-- Extractions (LLM-generated place suggestions per job)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "extractions" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "jobId" uuid NOT NULL REFERENCES "ingestion_jobs"("id") ON DELETE CASCADE,
+  "placeName" text,
+  "placeAddress" text,
+  "category" text,
+  "latitude" double precision,
+  "longitude" double precision,
+  "googlePlaceId" text,
+  "confidence" double precision,
+  "rawLlmOutput" jsonb,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "idx_extractions_jobId"
+  ON "extractions" ("jobId");
+
+-- ============================================================
+-- Activity Pins (user-confirmed places)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "activity_pins" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "extractionId" uuid REFERENCES "extractions"("id") ON DELETE SET NULL,
+  "title" text NOT NULL,
+  "category" text,
+  "placeName" text,
+  "placeAddress" text,
+  "latitude" double precision,
+  "longitude" double precision,
+  "googlePlaceId" text,
+  "rating" integer CHECK ("rating" >= 1 AND "rating" <= 5),
+  "visitStatus" "visitStatus" NOT NULL DEFAULT 'want',
+  "notes" text,
+  "thumbnailUrl" text,
+  "reelUrl" text,
+  "source" "pinSource" NOT NULL DEFAULT 'reel',
+  "lastInteractedAt" timestamptz,
+  "createdAt" timestamptz NOT NULL DEFAULT now(),
+  "updatedAt" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "idx_activity_pins_userId"
+  ON "activity_pins" ("userId");
+
+CREATE INDEX IF NOT EXISTS "idx_activity_pins_category"
+  ON "activity_pins" ("category");

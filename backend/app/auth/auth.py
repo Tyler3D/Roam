@@ -1,17 +1,79 @@
 from typing import Any, Dict
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, Request
 from firebase_admin import auth
+from sqlmodel import Session, select
 
 from app.auth.firebase import getFirebaseApp
+from app.common.backendErrors import NotFound, Unauthorized
+from app.common.db import getSession
+from app.models.users import UserModel
+
+
+class CurrentAuth:
+    """
+    Auth context for the request: the DB user and decoded Firebase token.
+    Use as a dependency via getCurrentAuth(). Later you can add methods
+    scoped to this auth, e.g. getPermittedActivityPins(session).
+    """
+    def __init__(self, *, user: UserModel, decodedToken: Dict[str, Any]):
+        self.user = user
+        self.decodedToken = decodedToken
+
+
+class OptionalAuth:
+    """Like CurrentAuth but user may be None (e.g. first-time signup before DB user exists)."""
+    def __init__(self, *, user: UserModel | None, decodedToken: Dict[str, Any]):
+        self.user = user
+        self.decodedToken = decodedToken
+
+
+def getDecodedTokenFromRequest(request: Request) -> Dict[str, Any]:
+    """Decoded Firebase token from request.state (set by middleware). Raises Unauthorized if missing uid."""
+    decoded = getattr(request.state, "decodedToken", None)
+    if not decoded:
+        raise Unauthorized("Missing auth")
+    uid = decoded.get("uid")
+    if not uid:
+        raise Unauthorized("Missing Firebase uid")
+    return decoded
+
+
+def getCurrentAuth(
+    request: Request,
+    session: Session = Depends(getSession),
+) -> CurrentAuth:
+    """FastAPI dependency: current user and decoded token for this request. Raises NotFound if no DB user."""
+    decoded = getDecodedTokenFromRequest(request)
+    uid = decoded.get("uid")
+    user = session.exec(select(UserModel).where(UserModel.firebaseUid == uid)).first()
+    if not user:
+        raise NotFound("User not found")
+    return CurrentAuth(user=user, decodedToken=decoded)
+
+
+def getCurrentUser(auth: CurrentAuth = Depends(getCurrentAuth)) -> UserModel:
+    """FastAPI dependency: current DB user only. Use when you don't need the token."""
+    return auth.user
+
+
+def getOptionalAuth(
+    request: Request,
+    session: Session = Depends(getSession),
+) -> OptionalAuth:
+    """FastAPI dependency: decoded token and user if it exists. Use for endpoints that create the user (e.g. signup)."""
+    decoded = getDecodedTokenFromRequest(request)
+    uid = decoded.get("uid")
+    user = session.exec(select(UserModel).where(UserModel.firebaseUid == uid)).first()
+    return OptionalAuth(user=user, decodedToken=decoded)
 
 
 def getBearerToken(authorization: str | None) -> str:
     if not authorization:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Authorization header")
+        raise Unauthorized("Missing Authorization header")
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Authorization header")
+        raise Unauthorized("Invalid Authorization header")
     return parts[1]
 
 
@@ -20,7 +82,7 @@ def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
     try:
         decoded = auth.verify_id_token(token, check_revoked=True)
     except Exception as exc:  # firebase_admin raises several types
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token") from exc
+        raise Unauthorized("Invalid Firebase token") from exc
     return decoded
 
 

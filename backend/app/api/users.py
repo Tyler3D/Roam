@@ -1,28 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
+from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser
-from app.common.db import getSession
+from app.common.backendErrors import BadRequest, NotFound
+from app.common.db import commitAndRefresh, getSession
 from app.models.users import UserCreate, UserModel, UserRead
-
 
 usersRouter = APIRouter()
 
-
-def _getDecodedToken(request: Request) -> dict:
-    decodedToken = request.state.decodedToken
-    firebaseUid = decodedToken.get("uid")
-    if not firebaseUid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Firebase uid",
-        )
-    return decodedToken
-
-
-def _getUserByFirebaseUid(session: Session, firebaseUid: str) -> UserModel | None:
-    return session.exec(select(UserModel).where(UserModel.firebaseUid == firebaseUid)).first()
+USER_CONSTRAINT_MESSAGES = {
+    "users_username_key": "Username already exists",
+    "users_email_key": "Email already exists",
+    "users_firebaseUid_key": "User already exists",
+}
 
 
 def _ensureFirebaseUserOrRaise(
@@ -31,13 +22,11 @@ def _ensureFirebaseUserOrRaise(
     displayName: str | None,
     photoUrl: str | None,
 ) -> None:
+    """Ensure Firebase has this user (get-or-create). Idempotent: safe to call on retries."""
     try:
         ensureFirebaseUser(firebaseUid, email, displayName, photoUrl)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create Firebase user",
-        ) from exc
+        raise BadRequest("Failed to create Firebase user") from exc
 
 
 def _applyUserUpdates(existingUser: UserModel, request: UserCreate, email: str) -> None:
@@ -52,84 +41,41 @@ def _setActivationFromToken(user: UserModel, tokenEmailVerified: bool) -> None:
     user.isActive = tokenEmailVerified
 
 
-def _commitAndRefresh(session: Session, user: UserModel) -> None:
-    try:
-        session.commit()
-    except IntegrityError as exc:
-        session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User already exists",
-        ) from exc
-    session.refresh(user)
-
-
 @usersRouter.get("/me")
-def getMe(
-    request: Request,
-    session: Session = Depends(getSession),
-) -> UserRead:
-    decodedToken = _getDecodedToken(request)
-    firebaseUid = decodedToken.get("uid")
-    existingUser = _getUserByFirebaseUid(session, firebaseUid)
-    if not existingUser:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    return UserRead.model_validate(existingUser)
+def getMe(user: UserModel = Depends(getCurrentUser)) -> UserRead:
+    return UserRead.model_validate(user)
 
 
 @usersRouter.post("/users/verify", response_model=UserRead)
 def verifyUserEmail(
-    request: Request,
+    auth: CurrentAuth = Depends(getCurrentAuth),
     session: Session = Depends(getSession),
 ) -> UserRead:
-    decodedToken = _getDecodedToken(request)
-    firebaseUid = decodedToken.get("uid")
-    existingUser = _getUserByFirebaseUid(session, firebaseUid)
-    if not existingUser:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    emailVerified = bool(decodedToken.get("email_verified"))
-    if not emailVerified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email not verified",
-        )
-
-    _setActivationFromToken(existingUser, True)
-    session.add(existingUser)
-    _commitAndRefresh(session, existingUser)
-    return UserRead.model_validate(existingUser)
+    if not bool(auth.decodedToken.get("email_verified")):
+        raise BadRequest("Email not verified")
+    _setActivationFromToken(auth.user, True)
+    session.add(auth.user)
+    commitAndRefresh(session, auth.user, constraintMessages=USER_CONSTRAINT_MESSAGES)
+    return UserRead.model_validate(auth.user)
 
 
 @usersRouter.post("/users", response_model=UserRead)
 def createUser(
     request: UserCreate,
-    httpRequest: Request,
+    auth: OptionalAuth = Depends(getOptionalAuth),
     session: Session = Depends(getSession),
 ) -> UserRead:
-    decodedToken = _getDecodedToken(httpRequest)
+    decodedToken = auth.decodedToken
     firebaseUid = decodedToken.get("uid")
     tokenEmail = decodedToken.get("email")
     tokenEmailVerified = bool(decodedToken.get("email_verified"))
     email = tokenEmail or request.email
     if not email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email is required",
-        )
+        raise BadRequest("Email is required")
     if not request.username.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is required",
-        )
+        raise BadRequest("Username is required")
 
-    existingUser = _getUserByFirebaseUid(session, firebaseUid)
+    existingUser = auth.user
 
     if existingUser:
         if not existingUser.isActive:
@@ -142,28 +88,26 @@ def createUser(
             _setActivationFromToken(existingUser, tokenEmailVerified)
         _applyUserUpdates(existingUser, request, email)
         session.add(existingUser)
-        _commitAndRefresh(session, existingUser)
+        commitAndRefresh(session, existingUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
         return UserRead.model_validate(existingUser)
 
-    newUser = UserModel(
-        firebaseUid=firebaseUid,
-        username=request.username,
-        email=email,
-        displayName=request.displayName,
-        photoUrl=request.photoUrl,
-        isActive=False,
-        emailVerified=tokenEmailVerified,
-    )
-    session.add(newUser)
-    _commitAndRefresh(session, newUser)
+    # New user: ensure Firebase first (idempotent), then single DB commit. Retries are safe.
     _ensureFirebaseUserOrRaise(
         firebaseUid,
         email,
         request.displayName,
         request.photoUrl,
     )
-    _setActivationFromToken(newUser, tokenEmailVerified)
+    newUser = UserModel(
+        firebaseUid=firebaseUid,
+        username=request.username,
+        email=email,
+        displayName=request.displayName,
+        photoUrl=request.photoUrl,
+        isActive=tokenEmailVerified,
+        emailVerified=tokenEmailVerified,
+    )
     session.add(newUser)
-    _commitAndRefresh(session, newUser)
+    commitAndRefresh(session, newUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
     return UserRead.model_validate(newUser)
 

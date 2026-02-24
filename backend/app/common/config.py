@@ -50,3 +50,11 @@ def getTrustedAuthProviders() -> set[str]:
 def getDatabaseUrl() -> str:
     return getEnv("DATABASE_URL")
 
+
+def getOpenAIApiKey() -> str:
+    return getEnv("OPENAI_API_KEY")
+
+
+def getGoogleMapsApiKey() -> str | None:
+    return getOptionalEnv("GOOGLE_MAPS_API_KEY")
+

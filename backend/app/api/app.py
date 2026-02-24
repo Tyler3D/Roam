@@ -4,15 +4,81 @@ import uuid
 from typing import Callable
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.ingest import ingestRouter
 from app.api.users import usersRouter
 from app.auth.auth import getBearerToken, verifyFirebaseTokenString
+from app.common.backendErrors import Forbidden, RateLimited, Unauthorized
 from app.common.config import IS_DEV, getTrustedAuthProviders
 
+logger = logging.getLogger("roam.api")
+app = FastAPI(title="Roam API")
 
-app = FastAPI(title="Cozy Corner Dates API")
+
+def _getRequestId(request: Request) -> str:
+    return getattr(request.state, "requestId", None) or str(uuid.uuid4())
+
+
+def _addSecurityHeaders(response: JSONResponse) -> None:
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+
+
+def _addCorsHeaders(response: JSONResponse, origin: str | None) -> None:
+    if origin and origin in allowOrigins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+
+
+@app.exception_handler(FastAPIHTTPException)
+async def httpExceptionHandler(request: Request, exc: FastAPIHTTPException) -> JSONResponse:
+    """Log all 4xx/5xx from HTTPException and return a consistent JSON response."""
+    requestId = _getRequestId(request)
+    cause = exc.__cause__
+    logger.warning(
+        "http_error",
+        extra={
+            "requestId": requestId,
+            "path": request.url.path,
+            "method": request.method,
+            "status": exc.status_code,
+            "detail": exc.detail,
+            **({"cause": str(cause)} if cause else {}),
+        },
+    )
+    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    response.headers["X-Request-Id"] = requestId
+    _addSecurityHeaders(response)
+    _addCorsHeaders(response, request.headers.get("Origin"))
+    return response
+
+
+@app.exception_handler(Exception)
+async def unhandledExceptionHandler(request: Request, exc: Exception) -> JSONResponse:
+    """Log unhandled exceptions (500) and return a generic response."""
+    requestId = _getRequestId(request)
+    logger.exception(
+        "unhandled_exception",
+        extra={
+            "requestId": requestId,
+            "path": request.url.path,
+            "method": request.method,
+        },
+    )
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+    response.headers["X-Request-Id"] = requestId
+    _addSecurityHeaders(response)
+    _addCorsHeaders(response, request.headers.get("Origin"))
+    return response
 
 isDev = IS_DEV()
 if not isDev:
@@ -33,7 +99,6 @@ rateLimitWindowSeconds = 60
 rateLimitMaxRequests = 120
 rateLimitStore: dict[str, list[float]] = {}
 
-logger = logging.getLogger("cozy.api")
 authFailureWindowSeconds = 900
 authFailureMaxAttempts = 5
 authLockoutSeconds = 900
@@ -43,25 +108,16 @@ trustedAuthProviders = getTrustedAuthProviders()
 
 
 def _isAuthExemptPath(path: str) -> bool:
-    return path in {"/health", "/docs", "/openapi.json", "/redoc"}
+    return path in {
+        "/health",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
 
 
 def _isVerificationExemptPath(path: str) -> bool:
     return path in {"/api/users", "/api/users/verify"}
-
-
-def _addSecurityHeaders(response: JSONResponse) -> None:
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
-
-
-def _addCorsHeaders(response: JSONResponse, origin: str | None) -> None:
-    if origin and origin in allowOrigins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
 @app.middleware("http")
@@ -82,14 +138,7 @@ async def authAndRateLimitMiddleware(request: Request, callNext: Callable):
     authKey = f"ip:{clientIp}"
     lockoutUntil = authLockoutUntil.get(authKey)
     if lockoutUntil and now < lockoutUntil:
-        response = JSONResponse(
-            status_code=429,
-            content={"detail": "Too many failed auth attempts"},
-        )
-        response.headers["X-Request-Id"] = requestId
-        _addSecurityHeaders(response)
-        _addCorsHeaders(response, origin)
-        return response
+        raise RateLimited("Too many failed auth attempts")
     if not _isAuthExemptPath(path):
         try:
             authorization = request.headers.get("Authorization")
@@ -107,16 +156,9 @@ async def authAndRateLimitMiddleware(request: Request, callNext: Callable):
                 and not emailVerified
                 and signInProvider not in trustedAuthProviders
             ):
-                response = JSONResponse(
-                    status_code=403,
-                    content={"detail": "Email not verified"},
-                )
-                response.headers["X-Request-Id"] = requestId
-                _addSecurityHeaders(response)
-                _addCorsHeaders(response, origin)
-                return response
+                raise Forbidden("Email not verified")
             key = f"uid:{decodedToken.get('uid')}"
-        except Exception as exc:
+        except Exception:
             failureTimestamps = authFailureStore.get(authKey, [])
             failureWindowStart = now - authFailureWindowSeconds
             failureTimestamps = [ts for ts in failureTimestamps if ts >= failureWindowStart]
@@ -124,21 +166,7 @@ async def authAndRateLimitMiddleware(request: Request, callNext: Callable):
             authFailureStore[authKey] = failureTimestamps
             if len(failureTimestamps) >= authFailureMaxAttempts:
                 authLockoutUntil[authKey] = now + authLockoutSeconds
-            response = JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-            response.headers["X-Request-Id"] = requestId
-            _addSecurityHeaders(response)
-            _addCorsHeaders(response, origin)
-            logger.warning(
-                "auth_failed",
-                extra={
-                    "requestId": requestId,
-                    "path": path,
-                    "method": request.method,
-                    "status": 401,
-                    "error": str(exc),
-                },
-            )
-            return response
+            raise Unauthorized("Unauthorized")
     else:
         key = f"ip:{clientIp}"
 
@@ -146,20 +174,7 @@ async def authAndRateLimitMiddleware(request: Request, callNext: Callable):
     windowStart = now - rateLimitWindowSeconds
     timestamps = [ts for ts in timestamps if ts >= windowStart]
     if len(timestamps) >= rateLimitMaxRequests:
-        response = JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
-        response.headers["X-Request-Id"] = requestId
-        _addSecurityHeaders(response)
-        _addCorsHeaders(response, origin)
-        logger.warning(
-            "rate_limited",
-            extra={
-                "requestId": requestId,
-                "path": path,
-                "method": request.method,
-                "status": 429,
-            },
-        )
-        return response
+        raise RateLimited("Rate limit exceeded")
     timestamps.append(now)
     rateLimitStore[key] = timestamps
 
@@ -187,4 +202,5 @@ def healthCheck() -> dict:
 
 
 app.include_router(usersRouter, prefix="/api")
+app.include_router(ingestRouter, prefix="/api")
 
