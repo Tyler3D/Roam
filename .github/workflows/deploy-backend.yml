@@ -1,0 +1,51 @@
+# Build and deploy Roam API to Cloud Run on push to main
+# Required secrets: GCP_SA_KEY (service account JSON), GCP_PROJECT_ID
+# Create an Artifact Registry repo named "roam" in your project. Set Cloud Run env vars (DATABASE_URL, OPENAI_API_KEY, etc.) in GCP Console or add --set-env-vars / --set-secrets to the deploy step.
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+
+env:
+  REGION: us-east1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }}
+        run: |
+          docker build -f backend/Dockerfile -t $IMAGE -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:latest backend/
+
+      - name: Push image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy roam-api \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated
