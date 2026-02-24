@@ -2,6 +2,14 @@
 .env.*
 .DS_Store
 
+# iOS / Xcode
+GoogleService-Info.plist
+*.xcuserstate
+**/xcuserdata/
+
+# Firebase
+firebase-service-account.json
+
 __pycache__/
 *.pyc
 .pytest_cache/
