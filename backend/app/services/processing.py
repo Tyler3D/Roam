@@ -8,6 +8,10 @@ import httpx
 from openai import OpenAI
 
 from app.common.config import getOpenAIApiKey, getGoogleMapsApiKey
+
+# Raised when OpenAI or Google Maps returns 429 / rate limit; job should fail with clear message
+class ProviderRateLimitError(Exception):
+    pass
 from app.common.db import getSession
 from app.models.ingestion import ExtractionModel, IngestionJobModel, JobStatus
 
@@ -73,15 +77,20 @@ def _callVisionLLM(framesData: list[bytes], thumbnailData: bytes | None, metadat
 
     userContent = _buildUserMessage(framesData, thumbnailData, metadata)
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": userContent},
-        ],
-        max_tokens=1024,
-        temperature=0.2,
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": userContent},
+            ],
+            max_tokens=1024,
+            temperature=0.2,
+        )
+    except Exception as e:
+        if getattr(e, "status_code", None) == 429 or "rate" in str(e).lower():
+            raise ProviderRateLimitError("OpenAI rate limit exceeded; try again later.") from e
+        raise
 
     raw = response.choices[0].message.content or "[]"
 
@@ -120,6 +129,8 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
                 "https://maps.googleapis.com/maps/api/place/textsearch/json",
                 params={"query": query, "key": apiKey},
             )
+            if resp.status_code == 429:
+                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
             resp.raise_for_status()
             data = resp.json()
 
@@ -135,6 +146,8 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
             "googlePlaceId": top.get("place_id"),
             "placeAddress": top.get("formatted_address"),
         }
+    except ProviderRateLimitError:
+        raise
     except Exception:
         logger.exception("Google Maps API call failed", extra={"query": query})
         return None
@@ -190,6 +203,18 @@ def processIngestionJob(
             "processing_complete",
             extra={"jobId": jobId, "extractionCount": len(filtered), "candidateCount": len(candidates)},
         )
+    except ProviderRateLimitError as e:
+        logger.warning("processing_rate_limited", extra={"jobId": jobId, "message": str(e)})
+        try:
+            job = session.get(IngestionJobModel, UUID(jobId))
+            if job:
+                job.status = JobStatus.failed
+                job.error = str(e)
+                job.updatedAt = datetime.utcnow()
+                session.add(job)
+                session.commit()
+        except Exception:
+            logger.exception("failed_to_update_job_status", extra={"jobId": jobId})
     except Exception:
         logger.exception("processing_failed", extra={"jobId": jobId})
         try:

@@ -36,9 +36,15 @@ def IS_DEV() -> bool:
     environment = getOptionalEnv("ENVIRONMENT")
     if environment not in {"dev", "prod"}:
         raise RuntimeError("ENVIRONMENT must be 'dev' or 'prod'.")
-    if environment != "dev":
-        raise RuntimeError("Only 'dev' environment is supported right now.")
     return environment == "dev"
+
+
+def getCorsOrigins() -> list[str]:
+    """Comma-separated origins for CORS (prod). In dev we use localhost."""
+    raw = getOptionalEnv("CORS_ORIGINS") or getOptionalEnv("FRONTEND_ORIGIN")
+    if not raw:
+        return []
+    return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 def getTrustedAuthProviders() -> set[str]:

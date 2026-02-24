@@ -35,8 +35,8 @@ class IngestJobResponse(IngestionJobRead):
 
 @ingestRouter.post("/ingest", status_code=202)
 async def createIngestionJob(
-    user: UserModel = Depends(getCurrentUser),
     backgroundTasks: BackgroundTasks,
+    user: UserModel = Depends(getCurrentUser),
     reelUrl: str = Form(...),
     shareText: Optional[str] = Form(None),
     lpTitle: Optional[str] = Form(None),
