@@ -526,10 +526,11 @@ export default function Marketing() {
           <div className="max-w-2xl mx-auto px-6 space-y-5 text-center">
             <p className="text-muted-foreground text-lg leading-relaxed">
               We believe in living life with intention. Once Roam understands
-              your taste, it can help you resurface ideas at the right moment so
-              you and your friends can live life to the fullest without turning
-              it into project management. Over time, your profile becomes more
-              than a map. It becomes an expression of who you are offline.
+              your taste, it resurfaces ideas at the right moment, so your saves
+              turn into plans, not projects. Over time, your profile becomes
+              more than a map. It becomes an expression of who you are offline.
+              Save a dinner. Pin a hike. Track the places you want to visit.
+              Live well.
             </p>
 
             <p className="text-foreground font-medium text-lg leading-relaxed">
