@@ -535,7 +535,7 @@ export default function Marketing() {
             <p className="text-foreground font-medium text-lg leading-relaxed">
               Roam isn't just about saving places. It's about tracking what
               you're drawn to, expanding your taste, and actually doing the
-              things you meant to do.
+              things you're meant to do.
             </p>
 
             {/* Bottom padding formula: vh*0.5 - contentHeight/2 ≈ vh*0.5 - 135px
