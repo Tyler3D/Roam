@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import Index from "./pages/Index";
 import Marketing from "./pages/Marketing";
+import MarketingOld from "./pages/MarketingOld";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerificationPending from "./pages/VerificationPending";
@@ -26,6 +27,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Marketing />} />
+            <Route path="/marketingOld" element={<MarketingOld />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/reset-password" element={<ResetPassword />} />
