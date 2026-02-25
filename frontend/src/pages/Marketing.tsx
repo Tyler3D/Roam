@@ -473,7 +473,7 @@ export default function Marketing() {
                   Rate it. Tag it. Revisit it. From a single share, Roam creates
                   a pin you can rate, tag, and revisit. Instead of scrolling
                   Google Maps or hunting through screenshots, you open Roam and
-                  see what you're in the mood for, like the best-rated nearby
+                  see what you're in the mood for like the best-rated nearby
                   dinner spots, saved hikes within 30 minutes, nightlife you've
                   been meaning to try. Organized by distance and category.
                 </p>
