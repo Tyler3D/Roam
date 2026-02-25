@@ -218,17 +218,17 @@ export default function Marketing() {
     }
   }, []);
 
-  // ── Scroll friction ──────────────────────────────────────────────────────
-  // Intercepts wheel and touch events, applies a multiplier < 1 so the user
-  // has to scroll significantly before animations advance. The actual scroll
-  // position is lerped toward the target each rAF tick, giving a smooth feel.
+  // ── Scroll friction (desktop wheel only) ──────────────────────────────────
+  // On desktop, intercepts wheel events with a multiplier < 1 so the user
+  // scrolls more deliberately and animations advance smoothly.
+  // On mobile, native touch scroll is used (no interception) so swiping feels
+  // natural and responsive instead of heavy.
   useEffect(() => {
     const SCROLL_MULTIPLIER = 0.28; // < 1 = more friction (scroll input shrunk)
     const LERP_EASE = 0.09; // how fast scroll catches up (lower = lazier)
 
     let targetY = window.scrollY;
     let rafId = 0;
-    let touchPrevY = 0;
 
     const maxScroll = () =>
       document.documentElement.scrollHeight - window.innerHeight;
@@ -256,30 +256,10 @@ export default function Marketing() {
       scheduleRaf();
     };
 
-    const onTouchStart = (e: TouchEvent) => {
-      touchPrevY = e.touches[0].clientY;
-      targetY = window.scrollY;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      const delta = touchPrevY - e.touches[0].clientY;
-      touchPrevY = e.touches[0].clientY;
-      targetY = Math.max(
-        0,
-        Math.min(maxScroll(), targetY + delta * SCROLL_MULTIPLIER),
-      );
-      scheduleRaf();
-    };
-
     window.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("touchstart", onTouchStart, { passive: false });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
 
     return () => {
       window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
       cancelAnimationFrame(rafId);
     };
   }, []);
