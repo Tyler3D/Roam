@@ -319,17 +319,16 @@ export default function Marketing() {
           style={{ gridTemplateRows: "13fr 5fr 4fr" }}
         >
           <div className="flex flex-col items-center justify-center min-h-0 px-2 overflow-y-auto py-2">
-            <p className="text-sm font-medium text-primary uppercase tracking-wide mb-4 shrink-0">
+            <p className="text-sm font-medium text-primary tracking-wide mb-4 shrink-0">
               A taste engine for real life
             </p>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-semibold leading-tight text-balance max-w-2xl shrink-0">
-              Don't let your dreams just be dreams!
+              Saves are just the beginning.
             </h1>
             <p className="text-muted-foreground text-lg md:text-xl max-w-xl mt-6 leading-relaxed shrink-0">
               Instead of letting Instagram and TikTok saves disappear into a
-              graveyard of good intentions, Roam turns the things you're drawn
-              to into a personalized map of your taste so life never distracts
-              you from what you want to do.
+              graveyard of good intentions, Roam turns what you are drawn to
+              into a living map so your saves become plans.
             </p>
           </div>
           <div className="flex flex-col items-center justify-center py-2 shrink-0 min-h-0">
@@ -460,7 +459,7 @@ export default function Marketing() {
                   Share a reel and Roam extracts all the important details like
                   location and categorizes it. You confirm and rank it among
                   your existing pins. Over time, Roams builds a living map of
-                  your taste. What you love, what you want to try, what you've
+                  your taste. What you love. What you want to try. What you have
                   already done.
                 </p>
               </div>
@@ -529,14 +528,13 @@ export default function Marketing() {
               your taste, it resurfaces ideas at the right moment, so your saves
               turn into plans, not projects. Over time, your profile becomes
               more than a map. It becomes an expression of who you are offline.
-              Save a dinner. Pin a hike. Track the places you want to visit.
-              Live well.
+              Save a dinner. Pin a hike. Live well.
             </p>
 
             <p className="text-foreground font-medium text-lg leading-relaxed">
-              Roam isn't just about saving places. It's about tracking what
-              you're drawn to, expanding your taste, and actually doing the
-              things you're meant to do.
+              Roam isn't just about saving places. It is about noticing what you
+              are drawn to and actually doing the things you have been meaning
+              to do.
             </p>
 
             {/* Bottom padding formula: vh*0.5 - contentHeight/2 ≈ vh*0.5 - 135px
