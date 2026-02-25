@@ -223,7 +223,7 @@ export default function Marketing() {
   // Touch (mobile): lighter friction so swiping feels responsive but still dampened.
   useEffect(() => {
     const WHEEL_MULTIPLIER = 0.28; // desktop: more friction
-    const TOUCH_MULTIPLIER = 0.65; // mobile: less friction
+    const TOUCH_MULTIPLIER = 0.85; // mobile: less friction
     const LERP_EASE = 0.09;
 
     let targetY = window.scrollY;
@@ -323,7 +323,7 @@ export default function Marketing() {
               A taste engine for real life
             </p>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-semibold leading-tight text-balance max-w-2xl shrink-0">
-              Don't let your dreams just be dreams
+              Don't let your dreams just be dreams!
             </h1>
             <p className="text-muted-foreground text-lg md:text-xl max-w-xl mt-6 leading-relaxed shrink-0">
               Instead of letting Instagram and TikTok saves disappear into a
