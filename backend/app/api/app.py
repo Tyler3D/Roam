@@ -12,7 +12,7 @@ from app.api.ingest import ingestRouter
 from app.api.users import usersRouter
 from app.auth.auth import getBearerToken, verifyFirebaseTokenString
 from app.common.backendErrors import Forbidden, RateLimited, Unauthorized
-from app.common.config import IS_DEV, getCorsOrigins, getTrustedAuthProviders
+from app.common.config import IS_DEV, getTrustedAuthProviders
 
 logger = logging.getLogger("roam.api")
 app = FastAPI(title="Roam API")
@@ -81,7 +81,7 @@ async def unhandledExceptionHandler(request: Request, exc: Exception) -> JSONRes
     return response
 
 isDev = IS_DEV()
-allowOrigins = ["http://localhost:3000"] if isDev else getCorsOrigins()
+allowOrigins = ["http://localhost:3000"] if isDev else ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
 
 app.add_middleware(
     CORSMiddleware,
