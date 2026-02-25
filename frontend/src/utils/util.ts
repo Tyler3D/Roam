@@ -5,3 +5,5 @@ if (environment !== "dev" && environment !== "prod") {
 };
 
 export const IS_DEV: boolean = environment === "dev";
+
+export const ROAM_DOMAIN: string = IS_DEV ? "http://localhost:3000/" : "https://roam-alpha.web.app/";

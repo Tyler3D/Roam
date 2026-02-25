@@ -15,6 +15,7 @@ import {
 } from "firebase/auth";
 
 import { firebaseAuth } from "@/auth/firebase";
+import { ROAM_DOMAIN } from "@/utils/util";
 
 type AuthContextValue = {
   user: User | null;
@@ -40,7 +41,7 @@ const trustedProviders = new Set(
   (import.meta.env.VITE_TRUSTED_AUTH_PROVIDERS || "google.com,password")
     .split(",")
     .map((value: string) => value.trim())
-    .filter(Boolean)
+    .filter(Boolean),
 );
 
 type ApiError = {
@@ -89,7 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isUserVerified = (inputUser: User | null = user) => {
-    return Boolean(inputUser && (inputUser.emailVerified || isTrustedProvider(inputUser)));
+    return Boolean(
+      inputUser && (inputUser.emailVerified || isTrustedProvider(inputUser)),
+    );
   };
 
   const apiFetch = async (path: string, options?: RequestInit) => {
@@ -167,11 +170,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isVerified: isUserVerified(user),
       isUserVerified,
       signIn: async (email: string, password: string) => {
-        const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+        const credential = await signInWithEmailAndPassword(
+          firebaseAuth,
+          email,
+          password,
+        );
         return credential.user;
       },
       signUp: async (email: string, password: string) => {
-        const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        const credential = await createUserWithEmailAndPassword(
+          firebaseAuth,
+          email,
+          password,
+        );
         return credential.user;
       },
       signInWithGoogle: async () => {
@@ -186,8 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!firebaseAuth.currentUser) {
           throw new Error("No authenticated user");
         }
-        const redirectUrl =
-          import.meta.env.VITE_FIREBASE_ACTION_URL || "http://localhost:3000/auth/action";
+        const redirectUrl = `${ROAM_DOMAIN}/verify`;
         console.info("Sending verification email", {
           redirectUrl,
           handleCodeInApp: true,
@@ -198,8 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       },
       resetPassword: async (email: string) => {
-        const redirectUrl =
-          import.meta.env.VITE_FIREBASE_PASSWORD_RESET_URL || "http://localhost:3000/login";
+        const redirectUrl = `${ROAM_DOMAIN}/login`;
         await sendPasswordResetEmail(firebaseAuth, email, {
           url: redirectUrl,
           handleCodeInApp: true,
@@ -223,7 +232,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await verifyBackendUserMutation.mutateAsync();
       },
     }),
-    [user, loading, ensureBackendUserMutation, syncBackendUserMutation, verifyBackendUserMutation]
+    [
+      user,
+      loading,
+      ensureBackendUserMutation,
+      syncBackendUserMutation,
+      verifyBackendUserMutation,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -236,4 +251,3 @@ export function useAuth() {
   }
   return context;
 }
-
