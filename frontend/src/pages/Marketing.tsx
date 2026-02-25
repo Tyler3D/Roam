@@ -223,7 +223,7 @@ export default function Marketing() {
   // Touch (mobile): lighter friction so swiping feels responsive but still dampened.
   useEffect(() => {
     const WHEEL_MULTIPLIER = 0.28; // desktop: more friction
-    const TOUCH_MULTIPLIER = 0.85; // mobile: less friction
+    const TOUCH_MULTIPLIER = 0.95; // mobile: less friction
     const LERP_EASE = 0.09;
 
     let targetY = window.scrollY;
