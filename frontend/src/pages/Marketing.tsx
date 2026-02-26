@@ -458,7 +458,7 @@ export default function Marketing() {
                 <p className="text-foreground text-lg leading-relaxed">
                   Share a reel and Roam extracts all the important details like
                   location and categorizes it. You confirm and rank it among
-                  your existing pins. Over time, Roams builds a living map of
+                  your existing pins. Over time, Roam builds a living map of
                   your taste. What you love. What you want to try. What you have
                   already done.
                 </p>
