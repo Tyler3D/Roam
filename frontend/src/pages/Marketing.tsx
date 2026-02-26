@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
+import { googleAnalyticsTrackEvent } from "@/utils/util";
 
 function AppleLogo({ className }: { className?: string }) {
   return (
@@ -191,10 +192,14 @@ function computeBoth(t1: DOMRect, t2: DOMRect, vh: number): { h1: HL; h2: HL } {
   };
 }
 
+const SCROLL_MILESTONES = [25, 50, 75, 100] as const;
+
 export default function Marketing() {
   const visionRef = useRef<HTMLElement>(null);
   const t1Ref = useRef<HTMLDivElement>(null);
   const t2Ref = useRef<HTMLDivElement>(null);
+  const scrollDepthReached = useRef<Set<number>>(new Set());
+  const pageLoadTime = useRef(Date.now());
 
   const [h1, setH1] = useState<HL>(HIDDEN);
   const [h2, setH2] = useState<HL>(HIDDEN);
@@ -215,6 +220,22 @@ export default function Marketing() {
       const { h1: nh1, h2: nh2 } = computeBoth(r1, r2, currentVh);
       setH1(nh1);
       setH2(nh2);
+    }
+
+    // Scroll depth analytics (piggybacks on existing scroll listener)
+    const maxScroll =
+      document.documentElement.scrollHeight - window.innerHeight;
+    if (maxScroll > 0) {
+      const percent = Math.round((window.scrollY / maxScroll) * 100);
+      for (const m of SCROLL_MILESTONES) {
+        if (percent >= m && !scrollDepthReached.current.has(m)) {
+          scrollDepthReached.current.add(m);
+          googleAnalyticsTrackEvent("scroll_depth", {
+            percent_scrolled: m,
+            page_location: window.location.href,
+          });
+        }
+      }
     }
   }, []);
 
@@ -289,12 +310,30 @@ export default function Marketing() {
       setVh(window.innerHeight);
       tick();
     };
+
+    const sendTimeOnPage = () => {
+      const seconds = Math.round((Date.now() - pageLoadTime.current) / 1000);
+      googleAnalyticsTrackEvent("time_on_page", {
+        time_seconds: seconds,
+        page_location: window.location.href,
+      });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") sendTimeOnPage();
+    };
+
     tick();
     window.addEventListener("scroll", tick, { passive: true });
     window.addEventListener("resize", onResize, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", sendTimeOnPage);
+
     return () => {
       window.removeEventListener("scroll", tick);
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", sendTimeOnPage);
     };
   }, [tick]);
 
@@ -347,6 +386,11 @@ export default function Marketing() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center"
                 aria-label="Join the iOS waitlist"
+                onClick={() =>
+                  googleAnalyticsTrackEvent("ios_waitlist_click", {
+                    button_label: "Join the iOS waitlist",
+                  })
+                }
               >
                 <AppleLogo className="h-5 w-5" />
                 Join the iOS waitlist

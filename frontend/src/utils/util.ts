@@ -7,3 +7,13 @@ if (environment !== "dev" && environment !== "prod") {
 export const IS_DEV: boolean = environment === "dev";
 
 export const ROAM_DOMAIN: string = IS_DEV ? "http://localhost:3000/" : "https://roam-alpha.web.app/";
+
+/** Fire GA4 event if gtag is available */
+export function googleAnalyticsTrackEvent(
+  eventName: string,
+  params?: Record<string, string | number | boolean>
+) {
+  if (typeof window !== "undefined" && window.gtag) {
+    window.gtag("event", eventName, params);
+  }
+}
