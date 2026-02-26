@@ -9,19 +9,36 @@ struct AuthGateView<MainContent: View>: View {
     @State private var syncCompleted = false
     @State private var hasBackendUser = false
     @State private var syncError: String?
+    @State private var retryTrigger = 0
+    #if DEBUG
+    @State private var showDebugMenu = false
+    #endif
 
     var body: some View {
         Group {
             if !syncCompleted {
                 ProgressView("Syncing…")
-            } else if let syncError {
+            } else if let error = syncError {
                 VStack(spacing: 16) {
                     Text("Sync failed")
                         .font(.headline)
-                    Text(syncError)
+                    Text(error)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    Button("Retry") {
+                        syncError = nil
+                        syncCompleted = false
+                        retryTrigger += 1
+                    }
+                    #if DEBUG
+                    Button {
+                        showDebugMenu = true
+                    } label: {
+                        Label("Debug", systemImage: "wrench.and.screwdriver")
+                    }
+                    .buttonStyle(.bordered)
+                    #endif
                 }
                 .padding()
             } else if !hasBackendUser {
@@ -32,9 +49,14 @@ struct AuthGateView<MainContent: View>: View {
                 mainContent()
             }
         }
-        .task {
+        .task(id: retryTrigger) {
             await sync()
         }
+        #if DEBUG
+        .sheet(isPresented: $showDebugMenu) {
+            DebugMenuView()
+        }
+        #endif
     }
 
     private func sync() async {

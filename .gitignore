@@ -4,6 +4,7 @@
 
 # iOS / Xcode
 GoogleService-Info.plist
+GoogleMaps-Info.plist
 *.xcuserstate
 **/xcuserdata/
 

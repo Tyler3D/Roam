@@ -124,7 +124,7 @@ struct LoginView: View {
             }
             .disabled(isLoading)
 
-            if appConfig.currentMode == .mock {
+            if appConfig.isMockAuth {
                 Button("Sign in (Mock)") {
                     Task { @MainActor in authManager.signInMock() }
                 }

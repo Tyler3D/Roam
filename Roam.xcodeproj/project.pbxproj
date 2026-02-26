@@ -62,20 +62,12 @@
 			);
 			target = 4567DC572F4A9AB4001700F7 /* reel-ingestion */;
 		};
-		4567DC862F4C0C6F001700F7 /* Exceptions for "Roam" folder in "Roam" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 4567DC3E2F4792A0001700F7 /* Roam */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4567DC412F4792A0001700F7 /* Roam */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4567DC862F4C0C6F001700F7 /* Exceptions for "Roam" folder in "Roam" target */,
 				4567DC692F4A9C85001700F7 /* Exceptions for "Roam" folder in "reel-ingestion" target */,
 			);
 			path = Roam;

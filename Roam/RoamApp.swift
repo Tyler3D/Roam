@@ -4,8 +4,8 @@ import SwiftUI
 @main
 struct RoamApp: App {
     init() {
-        let modeRaw = UserDefaults.standard.string(forKey: "roam_app_mode") ?? AppMode.local.rawValue
-        if modeRaw != AppMode.mock.rawValue {
+        let envRaw = UserDefaults.standard.string(forKey: "roam_network_env") ?? UserDefaults.standard.string(forKey: "roam_app_mode") ?? NetworkEnv.local.rawValue
+        if envRaw != NetworkEnv.mock.rawValue {
             FirebaseApp.configure()
         }
     }
@@ -25,7 +25,7 @@ private struct RootView: View {
 
     init() {
         let c = AppConfig()
-        let isMock = c.currentMode == .mock
+        let isMock = c.networkEnv == .mock
         let auth = AuthManager(isMock: isMock)
         _appConfig = State(initialValue: c)
         _authManager = State(initialValue: auth)
@@ -37,8 +37,8 @@ private struct RootView: View {
             .environment(appConfig)
             .environment(authManager)
             .environment(\.apiClient, apiClient)
-            .onChange(of: appConfig.currentMode) { _, newMode in
-                let isMock = (newMode == .mock)
+            .onChange(of: appConfig.networkEnv) { _, newEnv in
+                let isMock = (newEnv == .mock)
                 if isMock {
                     authManager = AuthManager(isMock: true)
                 } else {

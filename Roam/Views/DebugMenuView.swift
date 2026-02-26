@@ -10,17 +10,35 @@ struct DebugMenuView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Mode", selection: Binding(
-                        get: { appConfig.currentMode },
-                        set: { appConfig.currentMode = $0 }
+                    Picker("App mode", selection: Binding(
+                        get: { appConfig.appMode },
+                        set: { appConfig.appMode = $0 }
                     )) {
                         ForEach(AppMode.allCases) { mode in
                             Text(mode.displayName).tag(mode)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                 } header: {
                     Text("App mode")
+                } footer: {
+                    Text("Which feature set to show: Reel Ingestion (list of reels) or Time Estimates (placeholder).")
+                }
+
+                Section {
+                    Picker("App Network Env", selection: Binding(
+                        get: { appConfig.networkEnv },
+                        set: { appConfig.networkEnv = $0 }
+                    )) {
+                        ForEach(NetworkEnv.allCases) { env in
+                            Text(env.displayName).tag(env)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("App Network Env")
+                } footer: {
+                    Text("Mock disables auth. Local/Staging/Production connect to backend.")
                 }
 
                 Section {
@@ -30,7 +48,7 @@ struct DebugMenuView: View {
                     Text("Current")
                 }
 
-                if appConfig.currentMode == .staging {
+                if appConfig.networkEnv == .staging {
                     Section {
                         TextField("Staging base URL", text: $stagingURLText)
                             .keyboardType(.URL)
