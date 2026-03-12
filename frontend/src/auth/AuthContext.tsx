@@ -1,10 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import {
   GoogleAuthProvider,
   User,
   createUserWithEmailAndPassword,
-  getIdToken,
   onAuthStateChanged,
   reload,
   sendPasswordResetEmail,
@@ -16,6 +14,7 @@ import {
 
 import { firebaseAuth } from "@/auth/firebase";
 import { ROAM_DOMAIN } from "@/utils/util";
+import { useCreateBackendUser, useSyncBackendUser, useVerifyBackendUser } from "@/api/auth";
 
 type AuthContextValue = {
   user: User | null;
@@ -36,7 +35,6 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const trustedProviders = new Set(
   (import.meta.env.VITE_TRUSTED_AUTH_PROVIDERS || "google.com,password")
     .split(",")
@@ -44,42 +42,19 @@ const trustedProviders = new Set(
     .filter(Boolean),
 );
 
-type ApiError = {
-  status: number;
-  message: string;
-};
-
-const readErrorMessage = async (response: Response) => {
-  try {
-    const data = await response.json();
-    return data?.detail || "Request failed";
-  } catch {
-    return "Request failed";
-  }
-};
-
 const getProviderIds = (inputUser: User | null) =>
   inputUser?.providerData?.map((provider) => provider.providerId) ?? [];
 
 const isTrustedProvider = (inputUser: User | null) =>
   getProviderIds(inputUser).some((provider) => trustedProviders.has(provider));
 
-const resolveUsername = (inputUser: User | null, usernameOverride?: string) => {
-  if (usernameOverride?.trim()) {
-    return usernameOverride.trim();
-  }
-  if (inputUser?.displayName) {
-    return inputUser.displayName.replace(/\s+/g, "").toLowerCase();
-  }
-  if (inputUser?.email) {
-    return inputUser.email.split("@")[0];
-  }
-  return `user-${Date.now()}`;
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const createUser = useCreateBackendUser();
+  const syncUser = useSyncBackendUser();
+  const verifyUser = useVerifyBackendUser();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (nextUser) => {
@@ -94,74 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       inputUser && (inputUser.emailVerified || isTrustedProvider(inputUser)),
     );
   };
-
-  const apiFetch = async (path: string, options?: RequestInit) => {
-    const currentUser = firebaseAuth.currentUser;
-    if (!currentUser) {
-      throw new Error("No authenticated user");
-    }
-    const token = await getIdToken(currentUser, true);
-    const response = await fetch(`${apiBaseUrl}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(options?.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const message = await readErrorMessage(response);
-      throw { status: response.status, message } as ApiError;
-    }
-    if (response.status === 204) {
-      return null;
-    }
-    return response.json();
-  };
-
-  const ensureBackendUserMutation = useMutation({
-    mutationFn: async (username: string) => {
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername) {
-        throw new Error("Username is required");
-      }
-      const currentUser = firebaseAuth.currentUser;
-      const payload = {
-        username: trimmedUsername,
-        email: currentUser?.email || undefined,
-        displayName: currentUser?.displayName || undefined,
-        photoUrl: currentUser?.photoURL || undefined,
-      };
-      await apiFetch("/api/users", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    },
-  });
-
-  const syncBackendUserMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        await apiFetch("/api/me");
-        return true;
-      } catch (error) {
-        const apiError = error as ApiError;
-        if (apiError.status === 404) {
-          return false;
-        }
-        if (apiError.status === 403) {
-          return true;
-        }
-        throw apiError;
-      }
-    },
-  });
-
-  const verifyBackendUserMutation = useMutation({
-    mutationFn: async () => {
-      await apiFetch("/api/users/verify", { method: "POST" });
-    },
-  });
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -223,22 +130,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return firebaseAuth.currentUser;
       },
       ensureBackendUser: async (username: string) => {
-        await ensureBackendUserMutation.mutateAsync(username);
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername) {
+          throw new Error("Username is required");
+        }
+        const currentUser = firebaseAuth.currentUser;
+        const nameParts = (currentUser?.displayName ?? "").split(" ");
+        await createUser.mutateAsync({
+          username: trimmedUsername,
+          email: currentUser?.email ?? undefined,
+          firstName: nameParts[0] ?? "",
+          lastName: nameParts.slice(1).join(" ") || "",
+          photoUrl: currentUser?.photoURL ?? undefined,
+        });
       },
       syncBackendUser: async () => {
-        return await syncBackendUserMutation.mutateAsync();
+        return await syncUser.mutateAsync();
       },
       verifyBackendUser: async () => {
-        await verifyBackendUserMutation.mutateAsync();
+        await verifyUser.mutateAsync();
       },
     }),
-    [
-      user,
-      loading,
-      ensureBackendUserMutation,
-      syncBackendUserMutation,
-      verifyBackendUserMutation,
-    ],
+    [user, loading, createUser, syncUser, verifyUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

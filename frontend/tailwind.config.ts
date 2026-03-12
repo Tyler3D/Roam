@@ -14,10 +14,27 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        display: ['Playfair Display', 'serif'],
+        mono: ["'DM Mono'", "monospace"],
+        display: ["'DM Serif Display'", "serif"],
+        notes: ["'Lora'", "serif"],
       },
       colors: {
+        roam: {
+          text: "#1E1A2E",
+          "text-mid": "#6B6480",
+          "text-muted": "#A89FC0",
+          logan: "#ABA1C6",
+          "logan-deep": "#7B6FA8",
+          "logan-dark": "#4A4070",
+          lavender: "#DFDDF2",
+          "lav-deep": "#C9C5E8",
+          green: "#D4EDDA",
+          "green-deep": "#4A9E54",
+          surface: "rgba(255,255,255,0.96)",
+          bg: "#F5F3FA",
+          error: "#E57373",
+          "notif-dot": "#F2B8CB",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -75,6 +92,11 @@ export default {
         soft: "var(--shadow-soft)",
         elevated: "var(--shadow-elevated)",
         glow: "var(--shadow-glow)",
+        card: "0 2px 18px rgba(74,64,112,0.07)",
+        "card-hover": "0 4px 28px rgba(74,64,112,0.11)",
+        btn: "0 4px 20px rgba(74,64,112,0.25)",
+        dropdown: "0 4px 24px rgba(74,64,112,0.14)",
+        menu: "0 8px 30px rgba(74,64,112,0.12)",
       },
       keyframes: {
         "accordion-down": {

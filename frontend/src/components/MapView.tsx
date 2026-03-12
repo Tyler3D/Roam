@@ -41,7 +41,7 @@ const mapOptions: google.maps.MapOptions = {
 
 export function MapView({ pins, onPinClick }: MapViewProps) {
   const [selectedPin, setSelectedPin] = useState<DatePin | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [_map, setMap] = useState<google.maps.Map | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,

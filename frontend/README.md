@@ -62,7 +62,21 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+**Firebase Hosting (this repo)**
+
+1. **Install Firebase CLI** (if needed): `npm install -g firebase-tools`
+2. **Log in:** `firebase login`
+3. **From the `frontend` folder**, link to your Firebase project (first time only):
+   ```sh
+   cd frontend
+   firebase use --add
+   ```
+   Select your project and choose an alias (e.g. `default`).
+4. **Build the app:** `npm run build` (output goes to `dist/`)
+5. **Deploy:** `firebase deploy --only hosting`
+6. Your site will be at `https://PROJECT_ID.web.app` and `https://PROJECT_ID.firebaseapp.com`.
+
+The `firebase.json` in this folder is already set to use `dist` as the public directory and to rewrite all routes to `/index.html` for the SPA.
 
 ## Can I connect a custom domain to my Lovable project?
 

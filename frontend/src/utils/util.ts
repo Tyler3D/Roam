@@ -6,7 +6,8 @@ if (environment !== "dev" && environment !== "prod") {
 
 export const IS_DEV: boolean = environment === "dev";
 
-export const ROAM_DOMAIN: string = IS_DEV ? "http://localhost:3000/" : "https://roam-alpha.web.app/";
+export const ROAM_DOMAIN: string = import.meta.env.VITE_ROAM_DOMAIN;
+export const ROAM_API_BASE: string = import.meta.env.VITE_API_BASE_URL;
 
 /** Fire GA4 event if gtag is available */
 export function googleAnalyticsTrackEvent(

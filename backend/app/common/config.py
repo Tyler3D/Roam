@@ -55,3 +55,43 @@ def getOpenAIApiKey() -> str:
 def getGoogleMapsApiKey() -> str | None:
     return getOptionalEnv("GOOGLE_MAPS_API_KEY")
 
+
+def getFrontendUrl() -> str:
+    return getOptionalEnv("FRONTEND_URL") or "https://roam-alpha.web.app"
+
+
+def getTwilioAccountSid() -> str | None:
+    return getOptionalEnv("TWILIO_ACCOUNT_SID")
+
+
+def getTwilioAuthToken() -> str | None:
+    return getOptionalEnv("TWILIO_AUTH_TOKEN")
+
+
+def getTwilioFromNumber() -> str | None:
+    return getOptionalEnv("TWILIO_FROM_NUMBER")
+
+
+def getSmtpHost() -> str | None:
+    return getOptionalEnv("SMTP_HOST")
+
+
+def getSmtpPort() -> int:
+    return int(getOptionalEnv("SMTP_PORT") or "587")
+
+
+def getSmtpUser() -> str | None:
+    return getOptionalEnv("SMTP_USER")
+
+
+def getSmtpPassword() -> str | None:
+    return getOptionalEnv("SMTP_PASSWORD")
+
+
+def getSmtpFromEmail() -> str:
+    return getOptionalEnv("SMTP_FROM_EMAIL") or "noreply@roam.app"
+
+
+def getSendGridApiKey() -> str | None:
+    return getOptionalEnv("SENDGRID_API_KEY")
+

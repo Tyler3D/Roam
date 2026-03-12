@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
+from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session, select, col, or_
 
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser
 from app.common.backendErrors import BadRequest, NotFound
 from app.common.db import commitAndRefresh, getSession
-from app.models.users import UserCreate, UserModel, UserRead
+from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
 
 usersRouter = APIRouter()
 
@@ -19,20 +19,22 @@ USER_CONSTRAINT_MESSAGES = {
 def _ensureFirebaseUserOrRaise(
     firebaseUid: str,
     email: str,
-    displayName: str | None,
+    firstName: str | None,
     photoUrl: str | None,
 ) -> None:
-    """Ensure Firebase has this user (get-or-create). Idempotent: safe to call on retries."""
     try:
+        displayName = firstName or ""
         ensureFirebaseUser(firebaseUid, email, displayName, photoUrl)
     except Exception as exc:
         raise BadRequest("Failed to create Firebase user") from exc
 
 
 def _applyUserUpdates(existingUser: UserModel, request: UserCreate, email: str) -> None:
-    existingUser.username = request.username
+    if request.username:
+        existingUser.username = request.username
     existingUser.email = email
-    existingUser.displayName = request.displayName
+    existingUser.firstName = request.firstName
+    existingUser.lastName = request.lastName
     existingUser.photoUrl = request.photoUrl
 
 
@@ -43,6 +45,21 @@ def _setActivationFromToken(user: UserModel, tokenEmailVerified: bool) -> None:
 
 @usersRouter.get("/me")
 def getMe(user: UserModel = Depends(getCurrentUser)) -> UserRead:
+    return UserRead.model_validate(user)
+
+
+@usersRouter.put("/me", response_model=UserRead)
+def updateMe(
+    body: UserUpdate,
+    auth: CurrentAuth = Depends(getCurrentAuth),
+    session: Session = Depends(getSession),
+) -> UserRead:
+    user = auth.user
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
+    session.add(user)
+    commitAndRefresh(session, user, constraintMessages=USER_CONSTRAINT_MESSAGES)
     return UserRead.model_validate(user)
 
 
@@ -72,8 +89,6 @@ def createUser(
     email = tokenEmail or request.email
     if not email:
         raise BadRequest("Email is required")
-    if not request.username.strip():
-        raise BadRequest("Username is required")
 
     existingUser = auth.user
 
@@ -82,7 +97,7 @@ def createUser(
             _ensureFirebaseUserOrRaise(
                 firebaseUid,
                 email,
-                request.displayName,
+                request.firstName,
                 request.photoUrl,
             )
             _setActivationFromToken(existingUser, tokenEmailVerified)
@@ -91,18 +106,19 @@ def createUser(
         commitAndRefresh(session, existingUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
         return UserRead.model_validate(existingUser)
 
-    # New user: ensure Firebase first (idempotent), then single DB commit. Retries are safe.
     _ensureFirebaseUserOrRaise(
         firebaseUid,
         email,
-        request.displayName,
+        request.firstName,
         request.photoUrl,
     )
     newUser = UserModel(
         firebaseUid=firebaseUid,
         username=request.username,
         email=email,
-        displayName=request.displayName,
+        firstName=request.firstName,
+        lastName=request.lastName,
+        phone=request.phone,
         photoUrl=request.photoUrl,
         isActive=tokenEmailVerified,
         emailVerified=tokenEmailVerified,
@@ -111,3 +127,22 @@ def createUser(
     commitAndRefresh(session, newUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
     return UserRead.model_validate(newUser)
 
+
+@usersRouter.get("/users/search", response_model=list[UserRead])
+def searchUsers(
+    q: str = Query(..., min_length=1),
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> list[UserRead]:
+    q_lower = q.lower()
+    results = session.exec(
+        select(UserModel).where(
+            UserModel.id != user.id,
+            or_(
+                col(UserModel.firstName).ilike(f"%{q_lower}%"),
+                col(UserModel.lastName).ilike(f"%{q_lower}%"),
+                col(UserModel.username).ilike(f"%{q_lower}%"),
+            ),
+        ).limit(20)
+    ).all()
+    return [UserRead.model_validate(u) for u in results]

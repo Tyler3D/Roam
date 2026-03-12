@@ -20,7 +20,7 @@ export function LocationAutocomplete({
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, _setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState(value);
 
   useEffect(() => {

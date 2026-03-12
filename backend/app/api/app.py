@@ -10,6 +10,12 @@ from fastapi.responses import JSONResponse
 
 from app.api.ingest import ingestRouter
 from app.api.users import usersRouter
+from app.api.ideas import ideasRouter
+from app.api.plans import plansRouter
+from app.api.places import placesRouter
+from app.api.friends import friendsRouter
+from app.api.share import shareRouter
+from app.api.notifications import notificationsRouter
 from app.auth.auth import getBearerToken, verifyFirebaseTokenString
 from app.common.backendErrors import Forbidden, RateLimited, Unauthorized
 from app.common.config import IS_DEV, getTrustedAuthProviders
@@ -105,6 +111,8 @@ trustedAuthProviders = getTrustedAuthProviders()
 
 
 def _isAuthExemptPath(path: str) -> bool:
+    if path.startswith("/api/share/"):
+        return True
     return path in {
         "/health",
         "/docs",
@@ -200,4 +208,10 @@ def healthCheck() -> dict:
 
 app.include_router(usersRouter, prefix="/api")
 app.include_router(ingestRouter, prefix="/api")
+app.include_router(ideasRouter, prefix="/api")
+app.include_router(plansRouter, prefix="/api")
+app.include_router(placesRouter, prefix="/api")
+app.include_router(friendsRouter, prefix="/api")
+app.include_router(shareRouter, prefix="/api")
+app.include_router(notificationsRouter, prefix="/api")
 
