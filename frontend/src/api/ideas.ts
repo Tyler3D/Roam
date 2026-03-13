@@ -27,6 +27,10 @@ function promoteIdea(id: string) {
   return request<Plan>(`/api/ideas/${id}/plan`, { method: "POST" });
 }
 
+function selectPlaceSuggestion(ideaId: string, suggestionId: string) {
+  return request<Idea>(`/api/ideas/${ideaId}/place-suggestions/${suggestionId}`, { method: "PATCH" });
+}
+
 export function useIdeas() {
   return useQuery({
     queryKey: ideaKeys.all,
@@ -85,6 +89,19 @@ export function usePromoteIdea() {
         old?.filter((i) => i.id !== id)
       );
       qc.invalidateQueries({ queryKey: ["plans"] });
+    },
+  });
+}
+
+export function useSelectPlaceSuggestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ideaId, suggestionId }: { ideaId: string; suggestionId: string }) =>
+      selectPlaceSuggestion(ideaId, suggestionId),
+    onSuccess: (updated) => {
+      qc.setQueryData<Idea[]>(ideaKeys.all, (old) =>
+        old?.map((i) => (i.id === updated.id ? updated : i))
+      );
     },
   });
 }

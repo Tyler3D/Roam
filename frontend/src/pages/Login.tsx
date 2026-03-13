@@ -1,18 +1,22 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 
 export default function Login() {
-  const { signInWithGoogle, signIn, loading } = useAuth();
+  const { user, signInWithGoogle, signIn, loading } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  async function handleGoogle() {
+  if (user && !loading) {
+    console.log("[roam-auth] Login redirecting to /app", user.uid);
+    return <Navigate to="/app" replace />;
+  }
+
+  function handleGoogle() {
     try {
-      await signInWithGoogle();
-      navigate("/app");
+      signInWithGoogle();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Google sign-in failed");
     }

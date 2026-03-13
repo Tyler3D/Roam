@@ -15,13 +15,18 @@ async function getHeaders(): Promise<Record<string, string>> {
 }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${ROAM_API_BASE}${path}`;
+  console.log("[roam-api] request", path, url);
   const headers = await getHeaders();
-  const res = await fetch(`${ROAM_API_BASE}${path}`, {
+  const res = await fetch(url, {
     ...options,
     headers: { ...headers, ...(options?.headers || {}) },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: "Request failed" }));
+    if (!(path === "/api/me" && res.status === 404)) {
+      console.warn("[roam-api] request failed", path, res.status, body);
+    }
     throw { status: res.status, message: body?.detail || "Request failed" };
   }
   if (res.status === 204) return null as T;

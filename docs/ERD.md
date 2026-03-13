@@ -12,10 +12,10 @@ erDiagram
         text phone
         text photoUrl
         text city
-        jsonb tags
+        jsonb interestTags
         boolean isActive
         boolean isOnboarded
-        boolean isExternal
+        boolean isGuestUser
         boolean emailVerified
         timestamptz createdAt
     }
@@ -34,18 +34,26 @@ erDiagram
         timestamptz createdAt
     }
 
-    enrichments {
+    pipeline_results {
         uuid id PK
+        uuid ideaId FK "nullable"
+        uuid jobId FK "nullable"
+        text source
         text refinedTitle
         text category
-        text searchQuery
-        text_arr tags
         integer estimatedMinutes
-        text preference
-        boolean aiEnriched
         text modelName
         jsonb rawOutput
-        jsonb confidence
+        timestamptz createdAt
+    }
+
+    place_suggestions {
+        uuid id PK
+        uuid resultId FK
+        uuid placeId FK "nullable"
+        text rawName
+        double confidence
+        boolean isSelected
         timestamptz createdAt
     }
 
@@ -62,10 +70,11 @@ erDiagram
         uuid userId FK
         text title
         text notes
-        text savedLink
+        text sourceUrl
+        text displayName "nullable"
         uuid placeId FK "nullable"
-        uuid enrichmentId FK "nullable"
         ideaStatus status
+        integer planCount "computed via ideas_with_plan_count view"
         timestamptz createdAt
         timestamptz updatedAt
     }
@@ -75,7 +84,6 @@ erDiagram
         uuid creatorId FK
         uuid placeId FK "nullable"
         uuid ideaId FK "nullable"
-        uuid enrichmentId FK "nullable"
         text title
         timestamptz scheduledAt
         planStatus status
@@ -83,7 +91,7 @@ erDiagram
         text rawPrompt
         integer estimatedMinutes
         text calendarEventId
-        integer covers
+        integer partySize
         integer rating "1-5"
         text taskNotes
         timestamptz createdAt
@@ -132,27 +140,18 @@ erDiagram
         timestamptz createdAt
     }
 
-    ingestion_jobs {
+    reel_ingestion_jobs {
         uuid id PK
         uuid userId FK
         text reelUrl
         text shareText
-        text lpTitle
+        text reelTitle
         text ogDescription
         text ogKeywords
         jobStatus status
         text error
         timestamptz createdAt
         timestamptz updatedAt
-    }
-
-    extractions {
-        uuid id PK
-        uuid jobId FK
-        uuid placeId FK "nullable"
-        double confidence
-        jsonb rawLlmOutput
-        timestamptz createdAt
     }
 
     users ||--o{ friendships : "requests"
@@ -162,16 +161,18 @@ erDiagram
     users ||--o{ plan_members : "joins"
     users ||--o{ plan_messages : "sends"
     users ||--o{ notifications : "receives"
-    users ||--o{ ingestion_jobs : "submits"
+    users ||--o{ reel_ingestion_jobs : "submits"
 
-    enrichments ||--o{ ideas : "enriches"
-    enrichments ||--o{ plans : "enriches"
+    pipeline_results ||--o{ ideas : "enriches"
+    pipeline_results ||--o{ reel_ingestion_jobs : "from reel"
+    pipeline_results ||--o{ place_suggestions : "has"
+
+    place_suggestions }o--|| places : "references"
 
     places ||--o{ ideas : "located at"
     places ||--o{ plans : "hosts"
-    places ||--o{ extractions : "resolved from"
 
-    ideas ||--o{ plans : "promoted to"
+    ideas ||--o{ plans : "spawns"
 
     plans ||--o{ plan_members : "has"
     plans ||--o{ plan_tasks : "has"
@@ -180,15 +181,15 @@ erDiagram
 
     plan_members ||--o{ plan_tasks : "assigned"
 
-    ingestion_jobs ||--o{ extractions : "produces"
+    reel_ingestion_jobs ||--o{ pipeline_results : "produces"
 ```
 
 ## Enums
 
 | Enum | Values | Used By |
 |------|--------|---------|
-| `ideaStatus` | `captured`, `suggesting`, `ready`, `planned` | `ideas.status` |
-| `jobStatus` | `processing`, `done`, `failed` | `ingestion_jobs.status` |
+| `ideaStatus` | `captured`, `suggesting`, `ready`, `planned` (deprecated) | `ideas.status` — ideas stay `ready` after promotion; `planned` never set |
+| `jobStatus` | `processing`, `done`, `failed` | `reel_ingestion_jobs.status` |
 | `planStatus` | `draft`, `confirmed`, `completed`, `cancelled` | `plans.status` |
 | `rsvpStatus` | `pending`, `accepted`, `declined` | `plan_members.rsvpStatus` |
 | `memberRole` | `organizer`, `member` | `plan_members.role` |
@@ -202,10 +203,12 @@ erDiagram
 | `plans.creatorId` | `users.id` | many-to-one | CASCADE |
 | `plans.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
 | `plans.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
-| `plans.enrichmentId` | `enrichments.id` | many-to-one (nullable) | SET NULL |
 | `ideas.userId` | `users.id` | many-to-one | CASCADE |
 | `ideas.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
-| `ideas.enrichmentId` | `enrichments.id` | many-to-one (nullable) | SET NULL |
+| `pipeline_results.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
+| `pipeline_results.jobId` | `reel_ingestion_jobs.id` | many-to-one (nullable) | SET NULL |
+| `place_suggestions.resultId` | `pipeline_results.id` | many-to-one | CASCADE |
+| `place_suggestions.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
 | `plan_members.planId` | `plans.id` | many-to-one | CASCADE |
 | `plan_members.userId` | `users.id` | many-to-one | CASCADE |
 | `plan_tasks.planId` | `plans.id` | many-to-one | CASCADE |
@@ -216,18 +219,24 @@ erDiagram
 | `friendships.addresseeId` | `users.id` | many-to-one | CASCADE |
 | `notifications.userId` | `users.id` | many-to-one | CASCADE |
 | `notifications.planId` | `plans.id` | many-to-one (nullable) | CASCADE |
-| `ingestion_jobs.userId` | `users.id` | many-to-one | CASCADE |
-| `extractions.jobId` | `ingestion_jobs.id` | many-to-one | CASCADE |
-| `extractions.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
+| `reel_ingestion_jobs.userId` | `users.id` | many-to-one | CASCADE |
+
+## Views
+
+| View | Definition | Purpose |
+|------|------------|---------|
+| `ideas_with_plan_count` | `ideas` LEFT JOIN `plans` GROUP BY `ideas.id` | Adds computed `planCount` for each idea; used by API when listing ideas |
 
 ## Data Flow
 
 ```
-Reel shared -> ingestion_job -> extraction -> place (created/matched)
+Reel shared -> reel_ingestion_job -> idea (captured) -> suggesting -> pipeline_result + place_suggestions -> ready
+                                                                    -> places (created/matched)
 
-User input -> idea (raw) -> enrichment (AI) -> place (resolved)
-                                            -> idea card in UI
-                         -> "Plan this" -> plan + plan_members
+User input -> idea (raw) -> suggesting -> pipeline_result + place_suggestions -> ready
+                                                          -> place (resolved)
+                                                          -> idea card in UI
+                         -> "Plan this" -> plan + plan_members (idea stays ready, reusable)
                                         -> shareCode -> /share/schedule?uid={shareCode}
                                         -> external user RSVP (auto-friend)
                                         -> calendar invite (GCal or SMS)

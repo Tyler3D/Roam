@@ -6,6 +6,7 @@ from uuid import UUID
 
 import httpx
 from openai import OpenAI
+from sqlmodel import Session, select
 
 from app.common.config import getOpenAIApiKey, getGoogleMapsApiKey
 
@@ -13,7 +14,10 @@ from app.common.config import getOpenAIApiKey, getGoogleMapsApiKey
 class ProviderRateLimitError(Exception):
     pass
 from app.common.db import getSession
-from app.models.ingestion import ExtractionModel, IngestionJobModel, JobStatus
+from app.models.ideas import IdeaModel, IdeaStatus
+from app.models.ingestion import IngestionJobModel, JobStatus
+from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
+from app.models.places import PlaceModel
 
 logger = logging.getLogger("roam.processing")
 
@@ -40,8 +44,8 @@ def _buildUserMessage(framesData: list[bytes], thumbnailData: bytes | None, meta
     content: list[dict] = []
 
     textParts = []
-    if metadata.get("lpTitle"):
-        textParts.append(f"Title: {metadata['lpTitle']}")
+    if metadata.get("reelTitle"):
+        textParts.append(f"Title: {metadata['reelTitle']}")
     if metadata.get("ogDescription"):
         textParts.append(f"Description: {metadata['ogDescription']}")
     if metadata.get("ogKeywords"):
@@ -153,6 +157,60 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
         return None
 
 
+def _create_or_get_place(
+    session: Session,
+    place_name: str,
+    address: str | None,
+    google_place_id: str | None,
+    category: str | None,
+    latitude: float | None,
+    longitude: float | None,
+) -> PlaceModel | None:
+    if google_place_id:
+        existing = session.exec(
+            select(PlaceModel).where(PlaceModel.googlePlaceId == google_place_id)
+        ).first()
+        if existing:
+            return existing
+
+    place = PlaceModel(
+        googlePlaceId=google_place_id,
+        name=place_name or "Unknown",
+        address=address,
+        city=None,
+        latitude=latitude,
+        longitude=longitude,
+        category=category,
+    )
+    session.add(place)
+    session.flush()
+    return place
+
+
+def _auto_select_place(
+    session: Session,
+    idea: IdeaModel,
+    suggestions: list[tuple[PlaceSuggestionModel, float | None]],
+) -> None:
+    """Auto-select when confidence > 0.9 or exactly one suggestion."""
+    if len(suggestions) == 1:
+        sel, _ = suggestions[0]
+        sel.isSelected = True
+        idea.placeId = sel.placeId
+        session.add(sel)
+        return
+    for sel, conf in suggestions:
+        if conf is not None and conf > 0.9:
+            sel.isSelected = True
+            idea.placeId = sel.placeId
+            session.add(sel)
+            for other, _ in suggestions:
+                if other.id != sel.id:
+                    other.isSelected = False
+                    session.add(other)
+            return
+
+
 def processIngestionJob(
     jobId: str,
     framesData: list[bytes],
@@ -170,29 +228,75 @@ def processIngestionJob(
             logger.error("Job not found", extra={"jobId": jobId})
             return
 
+        title = metadata.get("reelTitle") or metadata.get("shareText") or "Untitled reel"
+        idea = IdeaModel(
+            userId=job.userId,
+            title=title[:500],
+            sourceUrl=metadata.get("reelUrl"),
+            status=IdeaStatus.captured,
+        )
+        session.add(idea)
+        session.flush()
+
+        idea.status = IdeaStatus.suggesting
+        idea.updatedAt = datetime.utcnow()
+        session.add(idea)
+        session.flush()
+
         candidates = _callVisionLLM(framesData, thumbnailData, metadata)
         filtered = [c for c in candidates if c.get("confidence", 0) >= CONFIDENCE_THRESHOLD]
 
+        first = filtered[0] if filtered else {}
+        refined_title = first.get("placeName") or title
+        category = first.get("category")
+        estimated_minutes = 90
+
+        pipeline_result = PipelineResultModel(
+            ideaId=idea.id,
+            jobId=UUID(jobId),
+            source="reel",
+            refinedTitle=refined_title,
+            category=category,
+            estimatedMinutes=estimated_minutes,
+            modelName="gpt-4o",
+            rawOutput={"candidates": candidates, "metadata": metadata},
+        )
+        session.add(pipeline_result)
+        session.flush()
+
+        suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
         for candidate in filtered:
             placeName = candidate.get("placeName", "")
             placeAddress = candidate.get("placeAddress")
-            category = candidate.get("category")
-            confidence = candidate.get("confidence")
+            category_cand = candidate.get("category")
+            confidence = candidate.get("confidence", 0.0)
 
             resolved = _resolveGoogleMaps(placeName, placeAddress) or {}
-
-            extraction = ExtractionModel(
-                jobId=UUID(jobId),
-                placeName=placeName,
-                placeAddress=resolved.get("placeAddress", placeAddress),
-                category=category,
+            place = _create_or_get_place(
+                session,
+                place_name=placeName,
+                address=resolved.get("placeAddress", placeAddress),
+                google_place_id=resolved.get("googlePlaceId"),
+                category=category_cand,
                 latitude=resolved.get("latitude"),
                 longitude=resolved.get("longitude"),
-                googlePlaceId=resolved.get("googlePlaceId"),
-                confidence=confidence,
-                rawLlmOutput=candidate,
             )
-            session.add(extraction)
+            if place:
+                sugg = PlaceSuggestionModel(
+                    resultId=pipeline_result.id,
+                    placeId=place.id,
+                    rawName=placeName,
+                    confidence=confidence,
+                )
+                session.add(sugg)
+                session.flush()
+                suggestions.append((sugg, confidence))
+
+        _auto_select_place(session, idea, suggestions)
+
+        idea.status = IdeaStatus.ready
+        idea.updatedAt = datetime.utcnow()
+        session.add(idea)
 
         job.status = JobStatus.done
         job.updatedAt = datetime.utcnow()
@@ -201,7 +305,7 @@ def processIngestionJob(
 
         logger.info(
             "processing_complete",
-            extra={"jobId": jobId, "extractionCount": len(filtered), "candidateCount": len(candidates)},
+            extra={"jobId": jobId, "ideaId": str(idea.id), "suggestionCount": len(suggestions), "candidateCount": len(candidates)},
         )
     except ProviderRateLimitError as e:
         logger.warning("processing_rate_limited", extra={"jobId": jobId, "message": str(e)})

@@ -17,7 +17,18 @@ import ResetPassword from "@/pages/ResetPassword";
 import ChooseUsername from "@/pages/ChooseUsername";
 import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        const status = (error as { status?: number })?.status;
+        if (status === 404) return false;
+        if (status && status >= 400 && status < 500) return false;
+        return failureCount < 2;
+      },
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

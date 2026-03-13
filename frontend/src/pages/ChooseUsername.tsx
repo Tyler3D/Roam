@@ -6,14 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const buildSuggestedUsername = (displayName: string) => {
+/** firstNamelastName for Google accounts (e.g. "John Doe" → "johndoe"). Empty for others. */
+const buildSuggestedUsername = (
+  displayName: string,
+  isGoogle: boolean,
+) => {
+  if (!isGoogle) return "";
   const trimmedName = displayName.trim();
-  if (!trimmedName) {
-    return "";
-  }
-  const parts = trimmedName.split(/\s+/);
+  if (!trimmedName) return "";
+  const parts = trimmedName.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
-    return `${parts[0]}${parts[1]}`.toLowerCase();
+    return `${parts[0]}${parts[parts.length - 1]}`.toLowerCase();
   }
   return trimmedName.replace(/\s+/g, "").toLowerCase();
 };
@@ -21,7 +24,14 @@ const buildSuggestedUsername = (displayName: string) => {
 export default function ChooseUsername() {
   const navigate = useNavigate();
   const { user, ensureBackendUser, isUserVerified } = useAuth();
-  const suggested = useMemo(() => buildSuggestedUsername(user?.displayName ?? ""), [user]);
+  const isGoogle = useMemo(
+    () => user?.providerData?.some((p) => p.providerId === "google.com") ?? false,
+    [user],
+  );
+  const suggested = useMemo(
+    () => buildSuggestedUsername(user?.displayName ?? "", isGoogle),
+    [user?.displayName, isGoogle],
+  );
   const [username, setUsername] = useState(suggested);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

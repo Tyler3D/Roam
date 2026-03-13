@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
@@ -12,7 +12,7 @@ import { deleteUser } from "firebase/auth";
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { signUp, signInWithGoogle, sendVerificationEmail, ensureBackendUser } = useAuth();
+  const { user, loading: authLoading, signUp, signInWithGoogle, sendVerificationEmail, ensureBackendUser } = useAuth();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -85,17 +85,13 @@ export default function Signup() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  useEffect(() => {
+    if (user && !authLoading) navigate("/choose-username");
+  }, [user, authLoading, navigate]);
+
+  const handleGoogleSignIn = () => {
     setError("");
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-      navigate("/choose-username");
-    } catch (err) {
-      setError("Google sign-up failed.");
-    } finally {
-      setLoading(false);
-    }
+    signInWithGoogle();
   };
 
   const passwordChecks = validatePassword(password);

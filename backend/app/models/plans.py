@@ -38,7 +38,6 @@ class PlanModel(SQLModel, table=True):
     creatorId: UUID = Field(foreign_key="users.id", nullable=False)
     placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
     ideaId: Optional[UUID] = Field(default=None, foreign_key="ideas.id")
-    enrichmentId: Optional[UUID] = Field(default=None, foreign_key="enrichments.id")
     title: str = Field(nullable=False)
     scheduledAt: Optional[datetime] = None
     status: PlanStatus = Field(
@@ -52,7 +51,7 @@ class PlanModel(SQLModel, table=True):
     rawPrompt: Optional[str] = None
     estimatedMinutes: int = Field(default=60)
     calendarEventId: Optional[str] = None
-    covers: int = Field(default=2)
+    partySize: int = Field(default=1)
     rating: Optional[int] = None
     taskNotes: str = Field(default="")
     createdAt: datetime = Field(default_factory=datetime.utcnow)
@@ -96,7 +95,7 @@ class PlanCreate(SQLModel):
     ideaId: Optional[UUID] = None
     scheduledAt: Optional[datetime] = None
     estimatedMinutes: int = 60
-    covers: int = 2
+    partySize: int = 1
     rawPrompt: Optional[str] = None
     taskNotes: str = ""
 
@@ -106,7 +105,6 @@ class PlanRead(SQLModel):
     creatorId: UUID
     placeId: Optional[UUID] = None
     ideaId: Optional[UUID] = None
-    enrichmentId: Optional[UUID] = None
     title: str
     scheduledAt: Optional[datetime] = None
     status: PlanStatus
@@ -114,7 +112,7 @@ class PlanRead(SQLModel):
     rawPrompt: Optional[str] = None
     estimatedMinutes: int
     calendarEventId: Optional[str] = None
-    covers: int
+    partySize: int
     rating: Optional[int] = None
     taskNotes: str
     createdAt: datetime
@@ -129,7 +127,7 @@ class PlanUpdate(SQLModel):
     scheduledAt: Optional[datetime] = None
     status: Optional[PlanStatus] = None
     estimatedMinutes: Optional[int] = None
-    covers: Optional[int] = None
+    partySize: Optional[int] = None
     rating: Optional[int] = None
     taskNotes: Optional[str] = None
 

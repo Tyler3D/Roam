@@ -109,11 +109,6 @@ def suggestSlots(
         raise NotFound("Plan not found")
 
     preference = "any"
-    if plan.enrichmentId:
-        from app.models.enrichments import EnrichmentModel
-        enrichment = session.get(EnrichmentModel, plan.enrichmentId)
-        if enrichment and enrichment.preference:
-            preference = enrichment.preference
 
     opening_hours = None
     if plan.placeId:

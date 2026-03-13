@@ -160,6 +160,23 @@ export interface paths {
         patch: operations["updateIdea_api_ideas__ideaId__patch"];
         trace?: never;
     };
+    "/api/ideas/{ideaId}/place-suggestions/{suggestionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Selectplacesuggestion */
+        patch: operations["selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch"];
+        trace?: never;
+    };
     "/api/ideas/{ideaId}/interpret": {
         parameters: {
             query?: never;
@@ -480,8 +497,8 @@ export interface components {
             reelUrl: string;
             /** Sharetext */
             shareText?: string | null;
-            /** Lptitle */
-            lpTitle?: string | null;
+            /** Reeltitle */
+            reelTitle?: string | null;
             /** Ogdescription */
             ogDescription?: string | null;
             /** Ogkeywords */
@@ -494,45 +511,30 @@ export interface components {
              */
             frames: string[];
         };
-        /** EnrichmentRead */
-        EnrichmentRead: {
-            /**
-             * Id
-             * Format: uuid
-             */
+        /** PlaceSuggestionRead */
+        PlaceSuggestionRead: {
             id: string;
-            /** Refinedtitle */
-            refinedTitle?: string | null;
-            /** Category */
-            category?: string | null;
-            /** Searchquery */
-            searchQuery?: string | null;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
-            /** Estimatedminutes */
-            estimatedMinutes?: number | null;
-            /** Preference */
-            preference?: string | null;
-            /** Aienriched */
-            aiEnriched: boolean;
-            /** Modelname */
-            modelName?: string | null;
-            /** Rawoutput */
-            rawOutput?: {
-                [key: string]: unknown;
-            } | null;
-            /** Confidence */
-            confidence?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Createdat
-             * Format: date-time
-             */
+            resultId: string;
+            placeId?: string | null;
+            rawName?: string | null;
+            confidence?: number | null;
+            isSelected: boolean;
             createdAt: string;
+            placeName?: string | null;
+        };
+        /** PipelineResultRead */
+        PipelineResultRead: {
+            id: string;
+            ideaId?: string | null;
+            jobId?: string | null;
+            source: string;
+            refinedTitle?: string | null;
+            category?: string | null;
+            estimatedMinutes?: number | null;
+            modelName?: string | null;
+            rawOutput?: { [key: string]: unknown } | null;
+            createdAt: string;
+            placeSuggestions: components["schemas"]["PlaceSuggestionRead"][];
         };
         /** ExtractionRead */
         ExtractionRead: {
@@ -623,8 +625,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** IdeaStatus */
-        IdeaStatus: "captured" | "suggesting" | "ready" | "planned";
         /** IdeaCreate */
         IdeaCreate: {
             /** Title */
@@ -635,58 +635,44 @@ export interface components {
              */
             notes: string;
             /**
-             * Savedlink
+             * Sourceurl
              * @default
              */
-            savedLink: string;
+            sourceUrl: string;
+            /** Displayname */
+            displayName?: string | null;
         };
         /** IdeaRead */
         IdeaRead: {
-            /**
-             * Id
-             * Format: uuid
-             */
             id: string;
-            /**
-             * Userid
-             * Format: uuid
-             */
             userId: string;
-            /** Title */
             title: string;
-            /** Notes */
             notes: string;
-            /** Savedlink */
-            savedLink: string;
-            /** Placeid */
+            sourceUrl: string;
+            displayName?: string | null;
             placeId?: string | null;
-            /** Enrichmentid */
-            enrichmentId?: string | null;
-            /** Status */
             status: components["schemas"]["IdeaStatus"];
-            /**
-             * Createdat
-             * Format: date-time
-             */
+            planCount: number;
             createdAt: string;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
             updatedAt: string;
-            enrichment?: components["schemas"]["EnrichmentRead"] | null;
-            /** Placename */
+            pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
             placeName?: string | null;
         };
+        /**
+         * IdeaStatus
+         * @enum {string}
+         */
+        IdeaStatus: "captured" | "suggesting" | "ready" | "planned";
         /** IdeaUpdate */
         IdeaUpdate: {
             /** Title */
             title?: string | null;
             /** Notes */
             notes?: string | null;
-            /** Savedlink */
-            savedLink?: string | null;
-            /** Status */
+            /** Sourceurl */
+            sourceUrl?: string | null;
+            /** Displayname */
+            displayName?: string | null;
             status?: components["schemas"]["IdeaStatus"] | null;
         };
         /** IngestJobResponse */
@@ -705,8 +691,8 @@ export interface components {
             reelUrl: string;
             /** Sharetext */
             shareText?: string | null;
-            /** Lptitle */
-            lpTitle?: string | null;
+            /** Reeltitle */
+            reelTitle?: string | null;
             /** Ogdescription */
             ogDescription?: string | null;
             /** Ogkeywords */
@@ -724,11 +710,8 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
-            /**
-             * Extractions
-             * @default []
-             */
-            extractions: components["schemas"]["ExtractionRead"][];
+            /** Pipeline result when job is done */
+            pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
         };
         /**
          * JobStatus
@@ -871,8 +854,8 @@ export interface components {
             estimatedMinutes: number;
             /** Calendareventid */
             calendarEventId?: string | null;
-            /** Covers */
-            covers: number;
+            /** Partysize */
+            partySize: number;
             /** Rating */
             rating?: number | null;
             /** Tasknotes */
@@ -911,8 +894,8 @@ export interface components {
             status?: components["schemas"]["PlanStatus"] | null;
             /** Estimatedminutes */
             estimatedMinutes?: number | null;
-            /** Covers */
-            covers?: number | null;
+            /** Partysize */
+            partySize?: number | null;
             /** Rating */
             rating?: number | null;
             /** Tasknotes */
@@ -1001,8 +984,8 @@ export interface components {
             isActive: boolean;
             /** Isonboarded */
             isOnboarded: boolean;
-            /** Isexternal */
-            isExternal: boolean;
+            /** Isguestuser */
+            isGuestUser: boolean;
             /** Emailverified */
             emailVerified: boolean;
             /**
@@ -1383,6 +1366,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ideaId: string;
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: { [name: string]: unknown };
+                content: { "application/json": components["schemas"]["IdeaRead"] };
+            };
+            422: {
+                headers: { [name: string]: unknown };
+                content: { "application/json": components["schemas"]["HTTPValidationError"] };
             };
         };
     };

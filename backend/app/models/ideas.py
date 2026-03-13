@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from sqlmodel import Column, Field, SQLModel
 from sqlalchemy import Enum as SAEnum
 
-from app.models.enrichments import EnrichmentRead
+from app.models.pipeline import PipelineResultRead
 
 
 class IdeaStatus(str, Enum):
@@ -16,6 +16,29 @@ class IdeaStatus(str, Enum):
     planned = "planned"
 
 
+class IdeaWithPlanCountView(SQLModel, table=True):
+    """Read-only view: ideas joined with COUNT(plans). Use for listing ideas with planCount."""
+    __tablename__ = "ideas_with_plan_count"
+    __table_args__ = {"info": {"is_view": True}}
+
+    id: UUID = Field(primary_key=True)
+    userId: UUID = Field(foreign_key="users.id", nullable=False)
+    title: str = Field(nullable=False)
+    notes: str = Field(default="")
+    sourceUrl: str = Field(default="")
+    displayName: Optional[str] = Field(default=None)
+    placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    status: IdeaStatus = Field(
+        sa_column=Column(
+            SAEnum(IdeaStatus, name="ideaStatus", create_type=False),
+            nullable=False,
+        )
+    )
+    planCount: int = Field(default=0)
+    createdAt: datetime = Field()
+    updatedAt: datetime = Field()
+
+
 class IdeaModel(SQLModel, table=True):
     __tablename__ = "ideas"
 
@@ -23,9 +46,9 @@ class IdeaModel(SQLModel, table=True):
     userId: UUID = Field(foreign_key="users.id", nullable=False)
     title: str = Field(nullable=False)
     notes: str = Field(default="")
-    savedLink: str = Field(default="")
+    sourceUrl: str = Field(default="")
+    displayName: Optional[str] = Field(default=None)
     placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
-    enrichmentId: Optional[UUID] = Field(default=None, foreign_key="enrichments.id")
     status: IdeaStatus = Field(
         sa_column=Column(
             SAEnum(IdeaStatus, name="ideaStatus", create_type=False),
@@ -40,7 +63,8 @@ class IdeaModel(SQLModel, table=True):
 class IdeaCreate(SQLModel):
     title: str
     notes: str = ""
-    savedLink: str = ""
+    sourceUrl: str = ""
+    displayName: Optional[str] = None
 
 
 class IdeaRead(SQLModel):
@@ -48,18 +72,20 @@ class IdeaRead(SQLModel):
     userId: UUID
     title: str
     notes: str
-    savedLink: str
+    sourceUrl: str
+    displayName: Optional[str] = None
     placeId: Optional[UUID] = None
-    enrichmentId: Optional[UUID] = None
     status: IdeaStatus
+    planCount: int = 0
     createdAt: datetime
     updatedAt: datetime
-    enrichment: Optional[EnrichmentRead] = None
+    pipelineResult: Optional[PipelineResultRead] = None
     placeName: Optional[str] = None
 
 
 class IdeaUpdate(SQLModel):
     title: Optional[str] = None
     notes: Optional[str] = None
-    savedLink: Optional[str] = None
+    sourceUrl: Optional[str] = None
+    displayName: Optional[str] = None
     status: Optional[IdeaStatus] = None

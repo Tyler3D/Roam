@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict
 
 from fastapi import Depends, Header, Request
@@ -39,6 +40,9 @@ def getDecodedTokenFromRequest(request: Request) -> Dict[str, Any]:
     return decoded
 
 
+logger = logging.getLogger("roam.auth")
+
+
 def getCurrentAuth(
     request: Request,
     session: Session = Depends(getSession),
@@ -48,6 +52,14 @@ def getCurrentAuth(
     uid = decoded.get("uid")
     user = session.exec(select(UserModel).where(UserModel.firebaseUid == uid)).first()
     if not user:
+        logger.info(
+            "user_not_found",
+            extra={
+                "firebaseUid": uid,
+                "path": request.url.path,
+                "email": decoded.get("email"),
+            },
+        )
         raise NotFound("User not found")
     return CurrentAuth(user=user, decodedToken=decoded)
 

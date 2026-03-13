@@ -1,3 +1,4 @@
 import type { components } from "./generated/api";
 
-export type Enrichment = components["schemas"]["EnrichmentRead"];
+export type PipelineResult = components["schemas"]["PipelineResultRead"];
+export type PlaceSuggestion = components["schemas"]["PlaceSuggestionRead"];

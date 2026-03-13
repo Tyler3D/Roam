@@ -18,10 +18,10 @@ class UserModel(SQLModel, table=True):
     phone: Optional[str] = None
     photoUrl: Optional[str] = None
     city: Optional[str] = None
-    tags: Optional[list] = Field(default=[], sa_column=Column(JSONB))
+    interestTags: Optional[list] = Field(default=[], sa_column=Column(JSONB))
     isActive: bool = Field(default=False)
     isOnboarded: bool = Field(default=False)
-    isExternal: bool = Field(default=False)
+    isGuestUser: bool = Field(default=False)
     emailVerified: bool = Field(default=False)
     createdAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -47,7 +47,7 @@ class UserRead(SQLModel):
     city: Optional[str] = None
     isActive: bool
     isOnboarded: bool
-    isExternal: bool
+    isGuestUser: bool
     emailVerified: bool
     createdAt: datetime
 

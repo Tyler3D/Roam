@@ -4,13 +4,17 @@ from app.models.users import UserModel, UserCreate, UserRead, UserUpdate  # noqa
 from app.models.ingestion import (  # noqa: F401
     JobStatus,
     IngestionJobModel,
-    ExtractionModel,
     IngestionJobCreate,
     IngestionJobRead,
-    ExtractionRead,
 )
 from app.models.places import PlaceModel, PlaceRead  # noqa: F401
-from app.models.enrichments import EnrichmentModel, EnrichmentRead  # noqa: F401
+from app.models.pipeline import (  # noqa: F401
+    PipelineResultModel,
+    PipelineResultRead,
+    PlaceSuggestionModel,
+    PlaceSuggestionRead,
+    PlaceSuggestionUpdate,
+)
 from app.models.ideas import IdeaModel, IdeaCreate, IdeaRead, IdeaUpdate, IdeaStatus  # noqa: F401
 from app.models.plans import (  # noqa: F401
     PlanStatus,

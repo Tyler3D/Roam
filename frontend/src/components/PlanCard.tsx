@@ -74,7 +74,7 @@ export default function PlanCard({ plan }: Props) {
         <div className="border-t border-roam-logan/[0.12] py-4 px-5 pb-[18px]">
           <div className="flex gap-2.5 flex-wrap mb-3.5">
             <StatPill label="Duration" value={`~${formatDuration(plan.estimatedMinutes)}`} />
-            <StatPill label="Party" value={`${plan.covers} ${plan.covers === 1 ? "person" : "people"}`} />
+            <StatPill label="Party" value={`${plan.partySize} ${plan.partySize === 1 ? "person" : "people"}`} />
           </div>
 
           {plan.members.length > 0 && (

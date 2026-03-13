@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
+  getRedirectResult,
   GoogleAuthProvider,
   User,
   createUserWithEmailAndPassword,
@@ -9,6 +10,7 @@ import {
   sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from "firebase/auth";
 
@@ -21,7 +23,7 @@ type AuthContextValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<User>;
   signUp: (email: string, password: string) => Promise<User>;
-  signInWithGoogle: () => Promise<User>;
+  signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -57,11 +59,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyUser = useVerifyBackendUser();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (nextUser) => {
-      setUser(nextUser);
-      setLoading(false);
+    console.log("[roam-auth] AuthProvider mount", {
+      href: window.location.href,
+      path: window.location.pathname,
+      hash: window.location.hash || "(empty)",
+      search: window.location.search || "(empty)",
     });
-    return unsubscribe;
+    let unsubscribe: (() => void) | undefined;
+    const setupListener = () => {
+      unsubscribe = onAuthStateChanged(firebaseAuth, (nextUser) => {
+        console.log("[roam-auth] onAuthStateChanged", nextUser?.uid ?? "null");
+        setUser(nextUser);
+        setLoading(false);
+      });
+    };
+    console.log("[roam-auth] calling getRedirectResult");
+    getRedirectResult(firebaseAuth)
+      .then((result) => {
+        console.log("[roam-auth] getRedirectResult done", result?.user?.uid ?? "no user");
+        setupListener();
+      })
+      .catch((err) => {
+        console.warn("[roam-auth] getRedirectResult error", err);
+        setupListener();
+      });
+    return () => unsubscribe?.();
   }, []);
 
   const isUserVerified = (inputUser: User | null = user) => {
@@ -94,8 +116,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       signInWithGoogle: async () => {
         const provider = new GoogleAuthProvider();
-        const credential = await signInWithPopup(firebaseAuth, provider);
-        return credential.user;
+        // signInWithRedirect is broken on localhost (Firebase bug: HTTPS/HTTP mismatch).
+        // Use popup for local dev; redirect for production. COOP header allows popups.
+        if (import.meta.env.DEV) {
+          console.log("[roam-auth] signInWithPopup (local dev)");
+          await signInWithPopup(firebaseAuth, provider);
+        } else {
+          console.log("[roam-auth] signInWithRedirect");
+          await signInWithRedirect(firebaseAuth, provider);
+        }
       },
       signOutUser: async () => {
         await signOut(firebaseAuth);
@@ -105,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error("No authenticated user");
         }
         const redirectUrl = `${ROAM_DOMAIN}/verify`;
-        console.info("Sending verification email", {
+        console.log("Sending verification email", {
           redirectUrl,
           handleCodeInApp: true,
         });

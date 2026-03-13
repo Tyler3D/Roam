@@ -87,7 +87,11 @@ async def unhandledExceptionHandler(request: Request, exc: Exception) -> JSONRes
     return response
 
 isDev = IS_DEV()
-allowOrigins = ["http://localhost:3000"] if isDev else ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
+allowOrigins = (
+    ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    if isDev
+    else ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -200,6 +204,10 @@ async def authAndRateLimitMiddleware(request: Request, callNext: Callable):
     )
     return response
 
+
+@app.on_event("startup")
+def startup():
+    logger.info("Roam API started")
 
 @app.get("/health")
 def healthCheck() -> dict:

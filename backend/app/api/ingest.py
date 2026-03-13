@@ -5,18 +5,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import getSession, handleIntegrityConflict
-from app.models.ingestion import (
-    ExtractionModel,
-    ExtractionRead,
-    IngestionJobModel,
-    IngestionJobRead,
-    JobStatus,
-)
+from app.models.ingestion import IngestionJobModel, IngestionJobRead, JobStatus
+from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
+from app.models.places import PlaceModel
 from app.models.users import UserModel
 from app.services.processing import processIngestionJob
 
@@ -30,7 +26,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB total for thumbnail + all frames
 
 
 class IngestJobResponse(IngestionJobRead):
-    extractions: list[ExtractionRead] = []
+    pipelineResult: PipelineResultRead | None = None
 
 
 @ingestRouter.post("/ingest", status_code=202)
@@ -39,7 +35,7 @@ async def createIngestionJob(
     user: UserModel = Depends(getCurrentUser),
     reelUrl: str = Form(...),
     shareText: Optional[str] = Form(None),
-    lpTitle: Optional[str] = Form(None),
+    reelTitle: Optional[str] = Form(None),
     ogDescription: Optional[str] = Form(None),
     ogKeywords: Optional[str] = Form(None),
     thumbnail: Optional[UploadFile] = File(None),
@@ -67,7 +63,7 @@ async def createIngestionJob(
         userId=user.id,
         reelUrl=reelUrl,
         shareText=shareText,
-        lpTitle=lpTitle,
+        reelTitle=reelTitle,
         ogDescription=ogDescription,
         ogKeywords=ogKeywords,
         status=JobStatus.processing,
@@ -91,7 +87,7 @@ async def createIngestionJob(
     metadata = {
         "reelUrl": reelUrl,
         "shareText": shareText,
-        "lpTitle": lpTitle,
+        "reelTitle": reelTitle,
         "ogDescription": ogDescription,
         "ogKeywords": ogKeywords,
     }
@@ -115,10 +111,28 @@ def getIngestionJob(
     if job.userId != user.id:
         raise Forbidden("Not your job")
 
-    extractions: list[ExtractionRead] = []
+    pipeline_result: PipelineResultRead | None = None
     if job.status == JobStatus.done:
-        rows = session.exec(select(ExtractionModel).where(ExtractionModel.jobId == jobId)).all()
-        extractions = [ExtractionRead.model_validate(r) for r in rows]
+        result = session.exec(
+            select(PipelineResultModel)
+            .where(PipelineResultModel.jobId == jobId)
+            .order_by(col(PipelineResultModel.createdAt).desc())
+            .limit(1)
+        ).first()
+        if result:
+            suggestions = session.exec(
+                select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
+            ).all()
+            read = PipelineResultRead.model_validate(result)
+            read.placeSuggestions = []
+            for s in suggestions:
+                sr = PlaceSuggestionRead.model_validate(s)
+                if s.placeId:
+                    place = session.get(PlaceModel, s.placeId)
+                    if place:
+                        sr.placeName = place.name
+                read.placeSuggestions.append(sr)
+            pipeline_result = read
 
     jobRead = IngestionJobRead.model_validate(job)
-    return IngestJobResponse(**jobRead.model_dump(), extractions=extractions)
+    return IngestJobResponse(**jobRead.model_dump(), pipelineResult=pipeline_result)

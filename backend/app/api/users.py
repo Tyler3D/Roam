@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, col, or_
 
@@ -7,6 +9,7 @@ from app.common.backendErrors import BadRequest, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
 
+logger = logging.getLogger("roam.users")
 usersRouter = APIRouter()
 
 USER_CONSTRAINT_MESSAGES = {
@@ -125,6 +128,10 @@ def createUser(
     )
     session.add(newUser)
     commitAndRefresh(session, newUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
+    logger.info(
+        "user_created",
+        extra={"firebaseUid": firebaseUid, "userId": str(newUser.id), "email": email},
+    )
     return UserRead.model_validate(newUser)
 
 

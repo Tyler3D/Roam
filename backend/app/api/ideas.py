@@ -9,8 +9,8 @@ from sqlmodel import Session, select, col
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
-from app.models.enrichments import EnrichmentModel, EnrichmentRead
-from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate, IdeaStatus
+from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate, IdeaStatus, IdeaWithPlanCountView
+from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
 from app.models.plans import (
     MemberRole,
@@ -30,29 +30,59 @@ logger = logging.getLogger("roam.ideas")
 ideasRouter = APIRouter()
 
 
+def _get_latest_pipeline_result(session: Session, idea_id: UUID) -> PipelineResultRead | None:
+    result = session.exec(
+        select(PipelineResultModel)
+        .where(PipelineResultModel.ideaId == idea_id)
+        .order_by(col(PipelineResultModel.createdAt).desc())
+        .limit(1)
+    ).first()
+    if not result:
+        return None
+    suggestions = session.exec(
+        select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
+    ).all()
+    read = PipelineResultRead.model_validate(result)
+    read.placeSuggestions = []
+    for s in suggestions:
+        sr = PlaceSuggestionRead.model_validate(s)
+        if s.placeId:
+            place = session.get(PlaceModel, s.placeId)
+            if place:
+                sr.placeName = place.name
+        read.placeSuggestions.append(sr)
+    return read
+
+
+def _idea_read_with_extras(
+    session: Session,
+    idea: IdeaModel | IdeaWithPlanCountView,
+    plan_count: int | None = None,
+) -> IdeaRead:
+    read = IdeaRead.model_validate(idea)
+    read.planCount = getattr(idea, "planCount", 0) if plan_count is None else plan_count
+    read.pipelineResult = _get_latest_pipeline_result(session, idea.id)
+    if idea.placeId:
+        place = session.get(PlaceModel, idea.placeId)
+        if place:
+            read.placeName = place.name
+    return read
+
+
 @ideasRouter.get("/ideas", response_model=list[IdeaRead])
 def listIdeas(
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> list[IdeaRead]:
     rows = session.exec(
-        select(IdeaModel)
-        .where(IdeaModel.userId == user.id)
-        .order_by(col(IdeaModel.createdAt).desc())
+        select(IdeaWithPlanCountView)
+        .where(IdeaWithPlanCountView.userId == user.id)
+        .order_by(col(IdeaWithPlanCountView.createdAt).desc())
     ).all()
 
     results: list[IdeaRead] = []
-    for idea in rows:
-        read = IdeaRead.model_validate(idea)
-        if idea.enrichmentId:
-            enrichment = session.get(EnrichmentModel, idea.enrichmentId)
-            if enrichment:
-                read.enrichment = EnrichmentRead.model_validate(enrichment)
-        if idea.placeId:
-            place = session.get(PlaceModel, idea.placeId)
-            if place:
-                read.placeName = place.name
-        results.append(read)
+    for row in rows:
+        results.append(_idea_read_with_extras(session, row))
     return results
 
 
@@ -69,11 +99,12 @@ def createIdea(
         userId=user.id,
         title=body.title.strip(),
         notes=body.notes,
-        savedLink=body.savedLink,
+        sourceUrl=body.sourceUrl,
+        displayName=body.displayName,
     )
     session.add(idea)
     commitAndRefresh(session, idea)
-    return IdeaRead.model_validate(idea)
+    return _idea_read_with_extras(session, idea, 0)
 
 
 @ideasRouter.patch("/ideas/{ideaId}", response_model=IdeaRead)
@@ -96,7 +127,10 @@ def updateIdea(
 
     session.add(idea)
     commitAndRefresh(session, idea)
-    return IdeaRead.model_validate(idea)
+    view_row = session.exec(
+        select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
+    ).first()
+    return _idea_read_with_extras(session, view_row if view_row else idea)
 
 
 @ideasRouter.delete("/ideas/{ideaId}", status_code=204)
@@ -114,6 +148,31 @@ def deleteIdea(
     session.commit()
 
 
+def _auto_select_place(
+    session: Session,
+    idea: IdeaModel,
+    result: PipelineResultModel,
+    suggestions: list[tuple[PlaceSuggestionModel, float | None]],
+) -> None:
+    """Auto-select when confidence > 0.9 or exactly one suggestion."""
+    if len(suggestions) == 1:
+        sel, _ = suggestions[0]
+        sel.isSelected = True
+        idea.placeId = sel.placeId
+        session.add(sel)
+        return
+    for sel, conf in suggestions:
+        if conf is not None and conf > 0.9:
+            sel.isSelected = True
+            idea.placeId = sel.placeId
+            session.add(sel)
+            for other, _ in suggestions:
+                if other.id != sel.id:
+                    other.isSelected = False
+                    session.add(other)
+            return
+
+
 @ideasRouter.post("/ideas/{ideaId}/interpret", response_model=IdeaRead)
 def interpretIdea(
     ideaId: UUID,
@@ -126,54 +185,104 @@ def interpretIdea(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
-    result = interpret_with_openai(idea.title)
-
-    enrichment = EnrichmentModel(
-        refinedTitle=result.get("refinedTitle"),
-        category=result.get("category"),
-        searchQuery=result.get("searchQuery"),
-        tags=result.get("tags", []),
-        estimatedMinutes=result.get("estimatedMinutes"),
-        preference=result.get("preference"),
-        aiEnriched=result.get("aiEnriched", False),
-        modelName=result.get("modelName"),
-        rawOutput=result,
-        confidence={},
-    )
-    session.add(enrichment)
-    session.flush()
-
-    idea.enrichmentId = enrichment.id
     idea.status = IdeaStatus.suggesting
     idea.updatedAt = datetime.utcnow()
+    session.add(idea)
+    session.flush()
 
-    search_query = result.get("searchQuery")
+    result_dict = interpret_with_openai(idea.title)
+
+    pipeline_result = PipelineResultModel(
+        ideaId=idea.id,
+        jobId=None,
+        source="scribble",
+        refinedTitle=result_dict.get("refinedTitle"),
+        category=result_dict.get("category"),
+        estimatedMinutes=result_dict.get("estimatedMinutes"),
+        modelName=result_dict.get("modelName"),
+        rawOutput=result_dict,
+    )
+    session.add(pipeline_result)
+    session.flush()
+
+    suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
+    search_query = result_dict.get("searchQuery")
     if search_query:
         place_data = search_google_places(search_query)
         if place_data:
             _upsert_place(session, idea, place_data)
+            place = session.get(PlaceModel, idea.placeId) if idea.placeId else None
+            place_name = place.name if place else place_data.get("name", "")
+            sugg = PlaceSuggestionModel(
+                resultId=pipeline_result.id,
+                placeId=idea.placeId,
+                rawName=place_name,
+                confidence=1.0,
+            )
+            session.add(sugg)
+            session.flush()
+            suggestions.append((sugg, 1.0))
+
+    _auto_select_place(session, idea, pipeline_result, suggestions)
 
     idea.status = IdeaStatus.ready
-
+    idea.updatedAt = datetime.utcnow()
     session.add(idea)
-    commitAndRefresh(session, idea, enrichment)
+    commitAndRefresh(session, idea, pipeline_result)
 
-    read = IdeaRead.model_validate(idea)
-    read.enrichment = EnrichmentRead.model_validate(enrichment)
-    if idea.placeId:
-        place = session.get(PlaceModel, idea.placeId)
-        if place:
-            read.placeName = place.name
+    view_row = session.exec(
+        select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
+    ).first()
+    read = _idea_read_with_extras(session, view_row if view_row else idea)
 
-    invitees = result.get("invitees", [])
-    if invitees:
+    invitees = result_dict.get("invitees", [])
+    if invitees and read.pipelineResult:
         resolved = _resolve_invitees(session, user.id, invitees)
-        read.enrichment.rawOutput = {
-            **(read.enrichment.rawOutput or {}),
+        read.pipelineResult.rawOutput = {
+            **(read.pipelineResult.rawOutput or {}),
             "resolvedInvitees": resolved,
         }
 
     return read
+
+
+@ideasRouter.patch("/ideas/{ideaId}/place-suggestions/{suggestionId}", response_model=IdeaRead)
+def selectPlaceSuggestion(
+    ideaId: UUID,
+    suggestionId: UUID,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> IdeaRead:
+    idea = session.get(IdeaModel, ideaId)
+    if not idea:
+        raise NotFound("Idea not found")
+    if idea.userId != user.id:
+        raise Forbidden("Not your idea")
+
+    suggestion = session.get(PlaceSuggestionModel, suggestionId)
+    if not suggestion:
+        raise NotFound("Place suggestion not found")
+
+    result = session.get(PipelineResultModel, suggestion.resultId)
+    if not result or result.ideaId != idea.id:
+        raise BadRequest("Suggestion does not belong to this idea")
+
+    others = session.exec(
+        select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
+    ).all()
+    for s in others:
+        s.isSelected = s.id == suggestionId
+        session.add(s)
+
+    idea.placeId = suggestion.placeId
+    idea.updatedAt = datetime.utcnow()
+    session.add(idea)
+    commitAndRefresh(session, idea)
+
+    view_row = session.exec(
+        select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
+    ).first()
+    return _idea_read_with_extras(session, view_row if view_row else idea)
 
 
 @ideasRouter.post("/ideas/{ideaId}/plan", response_model=PlanRead)
@@ -188,17 +297,19 @@ def promoteIdeaToPlan(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
-    enrichment = None
+    pipeline_result = _get_latest_pipeline_result(session, idea.id)
     specific_datetime = None
     estimated_minutes = 60
     invitees: list[str] = []
+    plan_title = idea.title
 
-    if idea.enrichmentId:
-        enrichment = session.get(EnrichmentModel, idea.enrichmentId)
-        if enrichment and enrichment.rawOutput:
-            specific_datetime = enrichment.rawOutput.get("specificDatetime")
-            estimated_minutes = enrichment.estimatedMinutes or 60
-            invitees = enrichment.rawOutput.get("invitees", [])
+    if pipeline_result:
+        raw = pipeline_result.rawOutput or {}
+        specific_datetime = raw.get("specificDatetime")
+        estimated_minutes = pipeline_result.estimatedMinutes or 60
+        invitees = raw.get("invitees", [])
+        if pipeline_result.refinedTitle:
+            plan_title = pipeline_result.refinedTitle
 
     share_code = secrets.token_urlsafe(8)
 
@@ -206,8 +317,7 @@ def promoteIdeaToPlan(
         creatorId=user.id,
         placeId=idea.placeId,
         ideaId=idea.id,
-        enrichmentId=idea.enrichmentId,
-        title=enrichment.refinedTitle if enrichment and enrichment.refinedTitle else idea.title,
+        title=plan_title,
         scheduledAt=datetime.fromisoformat(specific_datetime) if specific_datetime else None,
         status=PlanStatus.draft,
         shareCode=share_code,
@@ -224,9 +334,6 @@ def promoteIdeaToPlan(
         rsvpStatus=RsvpStatus.accepted,
     )
     session.add(organizer)
-
-    idea.status = IdeaStatus.planned
-    session.add(idea)
 
     if invitees:
         resolved = _resolve_invitees(session, user.id, invitees)

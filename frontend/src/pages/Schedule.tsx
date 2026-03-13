@@ -140,7 +140,7 @@ export default function Schedule() {
               {plan.estimatedMinutes && (
                 <StatPill label="Duration" value={`~${formatDuration(plan.estimatedMinutes)}`} />
               )}
-              <StatPill label="Party" value={`${plan.covers} ${plan.covers === 1 ? "person" : "people"}`} />
+              <StatPill label="Party" value={`${plan.partySize} ${plan.partySize === 1 ? "person" : "people"}`} />
             </div>
 
             {acceptedMembers.length > 0 && (

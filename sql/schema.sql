@@ -57,10 +57,10 @@ CREATE TABLE IF NOT EXISTS "users" (
   "phone"         text,
   "photoUrl"      text,
   "city"          text,
-  "tags"          jsonb DEFAULT '[]',
+  "interestTags"  jsonb DEFAULT '[]',
   "isActive"      boolean NOT NULL DEFAULT false,
   "isOnboarded"   boolean NOT NULL DEFAULT false,
-  "isExternal"    boolean NOT NULL DEFAULT false,
+  "isGuestUser"   boolean NOT NULL DEFAULT false,
   "emailVerified" boolean NOT NULL DEFAULT false,
   "createdAt"     timestamptz NOT NULL DEFAULT now()
 );
@@ -90,25 +90,6 @@ CREATE INDEX IF NOT EXISTS "idx_places_category"
   ON "places" ("category");
 
 -- ============================================================
--- Enrichments (AI-derived metadata for ideas and plans)
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS "enrichments" (
-  "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "refinedTitle"     text,
-  "category"         text,
-  "searchQuery"      text,
-  "tags"             text[] DEFAULT '{}',
-  "estimatedMinutes" integer,
-  "preference"       text,
-  "aiEnriched"       boolean NOT NULL DEFAULT false,
-  "modelName"        text,
-  "rawOutput"        jsonb DEFAULT '{}',
-  "confidence"       jsonb DEFAULT '{}',
-  "createdAt"        timestamptz NOT NULL DEFAULT now()
-);
-
--- ============================================================
 -- Friendships
 -- ============================================================
 
@@ -136,9 +117,9 @@ CREATE TABLE IF NOT EXISTS "ideas" (
   "userId"       uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "title"        text NOT NULL,
   "notes"        text DEFAULT '',
-  "savedLink"    text DEFAULT '',
+  "sourceUrl"    text DEFAULT '',
   "placeId"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
-  "enrichmentId" uuid REFERENCES "enrichments"("id") ON DELETE SET NULL,
+  "displayName" text,
   "status"       "ideaStatus" NOT NULL DEFAULT 'captured',
   "createdAt"    timestamptz NOT NULL DEFAULT now(),
   "updatedAt"    timestamptz NOT NULL DEFAULT now()
@@ -159,7 +140,6 @@ CREATE TABLE IF NOT EXISTS "plans" (
   "creatorId"        uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "placeId"          uuid REFERENCES "places"("id") ON DELETE SET NULL,
   "ideaId"           uuid REFERENCES "ideas"("id") ON DELETE SET NULL,
-  "enrichmentId"     uuid REFERENCES "enrichments"("id") ON DELETE SET NULL,
   "title"            text NOT NULL,
   "scheduledAt"      timestamptz,
   "status"           "planStatus" NOT NULL DEFAULT 'draft',
@@ -167,7 +147,7 @@ CREATE TABLE IF NOT EXISTS "plans" (
   "rawPrompt"        text,
   "estimatedMinutes" integer DEFAULT 60,
   "calendarEventId"  text,
-  "covers"           integer DEFAULT 2,
+  "partySize"        integer DEFAULT 1,
   "rating"           integer CHECK ("rating" IS NULL OR ("rating" >= 1 AND "rating" <= 5)),
   "taskNotes"        text DEFAULT '',
   "createdAt"        timestamptz NOT NULL DEFAULT now(),
@@ -257,15 +237,15 @@ CREATE INDEX IF NOT EXISTS "idx_notifications_userId"
   ON "notifications" ("userId", "isRead", "createdAt" DESC);
 
 -- ============================================================
--- Ingestion Jobs (reel -> place discovery pipeline)
+-- Reel Ingestion Jobs (reel -> place discovery pipeline)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS "ingestion_jobs" (
+CREATE TABLE IF NOT EXISTS "reel_ingestion_jobs" (
   "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "userId"        uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "reelUrl"       text NOT NULL,
   "shareText"     text,
-  "lpTitle"       text,
+  "reelTitle"     text,
   "ogDescription" text,
   "ogKeywords"    text,
   "status"        "jobStatus" NOT NULL DEFAULT 'processing',
@@ -275,23 +255,56 @@ CREATE TABLE IF NOT EXISTS "ingestion_jobs" (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_reel"
-  ON "ingestion_jobs" ("userId", "reelUrl");
+  ON "reel_ingestion_jobs" ("userId", "reelUrl");
 
 -- ============================================================
--- Extractions (LLM-generated place suggestions per job)
+-- Pipeline Results (unified output from scribble + reel pipelines)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS "extractions" (
-  "id"           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "jobId"        uuid NOT NULL REFERENCES "ingestion_jobs"("id") ON DELETE CASCADE,
-  "placeId"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
-  "confidence"   double precision,
-  "rawLlmOutput" jsonb,
-  "createdAt"    timestamptz NOT NULL DEFAULT now()
+CREATE TABLE IF NOT EXISTS "pipeline_results" (
+  "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "ideaId"           uuid REFERENCES "ideas"("id") ON DELETE CASCADE,
+  "jobId"            uuid REFERENCES "reel_ingestion_jobs"("id") ON DELETE SET NULL,
+  "source"           text NOT NULL,
+  "refinedTitle"     text,
+  "category"         text,
+  "estimatedMinutes" integer,
+  "modelName"        text,
+  "rawOutput"        jsonb DEFAULT '{}',
+  "createdAt"        timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "reel_result_has_idea" CHECK ("jobId" IS NULL OR "ideaId" IS NOT NULL)
 );
 
-CREATE INDEX IF NOT EXISTS "idx_extractions_jobId"
-  ON "extractions" ("jobId");
+CREATE INDEX IF NOT EXISTS "idx_pipeline_results_ideaId"
+  ON "pipeline_results" ("ideaId");
 
-CREATE INDEX IF NOT EXISTS "idx_extractions_placeId"
-  ON "extractions" ("placeId");
+CREATE INDEX IF NOT EXISTS "idx_pipeline_results_jobId"
+  ON "pipeline_results" ("jobId");
+
+-- ============================================================
+-- Place Suggestions (1-3 candidates per pipeline result)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "place_suggestions" (
+  "id"          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "resultId"    uuid NOT NULL REFERENCES "pipeline_results"("id") ON DELETE CASCADE,
+  "placeId"     uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "rawName"     text,
+  "confidence"  double precision,
+  "isSelected"  boolean NOT NULL DEFAULT false,
+  "createdAt"   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "idx_place_suggestions_resultId"
+  ON "place_suggestions" ("resultId");
+
+CREATE INDEX IF NOT EXISTS "idx_place_suggestions_placeId"
+  ON "place_suggestions" ("placeId");
+
+CREATE OR REPLACE VIEW "ideas_with_plan_count" AS
+SELECT
+  i.*,
+  COUNT(p.id)::int AS "planCount"
+FROM "ideas" i
+LEFT JOIN "plans" p ON p."ideaId" = i.id
+GROUP BY i.id;

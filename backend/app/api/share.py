@@ -192,7 +192,7 @@ def _find_or_create_external_user(session: Session, body: RsvpRequest) -> UserMo
         lastName=body.lastName.strip(),
         email=body.email,
         phone=body.phone,
-        isExternal=True,
+        isGuestUser=True,
         isActive=True,
     )
     session.add(user)
