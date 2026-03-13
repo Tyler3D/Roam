@@ -80,7 +80,6 @@ class PlanMemberModel(SQLModel, table=True):
         )
     )
     inviteToken: Optional[str] = None
-    task: Optional[str] = None
     rating: Optional[int] = None
     invitedAt: datetime = Field(default_factory=datetime.utcnow)
     respondedAt: Optional[datetime] = None
@@ -142,7 +141,6 @@ class PlanMemberRead(SQLModel):
     role: MemberRole
     rsvpStatus: RsvpStatus
     inviteToken: Optional[str] = None
-    task: Optional[str] = None
     rating: Optional[int] = None
     invitedAt: datetime
     respondedAt: Optional[datetime] = None

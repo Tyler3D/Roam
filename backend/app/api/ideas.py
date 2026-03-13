@@ -10,7 +10,7 @@ from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.enrichments import EnrichmentModel, EnrichmentRead
-from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate
+from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate, IdeaStatus
 from app.models.places import PlaceModel
 from app.models.plans import (
     MemberRole,
@@ -144,6 +144,7 @@ def interpretIdea(
     session.flush()
 
     idea.enrichmentId = enrichment.id
+    idea.status = IdeaStatus.suggesting
     idea.updatedAt = datetime.utcnow()
 
     search_query = result.get("searchQuery")
@@ -151,6 +152,8 @@ def interpretIdea(
         place_data = search_google_places(search_query)
         if place_data:
             _upsert_place(session, idea, place_data)
+
+    idea.status = IdeaStatus.ready
 
     session.add(idea)
     commitAndRefresh(session, idea, enrichment)
@@ -222,6 +225,9 @@ def promoteIdeaToPlan(
     )
     session.add(organizer)
 
+    idea.status = IdeaStatus.planned
+    session.add(idea)
+
     if invitees:
         resolved = _resolve_invitees(session, user.id, invitees)
         for r in resolved:
@@ -235,7 +241,7 @@ def promoteIdeaToPlan(
                 )
                 session.add(member)
 
-    commitAndRefresh(session, plan)
+    commitAndRefresh(session, plan, idea)
 
     members = session.exec(
         select(PlanMemberModel).where(PlanMemberModel.planId == plan.id)

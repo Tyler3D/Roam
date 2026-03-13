@@ -11,7 +11,7 @@ from app.models.ingestion import (  # noqa: F401
 )
 from app.models.places import PlaceModel, PlaceRead  # noqa: F401
 from app.models.enrichments import EnrichmentModel, EnrichmentRead  # noqa: F401
-from app.models.ideas import IdeaModel, IdeaCreate, IdeaRead, IdeaUpdate  # noqa: F401
+from app.models.ideas import IdeaModel, IdeaCreate, IdeaRead, IdeaUpdate, IdeaStatus  # noqa: F401
 from app.models.plans import (  # noqa: F401
     PlanStatus,
     RsvpStatus,

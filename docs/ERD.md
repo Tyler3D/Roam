@@ -65,6 +65,7 @@ erDiagram
         text savedLink
         uuid placeId FK "nullable"
         uuid enrichmentId FK "nullable"
+        ideaStatus status
         timestamptz createdAt
         timestamptz updatedAt
     }
@@ -96,7 +97,6 @@ erDiagram
         memberRole role
         rsvpStatus rsvpStatus
         text inviteToken
-        text task
         integer rating "1-5"
         timestamptz invitedAt
         timestamptz respondedAt
@@ -187,6 +187,7 @@ erDiagram
 
 | Enum | Values | Used By |
 |------|--------|---------|
+| `ideaStatus` | `captured`, `suggesting`, `ready`, `planned` | `ideas.status` |
 | `jobStatus` | `processing`, `done`, `failed` | `ingestion_jobs.status` |
 | `planStatus` | `draft`, `confirmed`, `completed`, `cancelled` | `plans.status` |
 | `rsvpStatus` | `pending`, `accepted`, `declined` | `plan_members.rsvpStatus` |

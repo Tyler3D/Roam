@@ -623,6 +623,8 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IdeaStatus */
+        IdeaStatus: "captured" | "suggesting" | "ready" | "planned";
         /** IdeaCreate */
         IdeaCreate: {
             /** Title */
@@ -660,6 +662,8 @@ export interface components {
             placeId?: string | null;
             /** Enrichmentid */
             enrichmentId?: string | null;
+            /** Status */
+            status: components["schemas"]["IdeaStatus"];
             /**
              * Createdat
              * Format: date-time
@@ -682,6 +686,8 @@ export interface components {
             notes?: string | null;
             /** Savedlink */
             savedLink?: string | null;
+            /** Status */
+            status?: components["schemas"]["IdeaStatus"] | null;
         };
         /** IngestJobResponse */
         IngestJobResponse: {
@@ -820,8 +826,6 @@ export interface components {
             rsvpStatus: components["schemas"]["RsvpStatus"];
             /** Invitetoken */
             inviteToken?: string | null;
-            /** Task */
-            task?: string | null;
             /** Rating */
             rating?: number | null;
             /**

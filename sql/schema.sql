@@ -6,6 +6,10 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ideaStatus') THEN
+    CREATE TYPE "ideaStatus" AS ENUM ('captured', 'suggesting', 'ready', 'planned');
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'jobStatus') THEN
     CREATE TYPE "jobStatus" AS ENUM ('processing', 'done', 'failed');
   END IF;
@@ -135,12 +139,16 @@ CREATE TABLE IF NOT EXISTS "ideas" (
   "savedLink"    text DEFAULT '',
   "placeId"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
   "enrichmentId" uuid REFERENCES "enrichments"("id") ON DELETE SET NULL,
+  "status"       "ideaStatus" NOT NULL DEFAULT 'captured',
   "createdAt"    timestamptz NOT NULL DEFAULT now(),
   "updatedAt"    timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS "idx_ideas_userId"
   ON "ideas" ("userId", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_ideas_status"
+  ON "ideas" ("status");
 
 -- ============================================================
 -- Plans
@@ -186,7 +194,6 @@ CREATE TABLE IF NOT EXISTS "plan_members" (
   "role"        "memberRole" NOT NULL DEFAULT 'member',
   "rsvpStatus"  "rsvpStatus" NOT NULL DEFAULT 'pending',
   "inviteToken" text,
-  "task"        text,
   "rating"      integer CHECK ("rating" >= 1 AND "rating" <= 5),
   "invitedAt"   timestamptz NOT NULL DEFAULT now(),
   "respondedAt" timestamptz
