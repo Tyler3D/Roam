@@ -1,20 +1,24 @@
 import logging
+import secrets
 from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlmodel import Session, select, col, or_
 
 from app.auth.auth import getCurrentUser
-from app.common.backendErrors import BadRequest, Forbidden, NotFound
+from app.common.backendErrors import BadRequest, Conflict, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.places import PlaceModel
 from app.models.plans import (
+    MemberRole,
     PlanMemberModel,
     PlanMemberRead,
     PlanModel,
     PlanRead,
     PlanUpdate,
+    RsvpStatus,
 )
 from app.models.users import UserModel
 from app.services.scheduling import suggest_time_slots
@@ -156,6 +160,54 @@ def createCalendarEvent(
         "scheduleUrl": schedule_url,
         "planId": str(plan.id),
     }
+
+
+class AddMemberRequest(BaseModel):
+    userId: UUID
+
+
+@plansRouter.post("/plans/{planId}/members", response_model=PlanRead)
+def addPlanMember(
+    planId: UUID,
+    body: AddMemberRequest,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> PlanRead:
+    plan = session.get(PlanModel, planId)
+    if not plan:
+        raise NotFound("Plan not found")
+    if plan.creatorId != user.id:
+        raise Forbidden("Only the creator can add members")
+
+    if body.userId == user.id:
+        raise BadRequest("Cannot add yourself")
+
+    target = session.get(UserModel, body.userId)
+    if not target:
+        raise NotFound("User not found")
+
+    existing = session.exec(
+        select(PlanMemberModel).where(
+            PlanMemberModel.planId == planId,
+            PlanMemberModel.userId == body.userId,
+        )
+    ).first()
+    if existing:
+        raise Conflict("User is already a member")
+
+    member = PlanMemberModel(
+        planId=plan.id,
+        userId=body.userId,
+        role=MemberRole.member,
+        rsvpStatus=RsvpStatus.pending,
+        inviteToken=secrets.token_urlsafe(12),
+    )
+    session.add(member)
+    commitAndRefresh(session, plan)
+
+    _send_invites_for_plan(session, plan)
+
+    return _build_plan_read(session, plan)
 
 
 def _build_plan_read(session: Session, plan: PlanModel) -> PlanRead:

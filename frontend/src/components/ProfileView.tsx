@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useMe, useSearchUsers } from "@/api/users";
 import { useFriends, useFriendRequests, useAcceptFriendRequest, useSendFriendRequest } from "@/api/friends";
 import { Avatar } from "@/components/ui/avatar-roam";
+import { Spinner } from "@/components/ui/spinner";
 import type { Friendship } from "@/models/friendship";
 import type { User } from "@/models/user";
 
@@ -15,13 +16,13 @@ export default function ProfileView() {
   const sendRequest = useSendFriendRequest();
 
   const [searchInput, setSearchInput] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const { data: searchResults = [] } = useSearchUsers(submittedQuery);
+  const deferredQuery = useDeferredValue(searchInput.trim());
+  const { data: searchResults = [], isFetching } = useSearchUsers(deferredQuery);
 
-  function handleSearch() {
-    if (!searchInput.trim()) return;
-    setSubmittedQuery(searchInput.trim());
-  }
+  const friendIds = new Set(friends.map((f) => f.friendId).filter(Boolean) as string[]);
+  const filteredResults = searchResults.filter(
+    (u) => !friendIds.has(u.id) && u.id !== profile?.id
+  );
 
   function handleSendRequest(userId: string) {
     sendRequest.mutate(userId);
@@ -36,7 +37,7 @@ export default function ProfileView() {
       <div className="anim text-center mb-8">
         <Avatar name={initials} size={64} src={user?.photoURL} className="mx-auto mb-3" />
         <p className="font-display text-[22px] text-roam-text mb-1">{profile?.firstName} {profile?.lastName}</p>
-        {profile?.email && <p className="font-mono text-[11px] text-roam-text-muted m-0">{profile.email}</p>}
+        {profile?.username && <p className="font-mono text-[11px] text-roam-text-muted m-0">@{profile.username}</p>}
       </div>
 
       {requests.length > 0 && (
@@ -69,16 +70,49 @@ export default function ProfileView() {
 
       <div className="anim d3 mb-6">
         <p className="label-mono mb-2.5">add friends</p>
-        <div className="flex gap-2 mb-2.5">
-          <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} placeholder="search by name..." className="input-field flex-1 text-xs py-2.5 px-3.5" />
-          <button onClick={handleSearch} className="btn-primary rounded-[11px] py-2.5 px-4">search</button>
-        </div>
-        {searchResults.map((u: User) => (
-          <div key={u.id} className="flex items-center justify-between py-2.5 px-3.5 bg-roam-surface rounded-xl border border-roam-logan/20 mb-1.5">
-            <span className="font-mono text-xs text-roam-text">{u.firstName} {u.lastName}</span>
-            <button onClick={() => handleSendRequest(u.id)} className="font-mono text-[9px] tracking-[1.5px] uppercase bg-roam-lavender text-roam-logan-deep border-none rounded-lg py-1.5 px-3 cursor-pointer">add friend</button>
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="search by name or username..."
+          className="input-field w-full text-xs py-2.5 px-3.5 rounded-[11px] mb-2.5"
+        />
+        {deferredQuery.length >= 2 && (
+          <div className="space-y-1.5">
+            {isFetching ? (
+              <div className="py-4 flex justify-center">
+                <Spinner />
+              </div>
+            ) : filteredResults.length === 0 ? (
+              <p className="py-4 font-notes text-[13px] text-roam-text-muted text-center">
+                no users found
+              </p>
+            ) : (
+              filteredResults.map((u: User) => (
+                <div key={u.id} className="flex items-center justify-between py-2.5 px-3.5 bg-roam-surface rounded-xl border border-roam-logan/20">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar name={u.firstName} size={28} src={u.photoUrl} />
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-roam-text m-0">
+                        {u.firstName} {u.lastName}
+                      </p>
+                      {u.username && (
+                        <p className="font-mono text-[10px] text-roam-text-muted m-0">
+                          @{u.username}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleSendRequest(u.id)}
+                    className="font-mono text-[9px] tracking-[1.5px] uppercase bg-roam-lavender text-roam-logan-deep border-none rounded-lg py-1.5 px-3 cursor-pointer shrink-0"
+                  >
+                    add friend
+                  </button>
+                </div>
+              ))
+            )}
           </div>
-        ))}
+        )}
       </div>
 
       <div className="anim d4 text-center">

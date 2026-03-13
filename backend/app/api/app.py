@@ -122,6 +122,7 @@ def _isAuthExemptPath(path: str) -> bool:
         "/docs",
         "/openapi.json",
         "/redoc",
+        "/api/users/check-username",
     }
 
 

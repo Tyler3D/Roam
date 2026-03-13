@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 interface AvatarProps {
   name: string;
   size?: number;
@@ -8,7 +10,7 @@ interface AvatarProps {
 export function Avatar({ name, size = 22, src, className }: AvatarProps) {
   const fontSize = Math.max(8, Math.round(size * 0.45));
   return (
-    <div className={`avatar-circle ${className ?? ""}`} style={{ width: size, height: size }}>
+    <div className={cn("avatar-circle", className)} style={{ width: size, height: size }}>
       {src ? (
         <img src={src} alt="" className="rounded-full" style={{ width: size, height: size }} referrerPolicy="no-referrer" />
       ) : (

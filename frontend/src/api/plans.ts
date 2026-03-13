@@ -27,6 +27,13 @@ function createCalendarEvent(id: string) {
   return request<Record<string, unknown>>(`/api/plans/${id}/calendar`, { method: "POST" });
 }
 
+function addPlanMember(planId: string, userId: string) {
+  return request<Plan>(`/api/plans/${planId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+}
+
 export function usePlans() {
   return useQuery({
     queryKey: planKeys.all,
@@ -62,5 +69,16 @@ export function useSuggestSlots() {
 export function useCreateCalendarEvent() {
   return useMutation({
     mutationFn: createCalendarEvent,
+  });
+}
+
+export function useAddPlanMember(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => addPlanMember(planId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: planKeys.all });
+      qc.invalidateQueries({ queryKey: planKeys.detail(planId) });
+    },
   });
 }

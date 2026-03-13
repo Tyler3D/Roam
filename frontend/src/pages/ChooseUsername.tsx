@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UsernameInput } from "@/components/UsernameInput";
 
 /** firstNamelastName for Google accounts (e.g. "John Doe" → "johndoe"). Empty for others. */
 const buildSuggestedUsername = (
@@ -73,10 +73,10 @@ export default function ChooseUsername() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
-            <Input
+            <UsernameInput
               id="username"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={setUsername}
               placeholder="yourname"
               required
             />

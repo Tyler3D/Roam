@@ -135,9 +135,24 @@ def createUser(
     return UserRead.model_validate(newUser)
 
 
+@usersRouter.get("/users/check-username")
+def checkUsername(
+    username: str = Query(..., min_length=1),
+    session: Session = Depends(getSession),
+) -> dict:
+    """Check if username is available. No auth required — used during onboarding."""
+    exists = (
+        session.exec(
+            select(UserModel).where(UserModel.username == username.strip())
+        ).first()
+        is not None
+    )
+    return {"available": not exists}
+
+
 @usersRouter.get("/users/search", response_model=list[UserRead])
 def searchUsers(
-    q: str = Query(..., min_length=1),
+    q: str = Query(..., min_length=2),
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> list[UserRead]:
@@ -150,6 +165,6 @@ def searchUsers(
                 col(UserModel.lastName).ilike(f"%{q_lower}%"),
                 col(UserModel.username).ilike(f"%{q_lower}%"),
             ),
-        ).limit(20)
+        ).limit(10)
     ).all()
     return [UserRead.model_validate(u) for u in results]

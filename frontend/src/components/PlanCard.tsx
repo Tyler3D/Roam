@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { useAddPlanMember } from "@/api/plans";
 import { formatDuration } from "@/lib/duration";
 import { Avatar } from "@/components/ui/avatar-roam";
+import { FriendSearch } from "@/components/FriendSearch";
 import { StatPill } from "@/components/ui/stat-pill";
 import type { Plan } from "@/models/plan";
+import type { User } from "@/models/user";
 
 interface Props {
   plan: Plan;
@@ -35,6 +38,7 @@ function getDateParts(iso: string) {
 export default function PlanCard({ plan }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const addMember = useAddPlanMember(plan.id);
 
   const dateParts = plan.scheduledAt ? getDateParts(plan.scheduledAt) : null;
   const isConfirmed = plan.status === "confirmed" || plan.status === "completed";
@@ -77,6 +81,15 @@ export default function PlanCard({ plan }: Props) {
             <StatPill label="Party" value={`${plan.partySize} ${plan.partySize === 1 ? "person" : "people"}`} />
           </div>
 
+          <div className="mb-3.5">
+            <p className="label-mono mb-2">Invite</p>
+            <FriendSearch
+              onSelect={(u: User) => addMember.mutate(u.id)}
+              excludeIds={plan.members.map((m) => String(m.userId))}
+              placeholder="search to add..."
+            />
+          </div>
+
           {plan.members.length > 0 && (
             <div className="mb-3.5">
               <p className="label-mono mb-2">Members</p>
@@ -85,7 +98,7 @@ export default function PlanCard({ plan }: Props) {
                   const accepted = m.rsvpStatus === "accepted";
                   return (
                     <div key={m.id} className={`member-chip ${accepted ? "bg-roam-green/60 border border-roam-green-deep/[0.22]" : "bg-roam-lavender/50 border border-roam-logan/20"}`}>
-                      <Avatar name={m.firstName ?? "?"} size={22} />
+                      <Avatar name={m.firstName ?? ""} size={22} />
                       <span className="font-mono text-[10px] text-roam-text-mid">{m.firstName} {m.lastName}</span>
                       <span className={`font-mono text-[8px] ${accepted ? "text-roam-green-deep" : "text-roam-text-muted"}`}>{m.rsvpStatus}</span>
                     </div>
