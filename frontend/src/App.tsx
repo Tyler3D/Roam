@@ -5,7 +5,12 @@ import { AuthProvider } from "@/auth/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
-import Dashboard from "@/components/Dashboard";
+import AppLayout from "@/components/AppLayout";
+import IdeasView from "@/pages/IdeasView";
+import DraftsView from "@/pages/DraftsView";
+import PlansView from "@/components/PlansView";
+import InboxView from "@/components/InboxView";
+import ProfilePage from "@/pages/ProfilePage";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Onboarding from "@/pages/Onboarding";
@@ -15,6 +20,8 @@ import AuthAction from "@/pages/AuthAction";
 import VerificationPending from "@/pages/VerificationPending";
 import ResetPassword from "@/pages/ResetPassword";
 import ChooseUsername from "@/pages/ChooseUsername";
+import IdeaOverview from "@/pages/IdeaOverview";
+import PlanOverview from "@/pages/PlanOverview";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -52,7 +59,27 @@ const App = () => (
             } />
             <Route path="/app" element={
               <RequireAuth>
-                <Dashboard />
+                <AppLayout />
+              </RequireAuth>
+            }>
+              <Route index element={<IdeasView />} />
+              <Route path="drafts" element={<DraftsView />} />
+              <Route path="plans" element={<PlansView />} />
+              <Route path="inbox" element={<InboxView />} />
+            </Route>
+            <Route path="/profile" element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            } />
+            <Route path="/ideas/:ideaId" element={
+              <RequireAuth>
+                <IdeaOverview />
+              </RequireAuth>
+            } />
+            <Route path="/plans/:planId" element={
+              <RequireAuth>
+                <PlanOverview />
               </RequireAuth>
             } />
             <Route path="/share/schedule" element={<Schedule />} />

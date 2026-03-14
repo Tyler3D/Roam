@@ -23,8 +23,10 @@ from app.models.plans import (
 )
 from app.models.users import UserModel
 from app.models.friendships import FriendshipModel, FriendshipStatus
+from app.models.notifications import NotificationModel, NotificationType
 from app.services.interpret import interpret_with_openai
 from app.services.places import search_google_places
+from app.services.scheduling import suggest_time_slots
 
 logger = logging.getLogger("roam.ideas")
 ideasRouter = APIRouter()
@@ -105,6 +107,23 @@ def createIdea(
     session.add(idea)
     commitAndRefresh(session, idea)
     return _idea_read_with_extras(session, idea, 0)
+
+
+@ideasRouter.get("/ideas/{ideaId}", response_model=IdeaRead)
+def getIdea(
+    ideaId: UUID,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> IdeaRead:
+    idea = session.get(IdeaModel, ideaId)
+    if not idea:
+        raise NotFound("Idea not found")
+    if idea.userId != user.id:
+        raise Forbidden("Not your idea")
+    view_row = session.exec(
+        select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
+    ).first()
+    return _idea_read_with_extras(session, view_row if view_row else idea)
 
 
 @ideasRouter.patch("/ideas/{ideaId}", response_model=IdeaRead)
@@ -225,6 +244,7 @@ def interpretIdea(
 
     _auto_select_place(session, idea, pipeline_result, suggestions)
 
+    # specificDatetime from AI stays in rawOutput; surfaced as slot option in PlanOverview
     idea.status = IdeaStatus.ready
     idea.updatedAt = datetime.utcnow()
     session.add(idea)
@@ -285,6 +305,42 @@ def selectPlaceSuggestion(
     return _idea_read_with_extras(session, view_row if view_row else idea)
 
 
+@ideasRouter.post("/ideas/{ideaId}/suggest-slots")
+def suggestSlotsForIdea(
+    ideaId: UUID,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> dict:
+    """Generate suggested time slots for an idea (on demand, not stored)."""
+    idea = session.get(IdeaModel, ideaId)
+    if not idea:
+        raise NotFound("Idea not found")
+    if idea.userId != user.id:
+        raise Forbidden("Not your idea")
+
+    pipeline_result = _get_latest_pipeline_result(session, idea.id)
+    preference = "any"
+    estimated_minutes = 60
+    opening_hours = None
+
+    if pipeline_result:
+        raw = pipeline_result.rawOutput or {}
+        preference = raw.get("preference") or "any"
+        estimated_minutes = pipeline_result.estimatedMinutes or 60
+
+    if idea.placeId:
+        place = session.get(PlaceModel, idea.placeId)
+        if place and place.openingHours:
+            opening_hours = place.openingHours
+
+    slots = suggest_time_slots(
+        preference=preference,
+        estimated_minutes=estimated_minutes,
+        opening_hours=opening_hours,
+    )
+    return {"slots": slots}
+
+
 @ideasRouter.post("/ideas/{ideaId}/plan", response_model=PlanRead)
 def promoteIdeaToPlan(
     ideaId: UUID,
@@ -298,19 +354,18 @@ def promoteIdeaToPlan(
         raise Forbidden("Not your idea")
 
     pipeline_result = _get_latest_pipeline_result(session, idea.id)
-    specific_datetime = None
     estimated_minutes = 60
     invitees: list[str] = []
     plan_title = idea.title
 
     if pipeline_result:
         raw = pipeline_result.rawOutput or {}
-        specific_datetime = raw.get("specificDatetime")
         estimated_minutes = pipeline_result.estimatedMinutes or 60
         invitees = raw.get("invitees", [])
         if pipeline_result.refinedTitle:
             plan_title = pipeline_result.refinedTitle
 
+    # Plan always starts as draft with scheduledAt = null. Time is set in PlanOverview.
     share_code = secrets.token_urlsafe(8)
 
     plan = PlanModel(
@@ -318,7 +373,7 @@ def promoteIdeaToPlan(
         placeId=idea.placeId,
         ideaId=idea.id,
         title=plan_title,
-        scheduledAt=datetime.fromisoformat(specific_datetime) if specific_datetime else None,
+        scheduledAt=None,
         status=PlanStatus.draft,
         shareCode=share_code,
         rawPrompt=idea.title,
@@ -347,6 +402,13 @@ def promoteIdeaToPlan(
                     inviteToken=secrets.token_urlsafe(12),
                 )
                 session.add(member)
+                notification = NotificationModel(
+                    userId=UUID(str(r["userId"])),
+                    type=NotificationType.invite_received,
+                    planId=plan.id,
+                    title=f"{user.firstName or 'Someone'} invited you to {plan_title}",
+                )
+                session.add(notification)
 
     commitAndRefresh(session, plan, idea)
 

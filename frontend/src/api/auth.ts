@@ -25,6 +25,27 @@ function verifyBackendUser() {
   return request<BackendUser>("/api/users/verify", { method: "POST" });
 }
 
+function storeOAuthToken(payload: {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: string | null;
+}) {
+  return request<{ ok: boolean }>("/api/users/oauth-token", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function useStoreOAuthToken() {
+  return useMutation({
+    mutationFn: (payload: {
+      accessToken: string;
+      refreshToken?: string;
+      expiresAt?: string | null;
+    }) => storeOAuthToken(payload),
+  });
+}
+
 export function useCreateBackendUser() {
   return useMutation({ mutationFn: createBackendUser });
 }

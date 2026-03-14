@@ -32,20 +32,26 @@ export default function InboxView() {
 
   if (isLoading) {
     return (
-      <div className="anim text-center py-20">
-        <span className="font-mono text-[11px] text-roam-text-muted">loading...</span>
+      <div className="max-w-[480px] mx-auto pt-5 px-4">
+        <div className="anim text-center py-20">
+          <span className="font-mono text-[11px] text-roam-text-muted">loading...</span>
+        </div>
       </div>
     );
   }
 
   if (notifications.length === 0) {
-    return <EmptyState icon="📭" title="all clear" subtitle="new activity will show up here" />;
+    return (
+      <div className="max-w-[480px] mx-auto pt-5 px-4">
+        <EmptyState icon="📭" title="all clear" subtitle="new activity will show up here" />
+      </div>
+    );
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div>
+    <div className="max-w-[480px] mx-auto pt-5 px-4">
       {unreadCount > 0 && (
         <div className="flex justify-end mb-2.5">
           <button onClick={() => markAllRead.mutate()} className="font-mono text-[9px] tracking-[1.5px] uppercase text-roam-logan-deep bg-transparent border-none cursor-pointer py-1">

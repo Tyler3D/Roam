@@ -5,10 +5,22 @@ import type { Plan } from "@/models/plan";
 
 export const ideaKeys = {
   all: ["ideas"] as const,
+  detail: (id: string) => ["ideas", id] as const,
 };
 
 function fetchIdeas() {
   return request<Idea[]>("/api/ideas");
+}
+
+function fetchIdea(id: string) {
+  return request<Idea>(`/api/ideas/${id}`);
+}
+
+function updateIdea(id: string, data: Partial<Record<string, unknown>>) {
+  return request<Idea>(`/api/ideas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 function createIdea(title: string) {
@@ -102,6 +114,30 @@ export function useSelectPlaceSuggestion() {
       qc.setQueryData<Idea[]>(ideaKeys.all, (old) =>
         old?.map((i) => (i.id === updated.id ? updated : i))
       );
+      qc.setQueryData(ideaKeys.detail(updated.id), updated);
     },
   });
 }
+
+export function useIdea(id: string | undefined) {
+  return useQuery({
+    queryKey: ideaKeys.detail(id ?? ""),
+    queryFn: () => fetchIdea(id!),
+    enabled: !!id,
+  });
+}
+
+export function useUpdateIdea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Record<string, unknown>> }) =>
+      updateIdea(id, data),
+    onSuccess: (updated) => {
+      qc.setQueryData<Idea[]>(ideaKeys.all, (old) =>
+        old?.map((i) => (i.id === updated.id ? updated : i))
+      );
+      qc.setQueryData(ideaKeys.detail(updated.id), updated);
+    },
+  });
+}
+

@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select, col, or_
 
@@ -17,12 +17,14 @@ from app.models.plans import (
     PlanMemberRead,
     PlanModel,
     PlanRead,
+    PlanStatus,
     PlanUpdate,
     RsvpStatus,
 )
 from app.models.users import UserModel
 from app.services.scheduling import suggest_time_slots
 from app.services.invite import send_plan_invites, build_gcal_link, get_schedule_url
+from app.services.calendar import create_calendar_event
 
 logger = logging.getLogger("roam.plans")
 plansRouter = APIRouter()
@@ -30,6 +32,8 @@ plansRouter = APIRouter()
 
 @plansRouter.get("/plans", response_model=list[PlanRead])
 def listPlans(
+    ideaId: UUID | None = Query(default=None, description="Filter by idea ID"),
+    status: str | None = Query(default=None, description="Filter by status, e.g. draft"),
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> list[PlanRead]:
@@ -37,13 +41,21 @@ def listPlans(
         select(PlanMemberModel.planId).where(PlanMemberModel.userId == user.id)
     ).all()
 
+    base_filter = or_(
+        PlanModel.creatorId == user.id,
+        col(PlanModel.id).in_(member_plan_ids),
+    )
+    if ideaId:
+        base_filter = base_filter & (PlanModel.ideaId == ideaId)
+    if status:
+        try:
+            status_enum = PlanStatus(status)
+            base_filter = base_filter & (PlanModel.status == status_enum)
+        except ValueError:
+            pass  # invalid status, ignore filter
+
     plans = session.exec(
-        select(PlanModel).where(
-            or_(
-                PlanModel.creatorId == user.id,
-                col(PlanModel.id).in_(member_plan_ids),
-            )
-        ).order_by(col(PlanModel.createdAt).desc())
+        select(PlanModel).where(base_filter).order_by(col(PlanModel.updatedAt).desc())
     ).all()
 
     results: list[PlanRead] = []
@@ -89,6 +101,19 @@ def updatePlan(
         raise Forbidden("Only the creator can update the plan")
 
     update_data = body.model_dump(exclude_unset=True)
+    new_status = update_data.get("status")
+    if new_status is not None:
+        # Status transition rules
+        if plan.status == PlanStatus.cancelled:
+            raise BadRequest("Cannot change a cancelled plan; create a new plan from the idea")
+        if new_status == PlanStatus.confirmed:
+            effective_scheduled = update_data.get("scheduledAt", plan.scheduledAt)
+            if not effective_scheduled:
+                raise BadRequest("Plan must have a scheduled time to confirm")
+        if new_status == PlanStatus.draft:
+            # Reopen as draft: clear scheduledAt
+            update_data["scheduledAt"] = None
+
     for key, value in update_data.items():
         setattr(plan, key, value)
     plan.updatedAt = datetime.utcnow()
@@ -130,16 +155,24 @@ def suggestSlots(
 @plansRouter.post("/plans/{planId}/calendar")
 def createCalendarEvent(
     planId: UUID,
+    timezone: str = Query(default="UTC", description="IANA timezone, e.g. America/New_York"),
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> dict:
     plan = session.get(PlanModel, planId)
     if not plan:
         raise NotFound("Plan not found")
-    if plan.creatorId != user.id:
-        raise Forbidden("Only the creator can create a calendar event")
     if not plan.scheduledAt:
         raise BadRequest("Plan must have a scheduled time")
+
+    member = session.exec(
+        select(PlanMemberModel)
+        .where(PlanMemberModel.planId == planId)
+        .where(PlanMemberModel.userId == user.id)
+    ).first()
+
+    if not member and plan.creatorId != user.id:
+        raise Forbidden("Must be a plan member to add to calendar")
 
     location = None
     if plan.placeId:
@@ -155,7 +188,30 @@ def createCalendarEvent(
     )
     schedule_url = get_schedule_url(plan.shareCode)
 
+    # Flow A: Create real event if OAuth token available
+    event_result = create_calendar_event(
+        session,
+        user.id,
+        title=plan.title,
+        start_time=plan.scheduledAt,
+        duration_minutes=plan.estimatedMinutes,
+        location=location,
+        description=f"Scheduled via Roam\n{schedule_url}",
+        timezone=timezone,
+    )
+
+    if event_result:
+        return {
+            "flow": "oauth",
+            "eventLink": event_result.get("eventLink"),
+            "eventId": event_result.get("eventId"),
+            "scheduleUrl": schedule_url,
+            "planId": str(plan.id),
+        }
+
+    # Flow B: No token or API failed — return link for manual add
     return {
+        "flow": "link",
         "gcalLink": gcal_link,
         "scheduleUrl": schedule_url,
         "planId": str(plan.id),

@@ -52,21 +52,17 @@ def getOpenAIApiKey() -> str:
     return getEnv("OPENAI_API_KEY")
 
 
-def getGoogleMapsApiKey() -> str | None:
-    return getOptionalEnv("GOOGLE_MAPS_API_KEY")
+def getGoogleMapsApiKey() -> str:
+    """API key for Google Maps Places API. Required for place suggestions."""
+    return getEnv("GOOGLE_MAPS_API_KEY")
 
+def getGoogleClientId() -> str:
+    """Google OAuth client ID. Required for Google sign-in and Calendar API."""
+    return getEnv("GOOGLE_CLIENT_ID")
 
-def getFrontendUrl() -> str:
-    return getOptionalEnv("FRONTEND_URL") or "https://roam-alpha.web.app"
-
-
-def getTwilioAccountSid() -> str | None:
-    return getOptionalEnv("TWILIO_ACCOUNT_SID")
-
-
-def getTwilioAuthToken() -> str | None:
-    return getOptionalEnv("TWILIO_AUTH_TOKEN")
-
+def getGoogleClientSecret() -> str:
+    """Google OAuth client secret. Required for token refresh with Google APIs."""
+    return getEnv("GOOGLE_CLIENT_SECRET")
 
 def getTwilioFromNumber() -> str | None:
     return getOptionalEnv("TWILIO_FROM_NUMBER")
@@ -95,3 +91,14 @@ def getSmtpFromEmail() -> str:
 def getSendGridApiKey() -> str | None:
     return getOptionalEnv("SENDGRID_API_KEY")
 
+
+def getOAuthEncryptionKey() -> str:
+    """Base64-encoded 32-byte key for Fernet. Required for OAuth token storage."""
+    key = getOptionalEnv("OAUTH_ENCRYPTION_KEY")
+    if not key:
+        raise RuntimeError(
+            "OAUTH_ENCRYPTION_KEY is not set. "
+            "Generate with: python -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\""
+        )
+    return key

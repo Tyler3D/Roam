@@ -16,7 +16,7 @@ import {
 
 import { firebaseAuth } from "@/auth/firebase";
 import { ROAM_DOMAIN } from "@/utils/util";
-import { useCreateBackendUser, useSyncBackendUser, useVerifyBackendUser } from "@/api/auth";
+import { useCreateBackendUser, useStoreOAuthToken, useSyncBackendUser, useVerifyBackendUser } from "@/api/auth";
 
 type AuthContextValue = {
   user: User | null;
@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const createUser = useCreateBackendUser();
   const syncUser = useSyncBackendUser();
   const verifyUser = useVerifyBackendUser();
+  const storeOAuthToken = useStoreOAuthToken();
 
   useEffect(() => {
     console.log("[roam-auth] AuthProvider mount", {
@@ -77,6 +78,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getRedirectResult(firebaseAuth)
       .then((result) => {
         console.log("[roam-auth] getRedirectResult done", result?.user?.uid ?? "no user");
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          const accessToken = credential?.accessToken;
+          if (accessToken) {
+            const sts = (result.user as { stsTokenManager?: { expirationTime?: number } })?.stsTokenManager;
+            const expiresAt = sts?.expirationTime
+              ? new Date(sts.expirationTime).toISOString()
+              : null;
+            storeOAuthToken.mutate(
+              { accessToken, expiresAt },
+              { onError: () => {} }
+            );
+          }
+        }
         setupListener();
       })
       .catch((err) => {
@@ -84,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setupListener();
       });
     return () => unsubscribe?.();
-  }, []);
+  }, [storeOAuthToken]);
 
   const isUserVerified = (inputUser: User | null = user) => {
     return Boolean(
@@ -116,11 +131,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       signInWithGoogle: async () => {
         const provider = new GoogleAuthProvider();
+        provider.addScope("https://www.googleapis.com/auth/calendar.events");
         // signInWithRedirect is broken on localhost (Firebase bug: HTTPS/HTTP mismatch).
         // Use popup for local dev; redirect for production. COOP header allows popups.
         if (import.meta.env.DEV) {
           console.log("[roam-auth] signInWithPopup (local dev)");
-          await signInWithPopup(firebaseAuth, provider);
+          const result = await signInWithPopup(firebaseAuth, provider);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          const accessToken = credential?.accessToken;
+          if (accessToken) {
+            const sts = (result.user as { stsTokenManager?: { expirationTime?: number } })?.stsTokenManager;
+            const expiresAt = sts?.expirationTime
+              ? new Date(sts.expirationTime).toISOString()
+              : null;
+            storeOAuthToken.mutate(
+              { accessToken, expiresAt },
+              { onError: () => {} }
+            );
+          }
         } else {
           console.log("[roam-auth] signInWithRedirect");
           await signInWithRedirect(firebaseAuth, provider);
@@ -180,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await verifyUser.mutateAsync();
       },
     }),
-    [user, loading, createUser, syncUser, verifyUser],
+    [user, loading, createUser, syncUser, verifyUser, storeOAuthToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

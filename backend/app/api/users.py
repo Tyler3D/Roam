@@ -1,16 +1,27 @@
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlmodel import Session, select, col, or_
 
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser
-from app.common.backendErrors import BadRequest, NotFound
+from app.common.backendErrors import BadRequest, InternalServerError, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
+from app.services.oauth_tokens import upsert_token
 
 logger = logging.getLogger("roam.users")
 usersRouter = APIRouter()
+
+
+class OAuthTokenStore(BaseModel):
+    """Payload for storing OAuth tokens (sent from client after Google sign-in)."""
+
+    accessToken: str
+    refreshToken: str | None = None
+    expiresAt: datetime | None = None
 
 USER_CONSTRAINT_MESSAGES = {
     "users_username_key": "Username already exists",
@@ -133,6 +144,31 @@ def createUser(
         extra={"firebaseUid": firebaseUid, "userId": str(newUser.id), "email": email},
     )
     return UserRead.model_validate(newUser)
+
+
+@usersRouter.post("/users/oauth-token")
+def storeOAuthToken(
+    body: OAuthTokenStore,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> dict:
+    """
+    Store Google OAuth tokens (encrypted) for calendar integration.
+    Call after Google sign-in when credential.accessToken is available.
+    Send expiresAt (ISO datetime) when available from token response for cheap expiry checks.
+    """
+    ok = upsert_token(
+        session,
+        user.id,
+        "google",
+        body.accessToken,
+        body.refreshToken,
+        body.expiresAt,
+    )
+    if not ok:
+        raise InternalServerError()
+    session.commit()
+    return {"ok": True}
 
 
 @usersRouter.get("/users/check-username")

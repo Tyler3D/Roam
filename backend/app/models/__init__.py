@@ -37,3 +37,4 @@ from app.models.notifications import (  # noqa: F401
     NotificationModel,
     NotificationRead,
 )
+from app.models.oauth_tokens import UserOAuthTokenModel, OAuthTokenUpsert  # noqa: F401
