@@ -113,16 +113,16 @@ CREATE INDEX IF NOT EXISTS "idx_friendships_addressee"
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS "ideas" (
-  "id"           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "userId"       uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "title"        text NOT NULL,
-  "notes"        text DEFAULT '',
-  "sourceUrl"    text DEFAULT '',
-  "placeId"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
-  "displayName" text,
-  "status"       "ideaStatus" NOT NULL DEFAULT 'captured',
-  "createdAt"    timestamptz NOT NULL DEFAULT now(),
-  "updatedAt"    timestamptz NOT NULL DEFAULT now()
+  "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"        uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title"         text NOT NULL,
+  "notes"         text DEFAULT '',
+  "sourceUrl"     text DEFAULT '',
+  "placeId"       uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "displayName"  text,
+  "status"        "ideaStatus" NOT NULL DEFAULT 'captured',
+  "createdAt"     timestamptz NOT NULL DEFAULT now(),
+  "updatedAt"     timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS "idx_ideas_userId"
@@ -217,6 +217,25 @@ CREATE TABLE IF NOT EXISTS "plan_messages" (
 
 CREATE INDEX IF NOT EXISTS "idx_plan_messages_planId"
   ON "plan_messages" ("planId", "createdAt");
+
+-- ============================================================
+-- User OAuth Tokens (encrypted at rest)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "user_oauth_tokens" (
+  "id"                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"                uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "provider"              text NOT NULL,
+  "encryptedAccessToken"  text NOT NULL,
+  "encryptedRefreshToken" text,
+  "expiresAt"             timestamptz,
+  "createdAt"             timestamptz NOT NULL DEFAULT now(),
+  "updatedAt"             timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "unique_user_oauth_provider" UNIQUE ("userId", "provider")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_user_oauth_tokens_userId"
+  ON "user_oauth_tokens" ("userId");
 
 -- ============================================================
 -- Notifications

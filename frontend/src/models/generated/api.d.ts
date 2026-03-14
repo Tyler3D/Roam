@@ -73,6 +73,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/oauth-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Storeoauthtoken
+         * @description Store Google OAuth tokens (encrypted) for calendar integration.
+         *     Call after Google sign-in when credential.accessToken is available.
+         *     Send expiresAt (ISO datetime) when available from token response for cheap expiry checks.
+         */
+        post: operations["storeOAuthToken_api_users_oauth_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/check-username": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Checkusername
+         * @description Check if username is available. No auth required — used during onboarding.
+         */
+        get: operations["checkUsername_api_users_check_username_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/search": {
         parameters: {
             query?: never;
@@ -149,7 +191,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Getidea */
+        get: operations["getIdea_api_ideas__ideaId__get"];
         put?: never;
         post?: never;
         /** Deleteidea */
@@ -158,6 +201,23 @@ export interface paths {
         head?: never;
         /** Updateidea */
         patch: operations["updateIdea_api_ideas__ideaId__patch"];
+        trace?: never;
+    };
+    "/api/ideas/{ideaId}/interpret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Interpretidea */
+        post: operations["interpretIdea_api_ideas__ideaId__interpret_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/ideas/{ideaId}/place-suggestions/{suggestionId}": {
@@ -177,7 +237,7 @@ export interface paths {
         patch: operations["selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch"];
         trace?: never;
     };
-    "/api/ideas/{ideaId}/interpret": {
+    "/api/ideas/{ideaId}/suggest-slots": {
         parameters: {
             query?: never;
             header?: never;
@@ -186,8 +246,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Interpretidea */
-        post: operations["interpretIdea_api_ideas__ideaId__interpret_post"];
+        /**
+         * Suggestslotsforidea
+         * @description Generate suggested time slots for an idea (on demand, not stored).
+         */
+        post: operations["suggestSlotsForIdea_api_ideas__ideaId__suggest_slots_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -278,6 +341,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/plans/{planId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Addplanmember */
+        post: operations["addPlanMember_api_plans__planId__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listtasks */
+        get: operations["listTasks_api_tasks__planId__get"];
+        put?: never;
+        /** Createtask */
+        post: operations["createTask_api_tasks__planId__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{planId}/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletetask */
+        delete: operations["deleteTask_api_tasks__planId___taskId__delete"];
+        options?: never;
+        head?: never;
+        /** Updatetask */
+        patch: operations["updateTask_api_tasks__planId___taskId__patch"];
         trace?: never;
     };
     "/api/places/search": {
@@ -491,6 +607,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddMemberRequest */
+        AddMemberRequest: {
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+        };
         /** Body_createIngestionJob_api_ingest_post */
         Body_createIngestionJob_api_ingest_post: {
             /** Reelurl */
@@ -510,63 +634,6 @@ export interface components {
              * @default []
              */
             frames: string[];
-        };
-        /** PlaceSuggestionRead */
-        PlaceSuggestionRead: {
-            id: string;
-            resultId: string;
-            placeId?: string | null;
-            rawName?: string | null;
-            confidence?: number | null;
-            isSelected: boolean;
-            createdAt: string;
-            placeName?: string | null;
-        };
-        /** PipelineResultRead */
-        PipelineResultRead: {
-            id: string;
-            ideaId?: string | null;
-            jobId?: string | null;
-            source: string;
-            refinedTitle?: string | null;
-            category?: string | null;
-            estimatedMinutes?: number | null;
-            modelName?: string | null;
-            rawOutput?: { [key: string]: unknown } | null;
-            createdAt: string;
-            placeSuggestions: components["schemas"]["PlaceSuggestionRead"][];
-        };
-        /** ExtractionRead */
-        ExtractionRead: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Jobid
-             * Format: uuid
-             */
-            jobId: string;
-            /** Placename */
-            placeName?: string | null;
-            /** Placeaddress */
-            placeAddress?: string | null;
-            /** Category */
-            category?: string | null;
-            /** Latitude */
-            latitude?: number | null;
-            /** Longitude */
-            longitude?: number | null;
-            /** Googleplaceid */
-            googlePlaceId?: string | null;
-            /** Confidence */
-            confidence?: number | null;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
         };
         /** FriendRequest */
         FriendRequest: {
@@ -644,18 +711,44 @@ export interface components {
         };
         /** IdeaRead */
         IdeaRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
+            /**
+             * Userid
+             * Format: uuid
+             */
             userId: string;
+            /** Title */
             title: string;
+            /** Notes */
             notes: string;
+            /** Sourceurl */
             sourceUrl: string;
+            /** Displayname */
             displayName?: string | null;
+            /** Placeid */
             placeId?: string | null;
             status: components["schemas"]["IdeaStatus"];
+            /**
+             * Plancount
+             * @default 0
+             */
             planCount: number;
+            /**
+             * Createdat
+             * Format: date-time
+             */
             createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
             updatedAt: string;
             pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
+            /** Placename */
             placeName?: string | null;
         };
         /**
@@ -710,7 +803,6 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
-            /** Pipeline result when job is done */
             pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
         };
         /**
@@ -755,6 +847,54 @@ export interface components {
          * @enum {string}
          */
         NotificationType: "invite_received" | "rsvp_accepted" | "rsvp_declined" | "task_assigned" | "plan_reminder" | "rate_prompt" | "friend_request";
+        /**
+         * OAuthTokenStore
+         * @description Payload for storing OAuth tokens (sent from client after Google sign-in).
+         */
+        OAuthTokenStore: {
+            /** Accesstoken */
+            accessToken: string;
+            /** Refreshtoken */
+            refreshToken?: string | null;
+            /** Expiresat */
+            expiresAt?: string | null;
+        };
+        /** PipelineResultRead */
+        PipelineResultRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ideaid */
+            ideaId?: string | null;
+            /** Jobid */
+            jobId?: string | null;
+            /** Source */
+            source: string;
+            /** Refinedtitle */
+            refinedTitle?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Estimatedminutes */
+            estimatedMinutes?: number | null;
+            /** Modelname */
+            modelName?: string | null;
+            /** Rawoutput */
+            rawOutput?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Placesuggestions
+             * @default []
+             */
+            placeSuggestions: components["schemas"]["PlaceSuggestionRead"][];
+        };
         /** PlaceRead */
         PlaceRead: {
             /**
@@ -787,6 +927,34 @@ export interface components {
             createdAt: string;
             /** Estimatedminutes */
             estimatedMinutes?: number | null;
+        };
+        /** PlaceSuggestionRead */
+        PlaceSuggestionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Resultid
+             * Format: uuid
+             */
+            resultId: string;
+            /** Placeid */
+            placeId?: string | null;
+            /** Rawname */
+            rawName?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Isselected */
+            isSelected: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Placename */
+            placeName?: string | null;
         };
         /** PlanMemberRead */
         PlanMemberRead: {
@@ -839,8 +1007,6 @@ export interface components {
             placeId?: string | null;
             /** Ideaid */
             ideaId?: string | null;
-            /** Enrichmentid */
-            enrichmentId?: string | null;
             /** Title */
             title: string;
             /** Scheduledat */
@@ -936,6 +1102,55 @@ export interface components {
          * @enum {string}
          */
         RsvpStatus: "pending" | "accepted" | "declined";
+        /** TaskCreate */
+        TaskCreate: {
+            /** Description */
+            description: string;
+            /**
+             * Assigneeid
+             * Format: uuid
+             */
+            assigneeId: string;
+        };
+        /** TaskRead */
+        TaskRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /**
+             * Assigneeid
+             * Format: uuid
+             */
+            assigneeId: string;
+            /**
+             * Assigneefirstname
+             * @default
+             */
+            assigneeFirstName: string;
+            /** Description */
+            description: string;
+            /** Iscompleted */
+            isCompleted: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Completedat */
+            completedAt?: string | null;
+        };
+        /** TaskUpdate */
+        TaskUpdate: {
+            /** Iscompleted */
+            isCompleted: boolean;
+        };
         /** UserCreate */
         UserCreate: {
             /** Username */
@@ -1155,6 +1370,74 @@ export interface operations {
             };
         };
     };
+    storeOAuthToken_api_users_oauth_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthTokenStore"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkUsername_api_users_check_username_get: {
+        parameters: {
+            query: {
+                username: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     searchUsers_api_users_search_get: {
         parameters: {
             query: {
@@ -1305,6 +1588,37 @@ export interface operations {
             };
         };
     };
+    getIdea_api_ideas__ideaId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ideaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     deleteIdea_api_ideas__ideaId__delete: {
         parameters: {
             query?: never;
@@ -1369,28 +1683,6 @@ export interface operations {
             };
         };
     };
-    selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ideaId: string;
-                suggestionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: { [name: string]: unknown };
-                content: { "application/json": components["schemas"]["IdeaRead"] };
-            };
-            422: {
-                headers: { [name: string]: unknown };
-                content: { "application/json": components["schemas"]["HTTPValidationError"] };
-            };
-        };
-    };
     interpretIdea_api_ideas__ideaId__interpret_post: {
         parameters: {
             query?: never;
@@ -1409,6 +1701,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdeaRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ideaId: string;
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggestSlotsForIdea_api_ideas__ideaId__suggest_slots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ideaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -1455,7 +1812,12 @@ export interface operations {
     };
     listPlans_api_plans_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by idea ID */
+                ideaId?: string | null;
+                /** @description Filter by status, e.g. draft */
+                status?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1469,6 +1831,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1574,7 +1945,10 @@ export interface operations {
     };
     createCalendarEvent_api_plans__planId__calendar_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone, e.g. America/New_York */
+                timezone?: string;
+            };
             header?: never;
             path: {
                 planId: string;
@@ -1592,6 +1966,173 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    addPlanMember_api_plans__planId__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTasks_api_tasks__planId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createTask_api_tasks__planId__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteTask_api_tasks__planId___taskId__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateTask_api_tasks__planId___taskId__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRead"];
                 };
             };
             /** @description Validation Error */

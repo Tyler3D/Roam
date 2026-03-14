@@ -16,6 +16,7 @@ from app.api.places import placesRouter
 from app.api.friends import friendsRouter
 from app.api.share import shareRouter
 from app.api.notifications import notificationsRouter
+from app.api.tasks import tasksRouter
 from app.auth.auth import getBearerToken, verifyFirebaseTokenString
 from app.common.backendErrors import Forbidden, RateLimited, Unauthorized
 from app.common.config import IS_DEV, getTrustedAuthProviders
@@ -219,6 +220,7 @@ app.include_router(usersRouter, prefix="/api")
 app.include_router(ingestRouter, prefix="/api")
 app.include_router(ideasRouter, prefix="/api")
 app.include_router(plansRouter, prefix="/api")
+app.include_router(tasksRouter, prefix="/api")
 app.include_router(placesRouter, prefix="/api")
 app.include_router(friendsRouter, prefix="/api")
 app.include_router(shareRouter, prefix="/api")

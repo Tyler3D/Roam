@@ -22,6 +22,7 @@ from app.models.plans import (
     RsvpStatus,
 )
 from app.models.users import UserModel
+from app.models.notifications import NotificationModel, NotificationType
 from app.services.scheduling import suggest_time_slots
 from app.services.invite import send_plan_invites, build_gcal_link, get_schedule_url
 from app.services.calendar import create_calendar_event
@@ -113,6 +114,38 @@ def updatePlan(
         if new_status == PlanStatus.draft:
             # Reopen as draft: clear scheduledAt
             update_data["scheduledAt"] = None
+        if new_status == PlanStatus.cancelled:
+            # Cancelling confirmed → reschedule (revert to draft). Cancelling draft → true cancel.
+            if plan.status == PlanStatus.confirmed:
+                plan.status = PlanStatus.draft
+                plan.scheduledAt = None
+                update_data["status"] = PlanStatus.draft
+                update_data["scheduledAt"] = None
+                # Reset member RSVPs to pending
+                members = session.exec(
+                    select(PlanMemberModel)
+                    .where(PlanMemberModel.planId == planId)
+                    .where(PlanMemberModel.role == MemberRole.member)
+                ).all()
+                organizer_member = session.exec(
+                    select(PlanMemberModel)
+                    .where(PlanMemberModel.planId == planId)
+                    .where(PlanMemberModel.role == MemberRole.organizer)
+                ).first()
+                organizer_user = session.get(UserModel, organizer_member.userId) if organizer_member else None
+                organizer_name = organizer_user.firstName if organizer_user else "Organizer"
+                for m in members:
+                    m.rsvpStatus = RsvpStatus.pending
+                    session.add(m)
+                    notification = NotificationModel(
+                        userId=m.userId,
+                        type=NotificationType.plan_reminder,
+                        planId=plan.id,
+                        title=f"{organizer_name} rescheduled {plan.title} — new time needed",
+                    )
+                    session.add(notification)
+            else:
+                update_data["status"] = PlanStatus.cancelled
 
     for key, value in update_data.items():
         setattr(plan, key, value)

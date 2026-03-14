@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { formatDuration } from "@/lib/duration";
 import { Spinner } from "@/components/ui/spinner";
 import { Avatar } from "@/components/ui/avatar-roam";
 import { FriendSearch } from "@/components/FriendSearch";
@@ -11,8 +10,13 @@ import {
   useCreateCalendarEvent,
   useAddPlanMember,
 } from "@/api/plans";
+import {
+  useTasks,
+  useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
+} from "@/api/tasks";
 import { useMe } from "@/api/users";
-import type { Plan } from "@/models/plan";
 import type { User } from "@/models/user";
 
 type Slot = { start: string; end: string; label: string };
@@ -45,18 +49,26 @@ function formatSlotLabel(iso: string): string {
 export default function PlanOverview() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
-  const { data: plan, isLoading } = usePlan(planId ?? "");
+  const pid = planId ?? "";
+  const { data: plan, isLoading } = usePlan(pid);
   const { data: me } = useMe();
   const updatePlan = useUpdatePlan();
   const suggestSlots = useSuggestSlots();
   const createCalendar = useCreateCalendarEvent();
-  const addMember = useAddPlanMember(planId ?? "");
+  const addMember = useAddPlanMember(pid);
+  const { data: tasks = [] } = useTasks(pid);
+  const createTaskMutation = useCreateTask(pid);
+  const updateTaskMutation = useUpdateTask(pid);
+  const deleteTaskMutation = useDeleteTask(pid);
 
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmReschedule, setConfirmReschedule] = useState(false);
+  const [taskDesc, setTaskDesc] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
 
   if (!planId) {
     return (
@@ -82,47 +94,46 @@ export default function PlanOverview() {
 
   function fetchSlots() {
     setShowSlotPicker(true);
-    suggestSlots.mutate(planId, {
+    suggestSlots.mutate(pid, {
       onSuccess: (data) => setSlots((data ?? []) as Slot[]),
     });
   }
 
   function handleConfirmPlan() {
-    if (!plan.scheduledAt) return;
+    if (!plan?.scheduledAt) return;
     updatePlan.mutate({
-      id: planId,
+      id: pid,
       data: { status: "confirmed" },
     });
   }
 
-  function handleReopenDraft() {
-    updatePlan.mutate({
-      id: planId,
-      data: { status: "draft", scheduledAt: null },
-    });
-  }
-
   function handleCancelPlan() {
+    const p = plan!;
     updatePlan.mutate(
-      { id: planId, data: { status: "cancelled" } },
+      { id: pid, data: { status: "cancelled" } },
       {
-        onSuccess: () => {
+        onSuccess: (updated) => {
           setConfirmCancel(false);
-          if (plan.ideaId) navigate(`/ideas/${plan.ideaId}`);
-          else navigate("/app");
+          setConfirmReschedule(false);
+          if (updated.status === "cancelled") {
+            if (p.ideaId) navigate(`/ideas/${p.ideaId}`);
+            else navigate("/app");
+          }
         },
       }
     );
   }
 
   function handleReplan() {
-    if (plan.ideaId) navigate(`/ideas/${plan.ideaId}`);
+    const p = plan!;
+    if (p.ideaId) navigate(`/ideas/${p.ideaId}`);
     else navigate("/app");
   }
 
   function saveTitle() {
-    if (titleDraft.trim() && titleDraft !== plan.title) {
-      updatePlan.mutate({ id: planId, data: { title: titleDraft.trim() } });
+    const p = plan!;
+    if (titleDraft.trim() && titleDraft !== p.title) {
+      updatePlan.mutate({ id: pid, data: { title: titleDraft.trim() } });
     }
     setEditingTitle(false);
   }
@@ -191,7 +202,7 @@ export default function PlanOverview() {
                         key={slot.start}
                         onClick={() =>
                           updatePlan.mutate({
-                            id: planId,
+                            id: pid,
                             data: { scheduledAt: slot.start },
                           })
                         }
@@ -238,7 +249,7 @@ export default function PlanOverview() {
                 onClick={() =>
                   createCalendar.mutate(
                     {
-                      planId,
+                      planId: pid,
                       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     },
                     {
@@ -293,35 +304,166 @@ export default function PlanOverview() {
         )}
       </div>
 
-      {/* Tasks placeholder - no API yet */}
+      {/* Tasks */}
       {(isDraft || isConfirmed || isCompleted) && (
         <div className="mb-6">
           <p className="label-mono mb-2">Tasks</p>
-          <p className="font-mono text-[11px] text-roam-text-muted">No tasks yet</p>
+          {(tasks?.length ?? 0) > 0 ? (
+            <div className="flex flex-col gap-1.5 mb-3">
+              {tasks.map((task) => {
+                const isAssignee = plan.members?.find((m) => m.id === task.assigneeId)?.userId === me?.id;
+                const canComplete = isCreator || isAssignee;
+                const canDelete = isCreator || isAssignee;
+                return (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-2 py-2 px-3 rounded-lg border border-roam-logan/20 bg-roam-surface"
+                  >
+                    <button
+                      onClick={() =>
+                        canComplete &&
+                        updateTaskMutation.mutate({
+                          taskId: task.id,
+                          isCompleted: !task.isCompleted,
+                        })
+                      }
+                      disabled={!canComplete || updateTaskMutation.isPending}
+                      className="font-mono text-[14px] shrink-0 bg-transparent border-none cursor-pointer"
+                    >
+                      {task.isCompleted ? "☑" : "☐"}
+                    </button>
+                    <span
+                      className={`font-mono text-[11px] flex-1 ${task.isCompleted ? "line-through text-roam-text-muted" : "text-roam-text"}`}
+                    >
+                      {task.description}
+                    </span>
+                    <span className="font-mono text-[10px] text-roam-text-muted shrink-0">
+                      {task.assigneeFirstName}
+                    </span>
+                    {canDelete && (
+                      <button
+                        onClick={() => deleteTaskMutation.mutate(task.id)}
+                        disabled={deleteTaskMutation.isPending}
+                        className="font-mono text-[10px] text-roam-error bg-transparent border-none cursor-pointer shrink-0"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="font-mono text-[11px] text-roam-text-muted mb-3">No tasks yet</p>
+          )}
+          {(isDraft || isConfirmed) && isCreator && (
+            <div className="flex gap-2 flex-wrap">
+              <input
+                value={taskDesc}
+                onChange={(e) => setTaskDesc(e.target.value)}
+                placeholder="add a task..."
+                className="font-mono text-[11px] flex-1 min-w-[120px] py-2 px-3 rounded-lg border border-roam-logan/20 bg-roam-surface"
+              />
+              <select
+                value={taskAssigneeId}
+                onChange={(e) => setTaskAssigneeId(e.target.value)}
+                className="font-mono text-[11px] py-2 px-3 rounded-lg border border-roam-logan/20 bg-roam-surface"
+              >
+                <option value="">assign to</option>
+                {plan.members?.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.firstName} {m.lastName}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  if (taskDesc.trim() && taskAssigneeId) {
+                    createTaskMutation.mutate({
+                      description: taskDesc.trim(),
+                      assigneeId: taskAssigneeId,
+                    });
+                    setTaskDesc("");
+                    setTaskAssigneeId("");
+                  }
+                }}
+                disabled={!taskDesc.trim() || !taskAssigneeId || createTaskMutation.isPending}
+                className="btn-primary font-mono text-[10px] px-3 py-2 rounded-lg"
+              >
+                Add
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Actions */}
       <div className="pt-4 border-t border-roam-logan/10 space-y-2">
-        {isConfirmed && isCreator && (
-          <button
-            onClick={handleReopenDraft}
-            disabled={updatePlan.isPending}
-            className="font-mono text-[11px] text-roam-logan-deep bg-transparent border-none cursor-pointer block"
-          >
-            Reopen as Draft
-          </button>
-        )}
         {(isDraft || isConfirmed || isCompleted) && isCreator && (
           <>
-            {!confirmCancel ? (
+            {isConfirmed && !confirmReschedule && (
+              <button
+                onClick={() => setConfirmReschedule(true)}
+                className="font-mono text-[11px] text-roam-logan-deep bg-transparent border-none cursor-pointer block"
+              >
+                Reschedule
+              </button>
+            )}
+            {isConfirmed && confirmReschedule && (
+              <div className="space-y-2">
+                <p className="font-mono text-[11px] text-roam-text-muted">
+                  This will notify all members that the plan needs a new time. Continue?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCancelPlan}
+                    className="font-mono text-[11px] text-roam-error"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setConfirmReschedule(false)}
+                    className="font-mono text-[11px] text-roam-text-muted"
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
+            {isDraft && !confirmCancel && (
               <button
                 onClick={() => setConfirmCancel(true)}
                 className="font-mono text-[11px] text-roam-error bg-transparent border-none cursor-pointer block"
               >
                 Cancel Plan
               </button>
-            ) : (
+            )}
+            {isDraft && confirmCancel && (
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[11px] text-roam-text-muted">Cancel this plan?</span>
+                <button
+                  onClick={handleCancelPlan}
+                  className="font-mono text-[11px] text-roam-error"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setConfirmCancel(false)}
+                  className="font-mono text-[11px] text-roam-text-muted"
+                >
+                  No
+                </button>
+              </div>
+            )}
+            {isCompleted && !confirmCancel && (
+              <button
+                onClick={() => setConfirmCancel(true)}
+                className="font-mono text-[11px] text-roam-error bg-transparent border-none cursor-pointer block"
+              >
+                Cancel Plan
+              </button>
+            )}
+            {isCompleted && confirmCancel && (
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[11px] text-roam-text-muted">Cancel this plan?</span>
                 <button
@@ -357,7 +499,7 @@ export default function PlanOverview() {
                   key={star}
                   onClick={() =>
                     updatePlan.mutate({
-                      id: planId,
+                      id: pid,
                       data: { rating: star },
                     })
                   }

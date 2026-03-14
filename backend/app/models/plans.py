@@ -144,3 +144,5 @@ class PlanMemberRead(SQLModel):
     respondedAt: Optional[datetime] = None
     firstName: Optional[str] = None
     lastName: Optional[str] = None
+
+
