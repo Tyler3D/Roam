@@ -24,7 +24,7 @@ from app.models.plans import (
 from app.models.users import UserModel
 from app.models.friendships import FriendshipModel, FriendshipStatus
 from app.models.notifications import NotificationModel, NotificationType
-from app.services.interpret import interpret_with_openai
+from app.services.interpret import get_scribble_prompt_version, interpret_idea
 from app.services.places import search_google_places
 from app.services.scheduling import suggest_time_slots
 
@@ -211,7 +211,7 @@ def interpretIdea(
     session.add(idea)
     session.flush()
 
-    result_dict = interpret_with_openai(idea.title)
+    result_dict = interpret_idea(idea.title)
 
     pipeline_result = PipelineResultModel(
         ideaId=idea.id,
@@ -222,6 +222,7 @@ def interpretIdea(
         estimatedMinutes=result_dict.get("estimatedMinutes"),
         modelName=result_dict.get("modelName"),
         rawOutput=result_dict,
+        promptVersion=get_scribble_prompt_version(),
     )
     session.add(pipeline_result)
     session.flush()

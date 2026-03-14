@@ -1,14 +1,15 @@
-import base64
 import json
 import logging
+import os
 from datetime import datetime
 from uuid import UUID
 
 import httpx
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from sqlmodel import Session, select
 
-from app.common.config import getOpenAIApiKey, getGoogleMapsApiKey
+from app.common.config import getGeminiApiKey, getGoogleMapsApiKey
 
 # Raised when OpenAI or Google Maps returns 429 / rate limit; job should fail with clear message
 class ProviderRateLimitError(Exception):
@@ -40,69 +41,68 @@ Return a JSON array. Return ALL candidates — do not self-filter. Example:
 If you cannot identify any places, return an empty array: []"""
 
 
-def _buildUserMessage(framesData: list[bytes], thumbnailData: bytes | None, metadata: dict) -> list[dict]:
-    content: list[dict] = []
+def _build_gemini_contents(framesData: list[bytes], thumbnailData: bytes | None, metadata: dict) -> list:
+    """Build multimodal contents for Gemini: text + images."""
+    parts: list = []
 
-    textParts = []
+    text_parts = []
     if metadata.get("reelTitle"):
-        textParts.append(f"Title: {metadata['reelTitle']}")
+        text_parts.append(f"Title: {metadata['reelTitle']}")
     if metadata.get("ogDescription"):
-        textParts.append(f"Description: {metadata['ogDescription']}")
+        text_parts.append(f"Description: {metadata['ogDescription']}")
     if metadata.get("ogKeywords"):
-        textParts.append(f"Keywords: {metadata['ogKeywords']}")
+        text_parts.append(f"Keywords: {metadata['ogKeywords']}")
     if metadata.get("shareText"):
-        textParts.append(f"Caption/Share text: {metadata['shareText']}")
+        text_parts.append(f"Caption/Share text: {metadata['shareText']}")
     if metadata.get("reelUrl"):
-        textParts.append(f"URL: {metadata['reelUrl']}")
+        text_parts.append(f"URL: {metadata['reelUrl']}")
 
-    if textParts:
-        content.append({"type": "text", "text": "\n".join(textParts)})
+    if text_parts:
+        parts.append(types.Part.from_text("\n".join(text_parts)))
 
-    allImages = []
+    all_images = []
     if thumbnailData:
-        allImages.append(thumbnailData)
-    allImages.extend(framesData)
+        all_images.append(thumbnailData)
+    all_images.extend(framesData)
 
-    for imgBytes in allImages:
-        b64 = base64.b64encode(imgBytes).decode("utf-8")
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
-        })
+    for img_bytes in all_images:
+        parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
 
-    if not content:
-        content.append({"type": "text", "text": "No metadata or images available."})
+    if not parts:
+        parts.append(types.Part.from_text("No metadata or images available."))
 
-    return content
+    return parts
 
 
 def _callVisionLLM(framesData: list[bytes], thumbnailData: bytes | None, metadata: dict) -> list[dict]:
-    client = OpenAI(api_key=getOpenAIApiKey())
+    client = genai.Client(api_key=getGeminiApiKey())
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-    userContent = _buildUserMessage(framesData, thumbnailData, metadata)
+    contents = _build_gemini_contents(framesData, thumbnailData, metadata)
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": userContent},
-            ],
-            max_tokens=1024,
-            temperature=0.2,
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                temperature=0.2,
+                max_output_tokens=1024,
+            ),
         )
     except Exception as e:
         if getattr(e, "status_code", None) == 429 or "rate" in str(e).lower():
-            raise ProviderRateLimitError("OpenAI rate limit exceeded; try again later.") from e
+            raise ProviderRateLimitError("Gemini rate limit exceeded; try again later.") from e
         raise
 
-    raw = response.choices[0].message.content or "[]"
+    raw = response.text or "[]"
 
     # Strip markdown fences if present
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
-        lines = lines[1:]  # drop opening fence
+        lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
@@ -258,7 +258,7 @@ def processIngestionJob(
             refinedTitle=refined_title,
             category=category,
             estimatedMinutes=estimated_minutes,
-            modelName="gpt-4o",
+            modelName=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
             rawOutput={"candidates": candidates, "metadata": metadata},
         )
         session.add(pipeline_result)

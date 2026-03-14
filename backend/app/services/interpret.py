@@ -1,12 +1,16 @@
-import json
+import hashlib
 import logging
+import os
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
 
-from app.common.config import getOpenAIApiKey
+from app.common.config import getGeminiApiKey
 
 logger = logging.getLogger("roam.interpret")
 
@@ -18,68 +22,60 @@ CATEGORIES = [
 
 PREFERENCES = ["morning", "afternoon", "evening", "weekend", "any"]
 
-SYSTEM_PROMPT = """You are the AI backend for Roam, a social planning app. Given a user's natural-language idea, extract structured data.
 
-Return ONLY valid JSON with these fields:
-{
-  "refinedTitle": "A concise, polished version of the idea",
-  "searchQuery": "Google Places search query to find the venue/location",
-  "category": "one of: food-drink, arts-culture, outdoors, fitness, shopping, entertainment, nightlife, learning, travel, social, other",
-  "preference": "one of: morning, afternoon, evening, weekend, any",
-  "estimatedMinutes": 90,
-  "tags": ["tag1", "tag2"],
-  "invitees": ["FirstName1", "FirstName2"],
-  "specificDatetime": "ISO 8601 datetime string or null",
-  "taskAssignments": "person: task; person2: task2" or null
-}
-
-Rules:
-- invitees: extract names after @ symbols. Return just the name part.
-- specificDatetime: parse relative dates like "friday 7pm", "tomorrow at noon", "next saturday 3pm" relative to the current time provided.
-- taskAssignments: if the input says something like "@Tyler bring drinks", extract "Tyler: bring drinks".
-- If no place is mentioned, set searchQuery to the refined title.
-- estimatedMinutes should be a reasonable estimate for the activity type.
-"""
+def _load_scribble_prompt() -> str:
+    path = Path(__file__).resolve().parent.parent / "prompts" / "scribble_interpret.md"
+    return path.read_text(encoding="utf-8")
 
 
-def interpret_with_openai(raw_input: str, current_time: str | None = None) -> dict[str, Any]:
-    client = OpenAI(api_key=getOpenAIApiKey())
+SCRIBBLE_SYSTEM_PROMPT = _load_scribble_prompt()
+
+
+class ScribbleInterpretOutput(BaseModel):
+    refinedTitle: str
+    searchQuery: str
+    category: str
+    preference: str
+    estimatedMinutes: int
+    invitees: list[str] = Field(default_factory=list)
+    specificDatetime: Optional[str] = None
+    taskAssignments: Optional[str] = None
+
+
+def interpret_idea(raw_input: str, current_time: str | None = None) -> dict[str, Any]:
+    """Interpret user idea using Gemini. Kept name for API compatibility."""
+    client = genai.Client(api_key=getGeminiApiKey())
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     now_str = current_time or datetime.utcnow().isoformat()
     user_message = f"Current time: {now_str}\n\nUser input: {raw_input}"
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            max_tokens=512,
-            temperature=0.2,
+        response = client.models.generate_content(
+            model=model,
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=SCRIBBLE_SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=ScribbleInterpretOutput,
+                temperature=0.2,
+                max_output_tokens=512,
+            ),
         )
 
-        raw = response.choices[0].message.content or "{}"
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            cleaned = "\n".join(lines)
-
-        result = json.loads(cleaned)
+        parsed = ScribbleInterpretOutput.model_validate_json(response.text)
+        result = parsed.model_dump()
         result["aiEnriched"] = True
-        result["modelName"] = "gpt-4o-mini"
+        result["modelName"] = model
         return result
 
     except Exception:
-        logger.exception("OpenAI interpretation failed, falling back to keyword parser")
+        logger.exception("Gemini interpretation failed, falling back to keyword parser")
         return interpret_fallback(raw_input)
 
 
 def interpret_fallback(raw_input: str) -> dict[str, Any]:
-    """Keyword-based fallback when OpenAI is unavailable."""
+    """Keyword-based fallback when Gemini is unavailable."""
     invitees = extract_invitees(raw_input)
     specific_datetime = extract_specific_datetime(raw_input)
 
@@ -103,7 +99,6 @@ def interpret_fallback(raw_input: str) -> dict[str, Any]:
         "category": category,
         "preference": preference,
         "estimatedMinutes": estimated,
-        "tags": [],
         "invitees": invitees,
         "specificDatetime": specific_datetime,
         "taskAssignments": _extract_task_assignments(raw_input, invitees),
@@ -252,3 +247,9 @@ def _infer_duration(text: str, category: str) -> int:
     if category == "outdoors":
         return 180
     return 90
+
+
+def get_scribble_prompt_version() -> str:
+    """Return a short hash of the current prompt for pipeline_results.promptVersion."""
+    h = hashlib.md5(SCRIBBLE_SYSTEM_PROMPT.encode()).hexdigest()[:8]
+    return f"scribble-{h}"

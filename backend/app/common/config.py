@@ -48,8 +48,9 @@ def getDatabaseUrl() -> str:
     return getEnv("DATABASE_URL")
 
 
-def getOpenAIApiKey() -> str:
-    return getEnv("OPENAI_API_KEY")
+def getGeminiApiKey() -> str:
+    """API key for Google Gemini. Required for idea interpretation and reel processing."""
+    return getEnv("GEMINI_API_KEY")
 
 
 def getGoogleMapsApiKey() -> str:

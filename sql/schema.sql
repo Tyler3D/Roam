@@ -292,6 +292,7 @@ CREATE TABLE IF NOT EXISTS "pipeline_results" (
   "refinedTitle"     text,
   "category"         text,
   "estimatedMinutes" integer,
+  "promptVersion"    text,
   "modelName"        text,
   "rawOutput"        jsonb DEFAULT '{}',
   "createdAt"        timestamptz NOT NULL DEFAULT now(),

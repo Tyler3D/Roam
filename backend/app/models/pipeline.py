@@ -17,6 +17,7 @@ class PipelineResultModel(SQLModel, table=True):
     category: Optional[str] = None
     estimatedMinutes: Optional[int] = None
     modelName: Optional[str] = None
+    promptVersion: Optional[str] = None
     rawOutput: Optional[dict[str, Any]] = Field(default={}, sa_column=Column(JSONB))
     createdAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -57,6 +58,7 @@ class PipelineResultRead(SQLModel):
     category: Optional[str] = None
     estimatedMinutes: Optional[int] = None
     modelName: Optional[str] = None
+    promptVersion: Optional[str] = None
     rawOutput: Optional[dict[str, Any]] = None
     createdAt: datetime
     placeSuggestions: list[PlaceSuggestionRead] = []

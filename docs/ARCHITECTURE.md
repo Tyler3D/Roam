@@ -55,7 +55,7 @@ CUIT enforces the policy `**constraints/run.managed.requireInvokerIam`**: so eve
 - **Region:** `us-east1` (must match the region used in the workflow and Artifact Registry).
 - **Authentication:** **Require authentication** — Identity and Access Management (IAM). Do not use Identity-Aware Proxy (IAP) for this service.
 - **Image:** Supplied by CI from Artifact Registry, e.g. `us-east1-docker.pkg.dev/PROJECT_ID/roam/backend:SHA`.
-- **Environment variables:** Set in the Cloud Run console (Variables & secrets). Required: `ENVIRONMENT=prod`, `DATABASE_URL`, `OPENAI_API_KEY`, Firebase vars (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`). Optional: `CORS_ORIGINS` or `FRONTEND_ORIGIN`, `GOOGLE_MAPS_API_KEY`, `TRUSTED_AUTH_PROVIDERS`. See `docs/ENV.md` for the full list.
+- **Environment variables:** Set in the Cloud Run console (Variables & secrets). Required: `ENVIRONMENT=prod`, `DATABASE_URL`, `GEMINI_API_KEY`, Firebase vars (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`). Optional: `CORS_ORIGINS` or `FRONTEND_ORIGIN`, `GOOGLE_MAPS_API_KEY`, `TRUSTED_AUTH_PROVIDERS`. See `docs/ENV.md` for the full list.
 
 ### Independent setup
 
