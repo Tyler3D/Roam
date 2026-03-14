@@ -3,6 +3,10 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================================
 -- Enums
 -- ============================================================
+-- planStatus: draft | confirmed | completed | cancelled
+-- rsvpStatus: pending | accepted | declined
+-- memberRole: organizer | member
+-- ============================================================
 
 DO $$
 BEGIN

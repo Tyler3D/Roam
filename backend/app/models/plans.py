@@ -1,28 +1,11 @@
 from datetime import datetime
-from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlmodel import Column, Field, SQLModel
 from sqlalchemy import CheckConstraint, Enum as SAEnum
 
-
-class PlanStatus(str, Enum):
-    draft = "draft"
-    confirmed = "confirmed"
-    completed = "completed"
-    cancelled = "cancelled"
-
-
-class RsvpStatus(str, Enum):
-    pending = "pending"
-    accepted = "accepted"
-    declined = "declined"
-
-
-class MemberRole(str, Enum):
-    organizer = "organizer"
-    member = "member"
+from app.models.plan_enums import MemberRole, PlanStatus, RsvpStatus
 
 
 class PlanModel(SQLModel, table=True):

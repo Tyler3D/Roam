@@ -19,10 +19,14 @@ export default function PlansView() {
         new Date(p.scheduledAt) >= now
     )
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
-  const past = plans.filter(
-    (p) =>
-      p.status === "cancelled" || (p.scheduledAt && new Date(p.scheduledAt) < now)
-  );
+  const past = plans
+    .filter(
+      (p) =>
+        (p.status === "confirmed" || p.status === "completed") &&
+        p.scheduledAt &&
+        new Date(p.scheduledAt) < now
+    )
+    .sort((a, b) => new Date(b.scheduledAt!).getTime() - new Date(a.scheduledAt!).getTime());
 
   const [activeTab, setActiveTab] = useState<TabId>("upcoming");
 

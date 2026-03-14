@@ -686,7 +686,7 @@ export interface components {
          * FriendshipStatus
          * @enum {string}
          */
-        FriendshipStatus: "pending" | "accepted";
+        FriendshipStatus: FriendshipStatus;
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -755,7 +755,7 @@ export interface components {
          * IdeaStatus
          * @enum {string}
          */
-        IdeaStatus: "captured" | "suggesting" | "ready" | "planned";
+        IdeaStatus: IdeaStatus;
         /** IdeaUpdate */
         IdeaUpdate: {
             /** Title */
@@ -809,12 +809,12 @@ export interface components {
          * JobStatus
          * @enum {string}
          */
-        JobStatus: "processing" | "done" | "failed";
+        JobStatus: JobStatus;
         /**
          * MemberRole
          * @enum {string}
          */
-        MemberRole: "organizer" | "member";
+        MemberRole: MemberRole;
         /** NotificationRead */
         NotificationRead: {
             /**
@@ -846,7 +846,7 @@ export interface components {
          * NotificationType
          * @enum {string}
          */
-        NotificationType: "invite_received" | "rsvp_accepted" | "rsvp_declined" | "task_assigned" | "plan_reminder" | "rate_prompt" | "friend_request";
+        NotificationType: NotificationType;
         /**
          * OAuthTokenStore
          * @description Payload for storing OAuth tokens (sent from client after Google sign-in).
@@ -1048,7 +1048,7 @@ export interface components {
          * PlanStatus
          * @enum {string}
          */
-        PlanStatus: "draft" | "confirmed" | "completed" | "cancelled";
+        PlanStatus: PlanStatus;
         /** PlanUpdate */
         PlanUpdate: {
             /** Title */
@@ -1101,7 +1101,7 @@ export interface components {
          * RsvpStatus
          * @enum {string}
          */
-        RsvpStatus: "pending" | "accepted" | "declined";
+        RsvpStatus: RsvpStatus;
         /** TaskCreate */
         TaskCreate: {
             /** Description */
@@ -2476,4 +2476,43 @@ export interface operations {
             };
         };
     };
+}
+export enum FriendshipStatus {
+    pending = "pending",
+    accepted = "accepted"
+}
+export enum IdeaStatus {
+    captured = "captured",
+    suggesting = "suggesting",
+    ready = "ready",
+    planned = "planned"
+}
+export enum JobStatus {
+    processing = "processing",
+    done = "done",
+    failed = "failed"
+}
+export enum MemberRole {
+    organizer = "organizer",
+    member = "member"
+}
+export enum NotificationType {
+    invite_received = "invite_received",
+    rsvp_accepted = "rsvp_accepted",
+    rsvp_declined = "rsvp_declined",
+    task_assigned = "task_assigned",
+    plan_reminder = "plan_reminder",
+    rate_prompt = "rate_prompt",
+    friend_request = "friend_request"
+}
+export enum PlanStatus {
+    draft = "draft",
+    confirmed = "confirmed",
+    completed = "completed",
+    cancelled = "cancelled"
+}
+export enum RsvpStatus {
+    pending = "pending",
+    accepted = "accepted",
+    declined = "declined"
 }
