@@ -81,6 +81,8 @@ class IdeaRead(SQLModel):
     updatedAt: datetime
     pipelineResult: Optional[PipelineResultRead] = None
     placeName: Optional[str] = None
+    placeLatitude: Optional[float] = None
+    placeLongitude: Optional[float] = None
 
 
 class IdeaUpdate(SQLModel):

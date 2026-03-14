@@ -68,6 +68,8 @@ def _idea_read_with_extras(
         place = session.get(PlaceModel, idea.placeId)
         if place:
             read.placeName = place.name
+            read.placeLatitude = place.latitude
+            read.placeLongitude = place.longitude
     return read
 
 

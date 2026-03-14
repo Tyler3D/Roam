@@ -750,6 +750,10 @@ export interface components {
             pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
             /** Placename */
             placeName?: string | null;
+            /** Placelatitude */
+            placeLatitude?: number | null;
+            /** Placelongitude */
+            placeLongitude?: number | null;
         };
         /**
          * IdeaStatus

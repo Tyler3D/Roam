@@ -8,7 +8,7 @@ const TABS = [
   { id: "ideas", symbol: "◌", label: "ideas", path: "/app" },
   { id: "drafts", symbol: "⊟", label: "drafts", path: "/app/drafts" },
   { id: "plans", symbol: "⊕", label: "plans", path: "/app/plans" },
-  { id: "inbox", symbol: "◎", label: "inbox", path: "/app/inbox" },
+  { id: "map", symbol: "◎", label: "map", path: "/app/map" },
 ] as const;
 
 export default function AppLayout() {
@@ -30,7 +30,7 @@ export default function AppLayout() {
         userLastName={profile?.lastName}
         userCity={profile?.city}
         notificationCount={unreadCount}
-        onNotificationClick={() => navigate("/app/inbox")}
+        onNotificationClick={() => navigate("/app/notifications")}
       />
 
       <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 72 }}>
@@ -59,9 +59,6 @@ export default function AppLayout() {
                 <span className="absolute top-1.5 right-[calc(50%-14px)] min-w-[14px] h-[14px] px-1 flex items-center justify-center rounded-full bg-roam-logan-deep text-white font-mono text-[9px]">
                   {draftsCount > 99 ? "99+" : draftsCount}
                 </span>
-              )}
-              {tab.id === "inbox" && unreadCount > 0 && (
-                <div className="absolute top-2 right-[calc(50%-14px)] w-[7px] h-[7px] rounded-full bg-roam-notif-dot border-[1.5px] border-roam-bg/95" />
               )}
             </button>
           );
