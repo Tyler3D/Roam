@@ -7,6 +7,7 @@ struct ReelDetailPage: View {
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.roamStores) private var stores
+    @EnvironmentObject private var shareIngress: ShareIngressCoordinator
     @State private var detail: APIClient.SavedReelDetailDTO?
     @State private var loadError: String?
     @State private var titleEdits: [UUID: String] = [:]
@@ -54,10 +55,19 @@ struct ReelDetailPage: View {
         .task { await load() }
     }
 
+    private var isIngestScanningThisReel: Bool {
+        guard let rid = shareIngress.ingestScanState?.reelId, !rid.isEmpty else { return false }
+        return rid == reelId.lowercased()
+    }
+
     @ViewBuilder
     private func content(_ d: APIClient.SavedReelDetailDTO) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if isIngestScanningThisReel {
+                    reelIngestSearchingBanner
+                }
+
                 if d.jobStatus == "failed" || d.status == "failed" {
                     VStack(alignment: .leading, spacing: 10) {
                         if let err = d.jobError?.trimmingCharacters(in: .whitespacesAndNewlines), !err.isEmpty {
@@ -99,6 +109,7 @@ struct ReelDetailPage: View {
 
                 if let rid = UUID(uuidString: reelId) {
                     ReelThumbnailImageView(reelId: rid, signedUrl: d.thumbnailSignedUrl, contentMode: .fit)
+                        .frame(minHeight: 120)
                         .frame(maxHeight: 220)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -151,6 +162,21 @@ struct ReelDetailPage: View {
             }
             .padding(16)
         }
+    }
+
+    private var reelIngestSearchingBanner: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Searching for Roamable ideas.")
+                .font(RoamFont.mono(11, weight: .medium))
+                .foregroundStyle(RoamColors.loganDark)
+            Text("Give us a minute.")
+                .font(RoamFont.mono(10))
+                .foregroundStyle(RoamColors.textMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(RoamColors.logan.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func ideasSection(_ d: APIClient.SavedReelDetailDTO) -> some View {
@@ -312,7 +338,7 @@ struct ReelDetailPage: View {
         defer { isRetryingIngest = false }
         let pack = await ReelMetadataService.extract(url: url, shareText: nil)
         do {
-            _ = try await apiClient.retryFailedReelIngest(
+            let resp = try await apiClient.retryFailedReelIngest(
                 reelId: reelId,
                 shareText: nil,
                 reelTitle: pack.ingestReelTitle,
@@ -320,6 +346,14 @@ struct ReelDetailPage: View {
                 ogKeywords: pack.ingestOgKeywords,
                 thumbnailJPEG: pack.thumbnailJPEG,
                 frameJPEGs: pack.frameJPEGs
+            )
+            let trimmedReel = resp.reelId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let trackedReelId = trimmedReel.isEmpty ? reelId : trimmedReel
+            shareIngress.beginIngestJobTracking(
+                jobId: resp.jobId,
+                reelId: trackedReelId,
+                apiClient: apiClient,
+                stores: stores
             )
             await load()
             await stores.reels.refresh()

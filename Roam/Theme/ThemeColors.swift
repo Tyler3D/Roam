@@ -22,6 +22,9 @@ enum RoamColors {
     static let notifDot = Color(red: 242 / 255, green: 184 / 255, blue: 203 / 255)
     static let error = Color(red: 229 / 255, green: 115 / 255, blue: 115 / 255)
 
+    /// Reels grid: outline for items that need a user decision (review / promote).
+    static let actionRequired = Color(red: 52 / 255, green: 120 / 255, blue: 246 / 255)
+
     /// Glass bar tint over material blur (see `.glass-bar` in frontend `index.css`).
     static let glassTint = Color(red: 245 / 255, green: 243 / 255, blue: 250 / 255).opacity(0.92)
 

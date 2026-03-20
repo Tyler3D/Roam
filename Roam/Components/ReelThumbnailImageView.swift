@@ -27,7 +27,7 @@ struct ReelThumbnailImageView: View {
                     .aspectRatio(contentMode: contentMode)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 120)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .task(id: taskKey) {
             await resolveImage()

@@ -106,19 +106,22 @@ final class ShareIngressCoordinator: ObservableObject {
             await stores.ideas.refresh()
             await stores.reels.refresh()
 
-            let jobId = resp.jobId.lowercased()
-            let reelNorm: String? = {
-                guard let s = resp.reelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
-                return s.lowercased()
-            }()
-
-            ingestScanState = IngestScanState(jobId: jobId, reelId: reelNorm)
-
-            Task { [weak self] in
-                await self?.pollUntilSettled(apiClient: apiClient, jobId: jobId, stores: stores)
-            }
+            beginIngestJobTracking(jobId: resp.jobId, reelId: resp.reelId, apiClient: apiClient, stores: stores)
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    /// Show the Reels “searching…” banner and poll until the job finishes (share handoff, queue flush with job, or retry from reel detail).
+    func beginIngestJobTracking(jobId: String, reelId: String?, apiClient: APIClient, stores: RoamStores) {
+        let jobNorm = jobId.lowercased()
+        let reelNorm: String? = {
+            guard let s = reelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+            return s.lowercased()
+        }()
+        ingestScanState = IngestScanState(jobId: jobNorm, reelId: reelNorm)
+        Task { [weak self] in
+            await self?.pollUntilSettled(apiClient: apiClient, jobId: jobNorm, stores: stores)
         }
     }
 

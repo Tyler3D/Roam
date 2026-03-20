@@ -16,6 +16,9 @@ struct ReelsPage: View {
         GridItem(.flexible(), spacing: 12),
     ]
 
+    /// Fixed portrait frame so grid cells stay aligned regardless of thumbnail pixel dimensions.
+    private static let gridThumbnailAspect: CGFloat = 9.0 / 16.0
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
@@ -112,31 +115,44 @@ struct ReelsPage: View {
         }
     }
 
+    @ViewBuilder
     private func queuedReelCell(_ q: QueuedReelIngest) -> some View {
+        let uploadFailed = q.uploadStatus == .failed
         VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    if let path = ShareQueueStore.thumbnailFileURL(for: q),
-                       let ui = UIImage(contentsOfFile: path.path) {
-                        Image(uiImage: ui)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } else {
-                        RoamColors.logan.opacity(0.12)
+            ZStack(alignment: .topLeading) {
+                ZStack(alignment: .topTrailing) {
+                    Color.clear
+                        .aspectRatio(Self.gridThumbnailAspect, contentMode: .fit)
+                        .overlay {
+                            Group {
+                                if let path = ShareQueueStore.thumbnailFileURL(for: q),
+                                   let ui = UIImage(contentsOfFile: path.path) {
+                                    Image(uiImage: ui)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    RoamColors.logan.opacity(0.12)
+                                }
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    if !uploadFailed {
+                        Text(queuedStatusChip(q.uploadStatus))
+                            .font(RoamFont.mono(8, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .padding(6)
                     }
                 }
-                .frame(minHeight: 120)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                Text(queuedStatusChip(q.uploadStatus))
-                    .font(RoamFont.mono(8, weight: .medium))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .padding(6)
+                if uploadFailed {
+                    ReelAttentionRibbon(title: "Upload failed", fill: RoamColors.error)
+                        .padding(.top, 6)
+                        .padding(.leading, 6)
+                }
             }
 
             Text(q.displayTitle)
@@ -145,6 +161,10 @@ struct ReelsPage: View {
                 .foregroundStyle(RoamColors.loganDark)
         }
         .padding(2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(uploadFailed ? RoamColors.error : Color.clear, lineWidth: uploadFailed ? 2.5 : 0)
+        )
     }
 
     private func queuedStatusChip(_ status: QueuedUploadStatus) -> String {
@@ -235,7 +255,7 @@ struct ReelsPage: View {
                     Button {
                         path.append(reel.id.uuidString.lowercased())
                     } label: {
-                        reelCell(reel, highlight: isScanHighlightReel(reel))
+                        reelCell(reel)
                     }
                     .buttonStyle(.plain)
                 }
@@ -244,36 +264,52 @@ struct ReelsPage: View {
     }
 
     private var scanningBanner: some View {
-        Text("Scanning for Roamable ideas")
-            .font(RoamFont.mono(11, weight: .medium))
-            .foregroundStyle(RoamColors.loganDark)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(RoamColors.logan.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private func isScanHighlightReel(_ reel: APIClient.SavedReelListItemDTO) -> Bool {
-        guard let rid = shareIngress.ingestScanState?.reelId else { return false }
-        return reel.id.uuidString.lowercased() == rid
-    }
-
-    private func reelCell(_ reel: APIClient.SavedReelListItemDTO, highlight: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topTrailing) {
-                ReelThumbnailImageView(reelId: reel.id, signedUrl: reel.thumbnailSignedUrl, contentMode: .fill)
-                .frame(minHeight: 120)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text("Searching for Roamable ideas.")
+                .font(RoamFont.mono(11, weight: .medium))
+                .foregroundStyle(RoamColors.loganDark)
+            Text("Give us a minute.")
+                .font(RoamFont.mono(10))
+                .foregroundStyle(RoamColors.textMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(RoamColors.logan.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
 
-                Text(statusChip(reel.status))
-                    .font(RoamFont.mono(8, weight: .medium))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .padding(6)
+    @ViewBuilder
+    private func reelCell(_ reel: APIClient.SavedReelListItemDTO) -> some View {
+        let attention = ReelCellAttention.forSavedReel(
+            reel,
+            scanReelId: shareIngress.ingestScanState?.reelId
+        )
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                ZStack(alignment: .topTrailing) {
+                    Color.clear
+                        .aspectRatio(Self.gridThumbnailAspect, contentMode: .fit)
+                        .overlay {
+                            ReelThumbnailImageView(reelId: reel.id, signedUrl: reel.thumbnailSignedUrl, contentMode: .fill)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    if attention.showTrailingStatusChip {
+                        Text(statusChip(reel.status))
+                            .font(RoamFont.mono(8, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .padding(6)
+                    }
+                }
+
+                if let ribbon = attention.ribbon {
+                    ReelAttentionRibbon(title: ribbon.title, fill: ribbon.fill)
+                        .padding(.top, 6)
+                        .padding(.leading, 6)
+                }
             }
 
             Text(reel.title.isEmpty ? reel.reelUrl : reel.title)
@@ -284,7 +320,7 @@ struct ReelsPage: View {
         .padding(2)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(highlight ? RoamColors.loganDeep : Color.clear, lineWidth: highlight ? 2 : 0)
+                .stroke(attention.outlineColor, lineWidth: attention.outlineWidth)
         )
     }
 
@@ -349,6 +385,88 @@ struct ReelsPage: View {
         } catch {
             ingestError = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Reel grid attention (review / failed / in-flight scan)
+
+private enum ReelCellAttention {
+    case none
+    case scanning
+    case needsReview
+    case failed
+
+    static func forSavedReel(_ reel: APIClient.SavedReelListItemDTO, scanReelId: String?) -> ReelCellAttention {
+        switch reel.status {
+        case "failed": return .failed
+        case "needs_review": return .needsReview
+        default: break
+        }
+        let rid = reel.id.uuidString.lowercased()
+        if let s = scanReelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty, s == rid {
+            return .scanning
+        }
+        return .none
+    }
+
+    var outlineColor: Color {
+        switch self {
+        case .none: return .clear
+        case .scanning: return RoamColors.loganDeep
+        case .needsReview: return RoamColors.actionRequired
+        case .failed: return RoamColors.error
+        }
+    }
+
+    var outlineWidth: CGFloat {
+        switch self {
+        case .none: return 0
+        case .scanning: return 2
+        case .needsReview, .failed: return 2.5
+        }
+    }
+
+    var ribbon: (title: String, fill: Color)? {
+        switch self {
+        case .scanning: return ("Searching…", RoamColors.loganDeep)
+        case .needsReview: return ("Action required", RoamColors.actionRequired)
+        case .failed: return ("Upload failed", RoamColors.error)
+        case .none: return nil
+        }
+    }
+
+    var showTrailingStatusChip: Bool {
+        switch self {
+        case .scanning, .needsReview, .failed: return false
+        case .none: return true
+        }
+    }
+}
+
+private struct ReelAttentionRibbon: View {
+    let title: String
+    let fill: Color
+
+    var body: some View {
+        Text(title)
+            .font(RoamFont.mono(7, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .multilineTextAlignment(.leading)
+            .lineLimit(2)
+            .minimumScaleFactor(0.88)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 10,
+                    bottomLeadingRadius: 3,
+                    bottomTrailingRadius: 14,
+                    topTrailingRadius: 6,
+                    style: .continuous
+                )
+                .fill(fill.opacity(0.92))
+            )
+            .shadow(color: Color.black.opacity(0.14), radius: 2, y: 1)
     }
 }
 
