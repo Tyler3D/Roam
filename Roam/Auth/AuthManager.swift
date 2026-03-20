@@ -94,6 +94,7 @@ final class AuthManager {
             try Auth.auth().signOut()
             user = nil
             ReelThumbnailDiskCache.clearAll()
+            SavedReelsListDiskCache.clearAll()
         } catch {
             errorMessage = error.localizedDescription
         }

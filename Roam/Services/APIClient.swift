@@ -21,6 +21,9 @@ final class APIClient {
     /// Used to skip network work (e.g. share-queue upload) when there is no Firebase session.
     var isUserSignedIn: Bool { authManager.isSignedIn }
 
+    /// Partitions on-disk caches (e.g. saved reels list) per account.
+    var signedInUserIdForCache: String? { authManager.user?.uid }
+
     // MARK: - Transport
 
     func apiFetch<T: Decodable>(
@@ -416,7 +419,7 @@ final class APIClient {
         let needsReviewCount: Int
     }
 
-    struct SavedReelListItemDTO: Decodable, Identifiable {
+    struct SavedReelListItemDTO: Codable, Identifiable {
         let id: UUID
         let jobId: UUID
         let reelUrl: String
@@ -425,6 +428,13 @@ final class APIClient {
         let thumbnailSignedUrl: String?
         let createdAt: Date
         let updatedAt: Date
+    }
+
+    /// On-disk snapshot for `ReelsQueryStore` (Application Support, per Firebase uid).
+    struct SavedReelsListCacheEnvelope: Codable {
+        let fetchedAt: Date
+        let needsReviewCount: Int
+        let reels: [SavedReelListItemDTO]
     }
 
     struct ReelCandidateDetailDTO: Decodable, Identifiable {

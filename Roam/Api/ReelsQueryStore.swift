@@ -13,9 +13,22 @@ final class ReelsQueryStore {
 
     init(api: APIClient) {
         self.api = api
+        restoreFromDiskIfPossible()
     }
 
+    /// Show last successful fetch immediately (cold launch / offline).
+    private func restoreFromDiskIfPossible() {
+        guard let uid = api.signedInUserIdForCache,
+              let envelope = SavedReelsListDiskCache.load(userId: uid) else { return }
+        reels = envelope.reels
+        needsReviewCount = envelope.needsReviewCount
+    }
+
+    /// After uploads / promotes / ingest, network refresh replaces memory and disk. TTL drops very old snapshots on read.
     func refresh() async {
+        if reels.isEmpty {
+            restoreFromDiskIfPossible()
+        }
         isLoading = true
         lastError = nil
         defer { isLoading = false }
@@ -24,6 +37,7 @@ final class ReelsQueryStore {
             async let summary = api.reelsSummary()
             reels = try await list
             needsReviewCount = try await summary.needsReviewCount
+            persistToDisk()
         } catch {
             lastError = error.localizedDescription
         }
@@ -32,8 +46,30 @@ final class ReelsQueryStore {
     func refreshSummaryOnly() async {
         do {
             needsReviewCount = try await api.reelsSummary().needsReviewCount
+            mergeSummaryIntoDiskCache()
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    private func persistToDisk() {
+        guard let uid = api.signedInUserIdForCache else { return }
+        let envelope = APIClient.SavedReelsListCacheEnvelope(
+            fetchedAt: Date(),
+            needsReviewCount: needsReviewCount,
+            reels: reels
+        )
+        SavedReelsListDiskCache.save(userId: uid, envelope: envelope)
+    }
+
+    private func mergeSummaryIntoDiskCache() {
+        guard let uid = api.signedInUserIdForCache,
+              let existing = SavedReelsListDiskCache.load(userId: uid) else { return }
+        let merged = APIClient.SavedReelsListCacheEnvelope(
+            fetchedAt: existing.fetchedAt,
+            needsReviewCount: needsReviewCount,
+            reels: existing.reels
+        )
+        SavedReelsListDiskCache.save(userId: uid, envelope: merged)
     }
 }
