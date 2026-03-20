@@ -94,6 +94,12 @@ def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
     try:
         decoded = auth.verify_id_token(token, check_revoked=True)
     except Exception as exc:  # firebase_admin raises several types
+        # Response stays generic; logs carry the real reason (wrong project, bad key, etc.).
+        logger.warning(
+            "firebase_token_verify_failed",
+            extra={"error": str(exc), "excType": type(exc).__name__},
+            exc_info=exc,
+        )
         raise Unauthorized("Invalid Firebase token") from exc
     return decoded
 
