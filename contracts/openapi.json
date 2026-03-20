@@ -458,6 +458,58 @@
         }
       }
     },
+    "/api/reels/{reelId}/retry-ingest": {
+      "post": {
+        "summary": "Retryreelingest",
+        "description": "Re-run vision ingest for a reel whose job ended in `failed` (e.g. \"Processing failed\").",
+        "operationId": "retryReelIngest_api_reels__reelId__retry_ingest_post",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_retryReelIngest_api_reels__reelId__retry_ingest_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Retryreelingest Api Reels  Reelid  Retry Ingest Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reels/{reelId}/ideas": {
       "post": {
         "summary": "Createideaonreel",
@@ -1964,6 +2016,77 @@
           "reelUrl"
         ],
         "title": "Body_createIngestionJob_api_ingest_post"
+      },
+      "Body_retryReelIngest_api_reels__reelId__retry_ingest_post": {
+        "properties": {
+          "shareText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharetext"
+          },
+          "reelTitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reeltitle"
+          },
+          "ogDescription": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ogdescription"
+          },
+          "ogKeywords": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ogkeywords"
+          },
+          "thumbnail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "binary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail"
+          },
+          "frames": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Frames",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "Body_retryReelIngest_api_reels__reelId__retry_ingest_post"
       },
       "CreateIdeaOnReelBody": {
         "properties": {
@@ -3614,6 +3737,11 @@
               }
             ],
             "title": "Thumbnailsignedurl"
+          },
+          "ingestRetryCount": {
+            "type": "integer",
+            "title": "Ingestretrycount",
+            "default": 0
           },
           "jobStatus": {
             "type": "string",

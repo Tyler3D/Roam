@@ -217,6 +217,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reels/{reelId}/retry-ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retryreelingest
+         * @description Re-run vision ingest for a reel whose job ended in `failed` (e.g. "Processing failed").
+         */
+        post: operations["retryReelIngest_api_reels__reelId__retry_ingest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reels/{reelId}/ideas": {
         parameters: {
             query?: never;
@@ -721,6 +741,24 @@ export interface components {
         Body_createIngestionJob_api_ingest_post: {
             /** Reelurl */
             reelUrl: string;
+            /** Sharetext */
+            shareText?: string | null;
+            /** Reeltitle */
+            reelTitle?: string | null;
+            /** Ogdescription */
+            ogDescription?: string | null;
+            /** Ogkeywords */
+            ogKeywords?: string | null;
+            /** Thumbnail */
+            thumbnail?: string | null;
+            /**
+             * Frames
+             * @default []
+             */
+            frames: string[];
+        };
+        /** Body_retryReelIngest_api_reels__reelId__retry_ingest_post */
+        Body_retryReelIngest_api_reels__reelId__retry_ingest_post: {
             /** Sharetext */
             shareText?: string | null;
             /** Reeltitle */
@@ -1321,6 +1359,11 @@ export interface components {
             status: components["schemas"]["SavedReelStatus"];
             /** Thumbnailsignedurl */
             thumbnailSignedUrl?: string | null;
+            /**
+             * Ingestretrycount
+             * @default 0
+             */
+            ingestRetryCount: number;
             /** Jobstatus */
             jobStatus: string;
             /** Joberror */
@@ -1895,6 +1938,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedReelDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retryReelIngest_api_reels__reelId__retry_ingest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_retryReelIngest_api_reels__reelId__retry_ingest_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
