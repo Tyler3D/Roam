@@ -158,5 +158,5 @@ So the **public** surface is the API Gateway; Cloud Run stays **private** (IAM-o
 
 - **Base URL:** Use the gateway URL as the API base (e.g. `https://roam-gateway-xxxxx.ue.gateway.dev`).
 - **Paths:** Same as the backend (e.g. `/health`, `/api/users`, `/api/ingest`). The gateway appends the path to the Cloud Run URL.
-- **Headers:** Send the Firebase ID token in `Authorization: Bearer <token>` for protected routes. Whether the backend receives it depends on API Gateway’s header forwarding; if the gateway overwrites `Authorization` with its own token, the backend may need to be configured to read the client token from another header (e.g. `X-Forwarded-Authorization`) if the gateway can be configured to pass it through.
+- **Headers:** Send the Firebase ID token as `Authorization: Bearer <token>` **and** duplicate it as `X-Roam-Authorization: Bearer <token>`. The gateway replaces `Authorization` with a Google ID token (audience = Cloud Run URL) when invoking the service; the backend verifies the Firebase JWT from `X-Roam-Authorization` first, then falls back to `Authorization` for local development.
 

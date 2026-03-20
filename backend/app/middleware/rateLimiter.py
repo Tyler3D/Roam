@@ -16,7 +16,7 @@ from fastapi import Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from starlette.responses import Response
 
-from app.auth.auth import getBearerToken, verifyFirebaseTokenString
+from app.auth.auth import getFirebaseBearerToken, verifyFirebaseTokenString
 from app.common.config import getCorsAllowOrigins, getTrustedAuthProviders
 
 from .policy import enforceEmailVerifiedIfRequired, isAuthExemptPath
@@ -104,7 +104,13 @@ async def rateLimiterMiddleware(
     if not isAuthExemptPath(path):
         try:
             authorization = request.headers.get("Authorization")
-            token = getBearerToken(authorization)
+            xroam = request.headers.get("X-Roam-Authorization") or request.headers.get(
+                "x-roam-authorization"
+            )
+            token = getFirebaseBearerToken(
+                authorization=authorization,
+                xRoamAuthorization=xroam,
+            )
             decodedToken = verifyFirebaseTokenString(token)
             request.state.decodedToken = decodedToken
             enforceEmailVerifiedIfRequired(decodedToken, path, trustedAuthProviders)

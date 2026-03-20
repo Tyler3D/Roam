@@ -30,7 +30,10 @@ final class APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let bearer = "Bearer \(token)"
+        request.setValue(bearer, forHTTPHeaderField: "Authorization")
+        // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
+        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         if let body {
             request.httpBody = body

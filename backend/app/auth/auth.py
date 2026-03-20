@@ -89,6 +89,25 @@ def getBearerToken(authorization: str | None) -> str:
     return parts[1]
 
 
+def getFirebaseBearerToken(
+    *,
+    authorization: str | None,
+    xRoamAuthorization: str | None = None,
+) -> str:
+    """
+    Prefer X-Roam-Authorization for the Firebase ID token.
+
+    Google API Gateway often replaces Authorization with a Google ID token whose
+    audience is the Cloud Run URL (invoker identity). That token is not a Firebase
+    user JWT and fails verify_id_token. Clients should duplicate the Firebase token
+    in X-Roam-Authorization; local dev can keep using Authorization only.
+    """
+    x = (xRoamAuthorization or "").strip()
+    if x:
+        return getBearerToken(x)
+    return getBearerToken(authorization)
+
+
 def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
     getFirebaseApp()
     try:
@@ -104,7 +123,13 @@ def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
     return decoded
 
 
-def verifyFirebaseToken(authorization: str | None = Header(default=None)) -> Dict[str, Any]:
-    token = getBearerToken(authorization)
+def verifyFirebaseToken(
+    authorization: str | None = Header(default=None),
+    x_roam_authorization: str | None = Header(default=None, alias="X-Roam-Authorization"),
+) -> Dict[str, Any]:
+    token = getFirebaseBearerToken(
+        authorization=authorization,
+        xRoamAuthorization=x_roam_authorization,
+    )
     return verifyFirebaseTokenString(token)
 

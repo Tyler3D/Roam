@@ -9,7 +9,10 @@ async function getHeaders(): Promise<Record<string, string>> {
   const user = firebaseAuth.currentUser;
   if (user) {
     const token = await getIdToken(user, true);
-    headers["Authorization"] = `Bearer ${token}`;
+    const bearer = `Bearer ${token}`;
+    headers["Authorization"] = bearer;
+    // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
+    headers["X-Roam-Authorization"] = bearer;
   }
   return headers;
 }
