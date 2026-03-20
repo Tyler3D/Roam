@@ -2,6 +2,8 @@
 
 This document describes the production infrastructure for the Roam API and how to set it up independently. The backend runs on Google Cloud; deployment is automated via GitHub Actions.
 
+For how authentication, email verification, and rate limiting run inside the FastAPI app (middleware order, exempt paths, `request.state`), see [AUTH_MIDDLEWARE.md](AUTH_MIDDLEWARE.md).
+
 ---
 
 ## High-level flow

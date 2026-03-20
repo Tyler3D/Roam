@@ -38,6 +38,18 @@ def IS_DEV() -> bool:
         raise RuntimeError("ENVIRONMENT must be 'dev' or 'prod'.")
     return environment == "dev"
 
+
+def getCorsAllowOrigins() -> list[str]:
+    """Origins allowed for CORS and manual Access-Control-Allow-* on error responses."""
+    if IS_DEV():
+        return [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    return ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
+
 def getTrustedAuthProviders() -> set[str]:
     rawProviders = getOptionalEnv("TRUSTED_AUTH_PROVIDERS") or "google.com,password"
     providers = {value.strip() for value in rawProviders.split(",") if value.strip()}
