@@ -48,6 +48,7 @@ final class ShareIngressCoordinator: ObservableObject {
                 thumbnailJPEG: pack.thumbnailJPEG,
                 frameJPEGs: pack.frameJPEGs
             )
+            ReelThumbnailDiskCache.saveAfterIngest(reelIdString: resp.reelId, jpegData: pack.thumbnailJPEG)
             SharedStore.remove(id: item.id)
             await stores.ideas.refresh()
             await stores.reels.refresh()

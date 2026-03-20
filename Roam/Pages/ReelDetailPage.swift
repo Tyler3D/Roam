@@ -60,21 +60,11 @@ struct ReelDetailPage: View {
                         .foregroundStyle(RoamColors.error)
                 }
 
-                if let u = d.thumbnailSignedUrl, let url = URL(string: u) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxHeight: 220)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        default:
-                            RoamColors.logan.opacity(0.12)
-                                .frame(height: 120)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                    }
+                if let rid = UUID(uuidString: reelId) {
+                    ReelThumbnailImageView(reelId: rid, signedUrl: d.thumbnailSignedUrl, contentMode: .fit)
+                        .frame(maxHeight: 220)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 Text(d.title.isEmpty ? d.reelUrl : d.title)

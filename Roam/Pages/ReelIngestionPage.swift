@@ -141,7 +141,9 @@ struct ReelsPage: View {
 
             LazyVGrid(columns: gridColumns, spacing: 12) {
                 ForEach(stores.reels.reels) { reel in
-                    NavigationLink(value: reel.id.uuidString.lowercased()) {
+                    Button {
+                        path.append(reel.id.uuidString.lowercased())
+                    } label: {
                         reelCell(reel)
                     }
                     .buttonStyle(.plain)
@@ -153,22 +155,7 @@ struct ReelsPage: View {
     private func reelCell(_ reel: APIClient.SavedReelListItemDTO) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topTrailing) {
-                Group {
-                    if let u = reel.thumbnailSignedUrl, let url = URL(string: u) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let img):
-                                img
-                                    .resizable()
-                                    .scaledToFill()
-                    default:
-                        RoamColors.logan.opacity(0.12)
-                    }
-                }
-                    } else {
-                        RoamColors.logan.opacity(0.12)
-                    }
-                }
+                ReelThumbnailImageView(reelId: reel.id, signedUrl: reel.thumbnailSignedUrl, contentMode: .fill)
                 .frame(minHeight: 120)
                 .frame(maxWidth: .infinity)
                 .clipped()
@@ -231,6 +218,7 @@ struct ReelsPage: View {
                 thumbnailJPEG: pack.thumbnailJPEG,
                 frameJPEGs: pack.frameJPEGs
             )
+            ReelThumbnailDiskCache.saveAfterIngest(reelIdString: create.reelId, jpegData: pack.thumbnailJPEG)
             SharedStore.remove(id: item.id)
             reloadLocal()
             await stores.ideas.refresh()

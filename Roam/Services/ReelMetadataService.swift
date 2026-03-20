@@ -77,10 +77,141 @@ enum ReelMetadataService {
             result.thumbnailJPEG = thumb.jpegData(compressionQuality: 0.85)
         }
 
+        if result.thumbnailJPEG == nil {
+            await fillThumbnailFromOpenGraphTags(&result)
+        }
+        if result.thumbnailJPEG == nil, let stripped = strippingQueryAndFragmentIfPresent(url) {
+            await mergeOgTagsFromHTMLFetch(
+                from: stripped,
+                userAgent: ogScrapeUserAgentPhone,
+                logLabel: "OG merge (URL without query)",
+                result: &result
+            )
+            await fillThumbnailFromOpenGraphTags(&result)
+        }
+        if result.thumbnailJPEG == nil {
+            await mergeOgTagsFromHTMLFetch(
+                from: url,
+                userAgent: ogScrapeUserAgentDesktop,
+                logLabel: "OG merge (desktop UA)",
+                result: &result
+            )
+            await fillThumbnailFromOpenGraphTags(&result)
+        }
+
         let frames = result.extractedFrames.isEmpty ? result.ogScrapedFrames : result.extractedFrames
         result.frameJPEGs = frames.compactMap { $0.jpegData(compressionQuality: 0.85) }
 
         return result
+    }
+
+    // MARK: - Open Graph image (thumbnail fallback for ingest)
+
+    private static let ogScrapeUserAgentPhone =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+    private static let ogScrapeUserAgentDesktop =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+    private static let maxOpenGraphImageDownloadBytes = 6 * 1024 * 1024
+
+    private static func htmlUnescapeMetaContentForURL(_ s: String) -> String {
+        s.replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+    }
+
+    private static func strippingQueryAndFragmentIfPresent(_ url: URL) -> URL? {
+        guard var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        guard c.query != nil || c.fragment != nil else { return nil }
+        c.query = nil
+        c.fragment = nil
+        return c.url
+    }
+
+    private static func fillThumbnailFromOpenGraphTags(_ result: inout ExtractResult) async {
+        guard result.thumbnailJPEG == nil else { return }
+        let keys = ["og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src"]
+        for key in keys {
+            guard let raw = result.ogAllTags[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+                continue
+            }
+            let cleaned = htmlUnescapeMetaContentForURL(raw)
+            guard let imageURL = URL(string: cleaned) else {
+                addOGLog(&result, "OG image skip bad URL key=\(key)")
+                continue
+            }
+            if await downloadImageAsThumbnailJPEG(from: imageURL, result: &result, sourceKey: key) {
+                return
+            }
+        }
+    }
+
+    private static func downloadImageAsThumbnailJPEG(
+        from imageURL: URL,
+        result: inout ExtractResult,
+        sourceKey: String
+    ) async -> Bool {
+        var request = URLRequest(url: imageURL)
+        request.setValue(ogScrapeUserAgentPhone, forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                addOGLog(
+                    &result,
+                    "OG image GET \(sourceKey): HTTP \(http.statusCode) \(formatBytes(data.count))"
+                )
+            }
+            guard !data.isEmpty, data.count <= maxOpenGraphImageDownloadBytes else {
+                addOGLog(&result, "OG image skip size key=\(sourceKey) bytes=\(data.count)")
+                return false
+            }
+            guard let image = UIImage(data: data) else {
+                addOGLog(&result, "OG image skip decode key=\(sourceKey)")
+                return false
+            }
+            guard let jpeg = image.jpegData(compressionQuality: 0.85) else { return false }
+            result.thumbnailJPEG = jpeg
+            addOGLog(&result, "OG image thumbnail OK key=\(sourceKey) jpegBytes=\(jpeg.count)")
+            return true
+        } catch {
+            addOGLog(&result, "OG image fetch failed key=\(sourceKey): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static func mergeOgTagsFromHTMLFetch(
+        from url: URL,
+        userAgent: String,
+        logLabel: String,
+        result: inout ExtractResult
+    ) async {
+        var request = URLRequest(url: url)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("document", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("navigate", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("none", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("?1", forHTTPHeaderField: "Sec-Fetch-User")
+        request.setValue("text/html", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                addOGLog(&result, "\(logLabel): HTTP \(httpResponse.statusCode)")
+            }
+            guard let html = String(data: data, encoding: .utf8) else {
+                addOGLog(&result, "\(logLabel): UTF-8 decode failed")
+                return
+            }
+            let tags = parseOGTags(from: html)
+            for (k, v) in tags {
+                result.ogAllTags[k] = v
+            }
+            addOGLog(&result, "\(logLabel): merged \(tags.count) meta tags")
+        } catch {
+            addOGLog(&result, "\(logLabel): fetch failed \(error.localizedDescription)")
+        }
     }
 
     // MARK: - LinkPresentation / video
@@ -222,10 +353,7 @@ enum ReelMetadataService {
 
     private static func scrapeOGTags(from url: URL, result: inout ExtractResult) async {
         var request = URLRequest(url: url)
-        request.setValue(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            forHTTPHeaderField: "User-Agent"
-        )
+        request.setValue(ogScrapeUserAgentPhone, forHTTPHeaderField: "User-Agent")
         request.setValue("document", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("navigate", forHTTPHeaderField: "Sec-Fetch-Mode")
         request.setValue("none", forHTTPHeaderField: "Sec-Fetch-Site")
