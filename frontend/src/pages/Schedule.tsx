@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useSharedPlan, useRsvp } from "@/api/share";
 import { useMe } from "@/api/users";
 import { formatDuration } from "@/lib/duration";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth";
 import { Avatar } from "@/components/ui/avatar-roam";
 import { StatPill } from "@/components/ui/stat-pill";
 import { LocationLink } from "@/components/ui/location-link";

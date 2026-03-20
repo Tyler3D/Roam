@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from "react";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth";
 import { useMe, useSearchUsers } from "@/api/users";
 import { useFriends, useFriendRequests, useAcceptFriendRequest, useSendFriendRequest } from "@/api/friends";
 import { Avatar } from "@/components/ui/avatar-roam";

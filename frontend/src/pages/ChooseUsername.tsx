@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { UsernameInput } from "@/components/UsernameInput";
@@ -23,7 +23,7 @@ const buildSuggestedUsername = (
 
 export default function ChooseUsername() {
   const navigate = useNavigate();
-  const { user, ensureBackendUser, isUserVerified } = useAuth();
+  const { user, loading: authLoading, ensureBackendUser, isUserVerified, signOutUser } = useAuth();
   const isGoogle = useMemo(
     () => user?.providerData?.some((p) => p.providerId === "google.com") ?? false,
     [user],
@@ -48,16 +48,33 @@ export default function ChooseUsername() {
     try {
       await ensureBackendUser(trimmed);
       navigate(isUserVerified(user) ? "/app" : "/verification");
-    } catch {
-      setError("Unable to save username. Please try again.");
+    } catch (err: unknown) {
+      const status =
+        err && typeof err === "object" && "status" in err
+          ? (err as { status: number }).status
+          : undefined;
+      if (status === 429) {
+        setError("Too many attempts. Please wait a few minutes and try again.");
+      } else if (status === 401) {
+        setError("Session expired or invalid. Sign out below and sign in again.");
+      } else {
+        setError("Unable to save username. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
   if (!user) {
-    navigate("/login");
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -86,6 +103,12 @@ export default function ChooseUsername() {
             {loading ? "Saving..." : "Continue"}
           </Button>
         </form>
+
+        <div className="mt-6 flex justify-center">
+          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => signOutUser()}>
+            Sign out
+          </Button>
+        </div>
       </div>
     </div>
   );

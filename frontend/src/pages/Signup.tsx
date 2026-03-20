@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth";
 import { firebaseAuth } from "@/auth/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,10 +85,6 @@ export default function Signup() {
     }
   };
 
-  useEffect(() => {
-    if (user && !authLoading) navigate("/choose-username");
-  }, [user, authLoading, navigate]);
-
   const handleGoogleSignIn = () => {
     setError("");
     signInWithGoogle();
@@ -100,6 +96,18 @@ export default function Signup() {
   const trimmedEmail = email.trim();
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
   const canSubmit = !loading && !passwordError && trimmedUsername.length > 0 && emailIsValid;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/choose-username" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">

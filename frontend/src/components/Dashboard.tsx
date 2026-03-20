@@ -1,5 +1,5 @@
 import { useDeferredValue, useState, useRef, useMemo } from "react";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth";
 import { useIdeas, useCreateIdea, useDeleteIdea, useInterpretIdea, usePromoteIdea } from "@/api/ideas";
 import { useUnreadCount } from "@/api/notifications";
 import { useSearchFriendsAndUsers } from "@/api/friends";

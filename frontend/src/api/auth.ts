@@ -2,6 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { request } from "@/lib/api";
 import type { User as BackendUser, UserCreate } from "@/models/user";
 
+export const backendUserGateQueryKey = (uid: string | undefined) =>
+  ["backendUserGate", uid] as const;
+
 function createBackendUser(payload: UserCreate) {
   return request<BackendUser>("/api/users", {
     method: "POST",
@@ -9,7 +12,7 @@ function createBackendUser(payload: UserCreate) {
   });
 }
 
-async function syncBackendUser(): Promise<boolean> {
+export async function fetchBackendUserGate(): Promise<boolean> {
   try {
     await request<BackendUser>("/api/me");
     return true;
@@ -25,7 +28,7 @@ function verifyBackendUser() {
   return request<BackendUser>("/api/users/verify", { method: "POST" });
 }
 
-function storeOAuthToken(payload: {
+export function sendOAuthTokenToBackend(payload: {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: string | null;
@@ -42,16 +45,12 @@ export function useStoreOAuthToken() {
       accessToken: string;
       refreshToken?: string;
       expiresAt?: string | null;
-    }) => storeOAuthToken(payload),
+    }) => sendOAuthTokenToBackend(payload),
   });
 }
 
 export function useCreateBackendUser() {
   return useMutation({ mutationFn: createBackendUser });
-}
-
-export function useSyncBackendUser() {
-  return useMutation({ mutationFn: syncBackendUser });
 }
 
 export function useVerifyBackendUser() {
