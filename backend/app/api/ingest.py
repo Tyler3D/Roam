@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, col
 
@@ -14,7 +15,7 @@ from app.models.ingestion import IngestionJobModel, IngestionJobRead, JobStatus
 from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
 from app.models.users import UserModel
-from app.services.processing import processIngestionJob
+from app.services.reelIngestion import processIngestionJob
 
 logger = logging.getLogger("roam.ingest")
 
@@ -82,7 +83,8 @@ async def createIngestionJob(
             ).first()
             return {"jobId": str(existing.id), "status": existing.status.value} if existing else None
 
-        return handleIntegrityConflict(session, lookupExisting, "Duplicate reel URL")
+        payload = handleIntegrityConflict(session, lookupExisting, "Duplicate reel URL")
+        return JSONResponse(status_code=202, content=payload)
 
     metadata = {
         "reelUrl": reelUrl,

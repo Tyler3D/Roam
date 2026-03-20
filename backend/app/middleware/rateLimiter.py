@@ -28,7 +28,8 @@ allowOrigins = tuple(getCorsAllowOrigins())
 trustedAuthProviders = getTrustedAuthProviders()
 
 rateLimitWindowSeconds = 60
-rateLimitMaxRequests = 120
+# High cap: ~1 Hz ingest job polling plus normal app traffic must stay under limit per UID.
+rateLimitMaxRequests = 1000
 rateLimitStore: dict[str, list[float]] = {}
 
 authFailureWindowSeconds = 900
