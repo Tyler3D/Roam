@@ -27,4 +27,12 @@ enum SharedStore {
     static func clearAll() {
         defaults?.removeObject(forKey: "sharedItems")
     }
+
+    static func remove(id: UUID) {
+        var items = loadAll()
+        items.removeAll { $0.id == id }
+        if let data = try? JSONEncoder().encode(items) {
+            defaults?.set(data, forKey: "sharedItems")
+        }
+    }
 }

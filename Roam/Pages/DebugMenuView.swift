@@ -22,7 +22,7 @@ struct DebugMenuView: View {
                 } header: {
                     Text("App mode")
                 } footer: {
-                    Text("Which feature set to show: Reel Ingestion (list of reels) or Time Estimates (placeholder).")
+                    Text("Main Roam: full tab app. Reel queue only: shared extension inbox. Time estimates: placeholder.")
                 }
 
                 Section {

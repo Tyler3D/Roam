@@ -1,0 +1,2871 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Roam API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Healthcheck",
+        "operationId": "healthCheck_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthcheck Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Getme",
+        "operationId": "getMe_api_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Updateme",
+        "operationId": "updateMe_api_me_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/verify": {
+      "post": {
+        "summary": "Verifyuseremail",
+        "operationId": "verifyUserEmail_api_users_verify_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "post": {
+        "summary": "Createuser",
+        "operationId": "createUser_api_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/oauth-token": {
+      "post": {
+        "summary": "Storeoauthtoken",
+        "description": "Store Google OAuth tokens (encrypted) for calendar integration.\nCall after Google sign-in when credential.accessToken is available.\nSend expiresAt (ISO datetime) when available from token response for cheap expiry checks.",
+        "operationId": "storeOAuthToken_api_users_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthTokenStore"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Storeoauthtoken Api Users Oauth Token Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/check-username": {
+      "get": {
+        "summary": "Checkusername",
+        "description": "Check if username is available. No auth required \u2014 used during onboarding.",
+        "operationId": "checkUsername_api_users_check_username_get",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Username"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Checkusername Api Users Check Username Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/search": {
+      "get": {
+        "summary": "Searchusers",
+        "operationId": "searchUsers_api_users_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserRead"
+                  },
+                  "title": "Response Searchusers Api Users Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest": {
+      "post": {
+        "summary": "Createingestionjob",
+        "operationId": "createIngestionJob_api_ingest_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_createIngestionJob_api_ingest_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Createingestionjob Api Ingest Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/{jobId}": {
+      "get": {
+        "summary": "Getingestionjob",
+        "operationId": "getIngestionJob_api_ingest__jobId__get",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Jobid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas": {
+      "get": {
+        "summary": "Listideas",
+        "operationId": "listIdeas_api_ideas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IdeaRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listideas Api Ideas Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Createidea",
+        "operationId": "createIdea_api_ideas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}": {
+      "get": {
+        "summary": "Getidea",
+        "operationId": "getIdea_api_ideas__ideaId__get",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Updateidea",
+        "operationId": "updateIdea_api_ideas__ideaId__patch",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deleteidea",
+        "operationId": "deleteIdea_api_ideas__ideaId__delete",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/interpret": {
+      "post": {
+        "summary": "Interpretidea",
+        "operationId": "interpretIdea_api_ideas__ideaId__interpret_post",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/place-suggestions/{suggestionId}": {
+      "patch": {
+        "summary": "Selectplacesuggestion",
+        "operationId": "selectPlaceSuggestion_api_ideas__ideaId__place_suggestions__suggestionId__patch",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          },
+          {
+            "name": "suggestionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestionid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/suggest-slots": {
+      "post": {
+        "summary": "Suggestslotsforidea",
+        "description": "Generate suggested time slots for an idea (on demand, not stored).",
+        "operationId": "suggestSlotsForIdea_api_ideas__ideaId__suggest_slots_post",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Suggestslotsforidea Api Ideas  Ideaid  Suggest Slots Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/plan": {
+      "post": {
+        "summary": "Promoteideatoplan",
+        "operationId": "promoteIdeaToPlan_api_ideas__ideaId__plan_post",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans": {
+      "get": {
+        "summary": "Listplans",
+        "operationId": "listPlans_api_plans_get",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "nullable": true,
+              "title": "Ideaid",
+              "description": "Filter by idea ID"
+            },
+            "description": "Filter by idea ID"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Status",
+              "description": "Filter by status, e.g. draft"
+            },
+            "description": "Filter by status, e.g. draft"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlanRead"
+                  },
+                  "title": "Response Listplans Api Plans Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans/{planId}": {
+      "get": {
+        "summary": "Getplan",
+        "operationId": "getPlan_api_plans__planId__get",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Updateplan",
+        "operationId": "updatePlan_api_plans__planId__patch",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans/{planId}/suggest-slots": {
+      "post": {
+        "summary": "Suggestslots",
+        "operationId": "suggestSlots_api_plans__planId__suggest_slots_post",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Suggestslots Api Plans  Planid  Suggest Slots Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans/{planId}/calendar": {
+      "post": {
+        "summary": "Createcalendarevent",
+        "operationId": "createCalendarEvent_api_plans__planId__calendar_post",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "IANA timezone, e.g. America/New_York",
+              "default": "UTC",
+              "title": "Timezone"
+            },
+            "description": "IANA timezone, e.g. America/New_York"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Createcalendarevent Api Plans  Planid  Calendar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plans/{planId}/members": {
+      "post": {
+        "summary": "Addplanmember",
+        "operationId": "addPlanMember_api_plans__planId__members_post",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{planId}": {
+      "get": {
+        "summary": "Listtasks",
+        "operationId": "listTasks_api_tasks__planId__get",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskRead"
+                  },
+                  "title": "Response Listtasks Api Tasks  Planid  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Createtask",
+        "operationId": "createTask_api_tasks__planId__post",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{planId}/{taskId}": {
+      "patch": {
+        "summary": "Updatetask",
+        "operationId": "updateTask_api_tasks__planId___taskId__patch",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Taskid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deletetask",
+        "operationId": "deleteTask_api_tasks__planId___taskId__delete",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Planid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Taskid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/places/search": {
+      "get": {
+        "summary": "Searchplaces",
+        "operationId": "searchPlaces_api_places_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceRead",
+                  "nullable": true,
+                  "title": "Response Searchplaces Api Places Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends": {
+      "get": {
+        "summary": "Listfriends",
+        "operationId": "listFriends_api_friends_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FriendshipRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listfriends Api Friends Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/requests": {
+      "get": {
+        "summary": "Listfriendrequests",
+        "operationId": "listFriendRequests_api_friends_requests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FriendshipRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listfriendrequests Api Friends Requests Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/request": {
+      "post": {
+        "summary": "Sendfriendrequest",
+        "operationId": "sendFriendRequest_api_friends_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FriendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FriendshipRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/{friendshipId}/accept": {
+      "post": {
+        "summary": "Acceptfriendrequest",
+        "operationId": "acceptFriendRequest_api_friends__friendshipId__accept_post",
+        "parameters": [
+          {
+            "name": "friendshipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Friendshipid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FriendshipRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/{friendshipId}": {
+      "delete": {
+        "summary": "Removefriendship",
+        "operationId": "removeFriendship_api_friends__friendshipId__delete",
+        "parameters": [
+          {
+            "name": "friendshipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Friendshipid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/search": {
+      "get": {
+        "summary": "Searchfriends",
+        "description": "Search for users: friends first, then all Roam users.",
+        "operationId": "searchFriends_api_friends_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FriendSearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/share/{shareCode}": {
+      "get": {
+        "summary": "Getsharedplan",
+        "operationId": "getSharedPlan_api_share__shareCode__get",
+        "parameters": [
+          {
+            "name": "shareCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sharecode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/share/{shareCode}/rsvp": {
+      "post": {
+        "summary": "Rsvptosharedplan",
+        "operationId": "rsvpToSharedPlan_api_share__shareCode__rsvp_post",
+        "parameters": [
+          {
+            "name": "shareCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sharecode"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RsvpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsvpResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "summary": "Listnotifications",
+        "operationId": "listNotifications_api_notifications_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listnotifications Api Notifications Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/{notificationId}/read": {
+      "post": {
+        "summary": "Markread",
+        "operationId": "markRead_api_notifications__notificationId__read_post",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Notificationid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "summary": "Markallread",
+        "operationId": "markAllRead_api_notifications_read_all_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddMemberRequest": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "AddMemberRequest"
+      },
+      "Body_createIngestionJob_api_ingest_post": {
+        "properties": {
+          "reelUrl": {
+            "type": "string",
+            "title": "Reelurl"
+          },
+          "shareText": {
+            "type": "string",
+            "nullable": true,
+            "title": "Sharetext"
+          },
+          "reelTitle": {
+            "type": "string",
+            "nullable": true,
+            "title": "Reeltitle"
+          },
+          "ogDescription": {
+            "type": "string",
+            "nullable": true,
+            "title": "Ogdescription"
+          },
+          "ogKeywords": {
+            "type": "string",
+            "nullable": true,
+            "title": "Ogkeywords"
+          },
+          "thumbnail": {
+            "type": "string",
+            "format": "binary",
+            "nullable": true,
+            "title": "Thumbnail"
+          },
+          "frames": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Frames",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "reelUrl"
+        ],
+        "title": "Body_createIngestionJob_api_ingest_post"
+      },
+      "FriendRequest": {
+        "properties": {
+          "targetUserId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetuserid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "targetUserId"
+        ],
+        "title": "FriendRequest"
+      },
+      "FriendSearchResult": {
+        "properties": {
+          "friends": {
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            },
+            "type": "array",
+            "title": "Friends"
+          },
+          "others": {
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            },
+            "type": "array",
+            "title": "Others"
+          }
+        },
+        "type": "object",
+        "required": [
+          "friends",
+          "others"
+        ],
+        "title": "FriendSearchResult"
+      },
+      "FriendshipRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "requesterId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requesterid"
+          },
+          "addresseeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Addresseeid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FriendshipStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "friendId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Friendid"
+          },
+          "friendFirstName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Friendfirstname"
+          },
+          "friendLastName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Friendlastname"
+          },
+          "friendPhotoUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Friendphotourl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "requesterId",
+          "addresseeId",
+          "status",
+          "createdAt"
+        ],
+        "title": "FriendshipRead"
+      },
+      "FriendshipStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted"
+        ],
+        "title": "FriendshipStatus"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IdeaCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "sourceUrl": {
+            "type": "string",
+            "title": "Sourceurl",
+            "default": ""
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Displayname"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "IdeaCreate"
+      },
+      "IdeaRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "title": "Sourceurl"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Displayname"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/IdeaStatus"
+          },
+          "planCount": {
+            "type": "integer",
+            "title": "Plancount",
+            "default": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "pipelineResult": {
+            "$ref": "#/components/schemas/PipelineResultRead",
+            "nullable": true
+          },
+          "placeName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placename"
+          },
+          "placeLatitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelatitude"
+          },
+          "placeLongitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelongitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "notes",
+          "sourceUrl",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "IdeaRead"
+      },
+      "IdeaStatus": {
+        "type": "string",
+        "enum": [
+          "captured",
+          "suggesting",
+          "ready",
+          "planned"
+        ],
+        "title": "IdeaStatus"
+      },
+      "IdeaUpdate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "title": "Notes"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Sourceurl"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Displayname"
+          },
+          "status": {
+            "$ref": "#/components/schemas/IdeaStatus",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "title": "IdeaUpdate"
+      },
+      "IngestJobResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "reelUrl": {
+            "type": "string",
+            "title": "Reelurl"
+          },
+          "shareText": {
+            "type": "string",
+            "nullable": true,
+            "title": "Sharetext"
+          },
+          "reelTitle": {
+            "type": "string",
+            "nullable": true,
+            "title": "Reeltitle"
+          },
+          "ogDescription": {
+            "type": "string",
+            "nullable": true,
+            "title": "Ogdescription"
+          },
+          "ogKeywords": {
+            "type": "string",
+            "nullable": true,
+            "title": "Ogkeywords"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "title": "Error"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "pipelineResult": {
+            "$ref": "#/components/schemas/PipelineResultRead",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "reelUrl",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "IngestJobResponse"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "processing",
+          "done",
+          "failed"
+        ],
+        "title": "JobStatus"
+      },
+      "MemberRole": {
+        "type": "string",
+        "enum": [
+          "organizer",
+          "member"
+        ],
+        "title": "MemberRole"
+      },
+      "NotificationRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Planid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true,
+            "title": "Body"
+          },
+          "isRead": {
+            "type": "boolean",
+            "title": "Isread"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "type",
+          "title",
+          "isRead",
+          "createdAt"
+        ],
+        "title": "NotificationRead"
+      },
+      "NotificationType": {
+        "type": "string",
+        "enum": [
+          "invite_received",
+          "rsvp_accepted",
+          "rsvp_declined",
+          "task_assigned",
+          "plan_reminder",
+          "rate_prompt",
+          "friend_request"
+        ],
+        "title": "NotificationType"
+      },
+      "OAuthTokenStore": {
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "title": "Accesstoken"
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true,
+            "title": "Refreshtoken"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Expiresat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accessToken"
+        ],
+        "title": "OAuthTokenStore",
+        "description": "Payload for storing OAuth tokens (sent from client after Google sign-in)."
+      },
+      "PipelineResultRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ideaId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Ideaid"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Jobid"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "refinedTitle": {
+            "type": "string",
+            "nullable": true,
+            "title": "Refinedtitle"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "title": "Category"
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Estimatedminutes"
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Modelname"
+          },
+          "promptVersion": {
+            "type": "string",
+            "nullable": true,
+            "title": "Promptversion"
+          },
+          "rawOutput": {
+            "additionalProperties": true,
+            "type": "object",
+            "nullable": true,
+            "title": "Rawoutput"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "placeSuggestions": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceSuggestionRead"
+            },
+            "type": "array",
+            "title": "Placesuggestions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "createdAt"
+        ],
+        "title": "PipelineResultRead"
+      },
+      "PlaceRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "googlePlaceId": {
+            "type": "string",
+            "nullable": true,
+            "title": "Googleplaceid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "nullable": true,
+            "title": "Address"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "title": "City"
+          },
+          "latitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Longitude"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "title": "Category"
+          },
+          "openingHours": {
+            "items": {},
+            "type": "array",
+            "nullable": true,
+            "title": "Openinghours"
+          },
+          "placeTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "nullable": true,
+            "title": "Placetypes"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Estimatedminutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "createdAt"
+        ],
+        "title": "PlaceRead"
+      },
+      "PlaceSuggestionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "resultId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Resultid"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
+          },
+          "rawName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Rawname"
+          },
+          "confidence": {
+            "type": "number",
+            "nullable": true,
+            "title": "Confidence"
+          },
+          "isSelected": {
+            "type": "boolean",
+            "title": "Isselected"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "placeName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "resultId",
+          "isSelected",
+          "createdAt"
+        ],
+        "title": "PlaceSuggestionRead"
+      },
+      "PlanMemberRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Planid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          },
+          "rsvpStatus": {
+            "$ref": "#/components/schemas/RsvpStatus"
+          },
+          "inviteToken": {
+            "type": "string",
+            "nullable": true,
+            "title": "Invitetoken"
+          },
+          "rating": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Rating"
+          },
+          "invitedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Invitedat"
+          },
+          "respondedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Respondedat"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Firstname"
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Lastname"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "planId",
+          "userId",
+          "role",
+          "rsvpStatus",
+          "invitedAt"
+        ],
+        "title": "PlanMemberRead"
+      },
+      "PlanRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "creatorId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Creatorid"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
+          },
+          "ideaId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Ideaid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Scheduledat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          },
+          "shareCode": {
+            "type": "string",
+            "title": "Sharecode"
+          },
+          "rawPrompt": {
+            "type": "string",
+            "nullable": true,
+            "title": "Rawprompt"
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "title": "Estimatedminutes"
+          },
+          "calendarEventId": {
+            "type": "string",
+            "nullable": true,
+            "title": "Calendareventid"
+          },
+          "partySize": {
+            "type": "integer",
+            "title": "Partysize"
+          },
+          "rating": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Rating"
+          },
+          "taskNotes": {
+            "type": "string",
+            "title": "Tasknotes"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PlanMemberRead"
+            },
+            "type": "array",
+            "title": "Members",
+            "default": []
+          },
+          "placeName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "creatorId",
+          "title",
+          "status",
+          "shareCode",
+          "estimatedMinutes",
+          "partySize",
+          "taskNotes",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "PlanRead"
+      },
+      "PlanStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "confirmed",
+          "completed",
+          "cancelled"
+        ],
+        "title": "PlanStatus"
+      },
+      "PlanUpdate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "title": "Title"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Scheduledat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus",
+            "nullable": true
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Estimatedminutes"
+          },
+          "partySize": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Partysize"
+          },
+          "rating": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Rating"
+          },
+          "taskNotes": {
+            "type": "string",
+            "nullable": true,
+            "title": "Tasknotes"
+          }
+        },
+        "type": "object",
+        "title": "PlanUpdate"
+      },
+      "RsvpRequest": {
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "title": "Firstname"
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Lastname"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "title": "Phone"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "firstName",
+          "lastName"
+        ],
+        "title": "RsvpRequest"
+      },
+      "RsvpResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "memberId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Memberid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "gcalLink": {
+            "type": "string",
+            "nullable": true,
+            "title": "Gcallink"
+          },
+          "scheduleUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Scheduleurl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "memberId",
+          "userId"
+        ],
+        "title": "RsvpResponse"
+      },
+      "RsvpStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "declined"
+        ],
+        "title": "RsvpStatus"
+      },
+      "TaskCreate": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "assigneeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Assigneeid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "description",
+          "assigneeId"
+        ],
+        "title": "TaskCreate"
+      },
+      "TaskRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Planid"
+          },
+          "assigneeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Assigneeid"
+          },
+          "assigneeFirstName": {
+            "type": "string",
+            "title": "Assigneefirstname",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "isCompleted": {
+            "type": "boolean",
+            "title": "Iscompleted"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Completedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "planId",
+          "assigneeId",
+          "description",
+          "isCompleted",
+          "createdAt"
+        ],
+        "title": "TaskRead"
+      },
+      "TaskUpdate": {
+        "properties": {
+          "isCompleted": {
+            "type": "boolean",
+            "title": "Iscompleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isCompleted"
+        ],
+        "title": "TaskUpdate"
+      },
+      "UserCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "nullable": true,
+            "title": "Username"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "title": "Email"
+          },
+          "firstName": {
+            "type": "string",
+            "title": "Firstname",
+            "default": ""
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Lastname",
+            "default": ""
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "title": "Phone"
+          },
+          "photoUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Photourl"
+          }
+        },
+        "type": "object",
+        "title": "UserCreate"
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "firebaseUid": {
+            "type": "string",
+            "nullable": true,
+            "title": "Firebaseuid"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true,
+            "title": "Username"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "title": "Email"
+          },
+          "firstName": {
+            "type": "string",
+            "title": "Firstname"
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Lastname"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "title": "Phone"
+          },
+          "photoUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Photourl"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "title": "City"
+          },
+          "isActive": {
+            "type": "boolean",
+            "title": "Isactive"
+          },
+          "isOnboarded": {
+            "type": "boolean",
+            "title": "Isonboarded"
+          },
+          "isGuestUser": {
+            "type": "boolean",
+            "title": "Isguestuser"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "title": "Emailverified"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "isActive",
+          "isOnboarded",
+          "isGuestUser",
+          "emailVerified",
+          "createdAt"
+        ],
+        "title": "UserRead"
+      },
+      "UserUpdate": {
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Firstname"
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Lastname"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "title": "Phone"
+          },
+          "photoUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Photourl"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "title": "City"
+          },
+          "isOnboarded": {
+            "type": "boolean",
+            "nullable": true,
+            "title": "Isonboarded"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

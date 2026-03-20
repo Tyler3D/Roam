@@ -1,23 +1,42 @@
 import SwiftUI
 
-/// Colors matching frontend index.css (light theme): bright warm background, coral primary.
+/// Roam light palette — matches `roam.*` in [frontend/tailwind.config.ts](frontend/tailwind.config.ts).
+enum RoamColors {
+    static let text = Color(red: 30 / 255, green: 26 / 255, blue: 46 / 255)
+    static let textMid = Color(red: 107 / 255, green: 100 / 255, blue: 128 / 255)
+    static let textMuted = Color(red: 168 / 255, green: 159 / 255, blue: 192 / 255)
+
+    static let logan = Color(red: 171 / 255, green: 161 / 255, blue: 198 / 255)
+    static let loganDeep = Color(red: 123 / 255, green: 111 / 255, blue: 168 / 255)
+    static let loganDark = Color(red: 74 / 255, green: 64 / 255, blue: 112 / 255)
+
+    static let lavender = Color(red: 223 / 255, green: 221 / 255, blue: 242 / 255)
+    static let lavDeep = Color(red: 201 / 255, green: 197 / 255, blue: 232 / 255)
+
+    static let greenTint = Color(red: 212 / 255, green: 237 / 255, blue: 218 / 255)
+    static let greenDeep = Color(red: 74 / 255, green: 158 / 255, blue: 84 / 255)
+
+    static let surface = Color.white.opacity(0.96)
+    static let background = Color(red: 245 / 255, green: 243 / 255, blue: 250 / 255)
+
+    static let notifDot = Color(red: 242 / 255, green: 184 / 255, blue: 203 / 255)
+    static let error = Color(red: 229 / 255, green: 115 / 255, blue: 115 / 255)
+
+    /// Glass bar tint over material blur (see `.glass-bar` in frontend `index.css`).
+    static let glassTint = Color(red: 245 / 255, green: 243 / 255, blue: 250 / 255).opacity(0.92)
+
+    static let dotGridDot = Color(red: 171 / 255, green: 161 / 255, blue: 198 / 255).opacity(0.30)
+}
+
+/// Legacy name used by older auth screens; maps to Roam primary actions.
 enum ThemeColors {
-    /// Background: bright warm white (lighter than 30 40% 98%)
-    static let background = Color(hue: 30/360, saturation: 0.15, brightness: 0.99)
-    /// Card: bright off-white
-    static let card = Color(hue: 30/360, saturation: 0.08, brightness: 1.0)
-    /// Primary (warm coral/rose): 12 76% 61%
-    static let primary = Color(hue: 12/360, saturation: 0.76, brightness: 0.61)
-    /// Primary foreground (white on primary)
+    static let background = RoamColors.background
+    static let card = RoamColors.surface
+    static let primary = RoamColors.loganDeep
     static let primaryForeground = Color.white
-    /// Secondary / muted: 30 30% 94%
-    static let secondary = Color(hue: 30/360, saturation: 0.3, brightness: 0.94)
-    /// Muted text: 20 10% 45%
-    static let mutedForeground = Color(hue: 20/360, saturation: 0.1, brightness: 0.45)
-    /// Accent (sage): 150 25% 45%
-    static let accent = Color(hue: 150/360, saturation: 0.25, brightness: 0.45)
-    /// Border: 30 20% 88%
-    static let border = Color(hue: 30/360, saturation: 0.2, brightness: 0.88)
-    /// Soft shadow
+    static let secondary = RoamColors.lavender
+    static let mutedForeground = RoamColors.textMid
+    static let accent = RoamColors.greenDeep
+    static let border = RoamColors.logan.opacity(0.2)
     static let shadow = Color.black.opacity(0.06)
 }

@@ -7,6 +7,8 @@ GoogleService-Info.plist
 GoogleMaps-Info.plist
 *.xcuserstate
 **/xcuserdata/
+.derivedData/
+**/.build/
 
 # Firebase
 firebase-service-account.json
@@ -20,3 +22,7 @@ node_modules/
 dist/
 build/
 
+**/.venv-export/
+
+.cursor/
+scripts/nuke_db.py

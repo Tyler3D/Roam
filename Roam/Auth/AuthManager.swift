@@ -24,10 +24,7 @@ final class AuthManager {
 
     var isVerified: Bool {
         if isMock { return true }
-        guard let user else { return false }
-        if user.isEmailVerified { return true }
-        let providerIds = user.providerData.map(\.providerID)
-        return providerIds.contains("google.com")
+        return RoamVerificationPolicy.userMeetsVerificationPolicy(user: user)
     }
 
     private var authListener: AuthStateDidChangeListenerHandle?

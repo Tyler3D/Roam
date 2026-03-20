@@ -56,7 +56,6 @@ struct VerificationPendingView: View {
     }
 
     private func checkAndVerify() async {
-        guard let apiClient else { return }
         isChecking = true
         message = nil
         defer { isChecking = false }
@@ -72,7 +71,6 @@ struct VerificationPendingView: View {
     }
 
     private func refreshAndVerifyIfNeeded() async {
-        guard let apiClient else { return }
         do {
             _ = try await authManager.getIdToken(forcingRefresh: true)
             try await apiClient.verifyBackendUser()

@@ -1,0 +1,39 @@
+name: OpenAPI contract
+
+# Fails when backend routes/models change but contracts/openapi.json was not regenerated.
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "contracts/openapi.json"
+      - "scripts/verify_openapi_contract.py"
+      - ".github/workflows/openapi-contract.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "contracts/openapi.json"
+      - "scripts/verify_openapi_contract.py"
+      - ".github/workflows/openapi-contract.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+      - name: Verify contracts/openapi.json matches FastAPI
+        working-directory: ${{ github.workspace }}
+        env:
+          ENVIRONMENT: dev
+          # Satisfies app.common.db at import time; no DB connection is opened for openapi().
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+        run: python3 scripts/verify_openapi_contract.py

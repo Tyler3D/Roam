@@ -3,14 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(AppConfig.self) private var appConfig
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var items: [SharedItem] = []
+    @Environment(\.apiClient) private var apiClient
+    #if DEBUG
     @State private var showDebugMenu = false
+    #endif
 
     var body: some View {
         Group {
             if appConfig.isMockAuth {
-                // Mock: skip auth, show feature directly
                 featureContent
             } else if authManager.isLoading {
                 ProgressView("Loading...")
@@ -28,17 +28,39 @@ struct ContentView: View {
         #endif
     }
 
-
     @ViewBuilder
     private var featureContent: some View {
-        NavigationStack {
-            switch appConfig.appMode {
-            case .reelIngestionMVP:
-                ReelIngestionView(items: $items, showDebugMenu: $showDebugMenu)
-            case .timeEstimatesMVP:
-                TimeEstimatesPlaceholderView(showDebugMenu: $showDebugMenu)
+        switch appConfig.appMode {
+        case .mainRoam:
+            MainTabShell(apiClient: apiClient, showDebugMenu: showDebugMenuBinding)
+        case .reelIngestionMVP:
+            NavigationStack {
+                ReelIngestionPage()
+                    #if DEBUG
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                showDebugMenu = true
+                            } label: {
+                                Image(systemName: "wrench.and.screwdriver")
+                            }
+                        }
+                    }
+                    #endif
+            }
+        case .timeEstimatesMVP:
+            NavigationStack {
+                TimeEstimatesPlaceholderView(showDebugMenu: showDebugMenuBinding)
             }
         }
+    }
+
+    private var showDebugMenuBinding: Binding<Bool> {
+        #if DEBUG
+        $showDebugMenu
+        #else
+        .constant(false)
+        #endif
     }
 }
 

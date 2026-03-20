@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
+			</array>
+		</dict>
+	</array>
+	<key>ROAM_LOCAL_BASE_URL</key>
+	<string>http://localhost:8000</string>
+	<key>ROAM_PRODUCTION_BASE_URL</key>
+	<string>https://roam-gateway-cm0ahzq6.ue.gateway.dev</string>
+	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>
+	<string>google.com,password</string>
+</dict>
+</plist>

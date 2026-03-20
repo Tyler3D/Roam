@@ -1,0 +1,122 @@
+# Repo: contracts/openapi-roam-gateway.yaml — API Gateway -> Cloud Run (roam-api). Paths forwarded; client Authorization forwarded.
+# No securityDefinitions so the gateway does not require an API key; backend uses Firebase token in Authorization.
+swagger: '2.0'
+info:
+  title: roam-api-gateway
+  description: API Gateway in front of roam-api Cloud Run
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+x-google-allow: all
+x-google-backend:
+  address: https://roam-api-cfqstl5w4a-ue.a.run.app
+  path_translation: APPEND_PATH_TO_ADDRESS
+paths:
+  /:
+    get:
+      summary: Root (proxied)
+      operationId: root
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: rootOptions
+      responses:
+        '200':
+          description: OK
+  /health:
+    get:
+      summary: Health (proxied)
+      operationId: health
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: healthOptions
+      responses:
+        '200':
+          description: OK
+  /api:
+    get:
+      summary: API (proxied)
+      operationId: apiGet
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: API (proxied)
+      operationId: apiPost
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: apiOptions
+      responses:
+        '200':
+          description: OK
+  /api/{proxy=**}:
+    get:
+      summary: API path (proxied)
+      operationId: apiPathGet
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: API path (proxied)
+      operationId: apiPathPost
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    put:
+      summary: API path (proxied)
+      operationId: apiPathPut
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: API path (proxied)
+      operationId: apiPathDelete
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: apiPathOptions
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK

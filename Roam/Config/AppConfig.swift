@@ -8,14 +8,18 @@ private let stagingURLKey = "roam_staging_base_url"
 // MARK: - App Mode (feature selection)
 
 enum AppMode: String, CaseIterable, Identifiable {
-    case reelIngestionMVP
-    case timeEstimatesMVP
+    /// Full Roam tab shell (ideas, drafts, plans, map, shared).
+    case mainRoam = "mainRoam"
+    /// QA: only the shared-links queue (legacy name kept for UserDefaults compatibility).
+    case reelIngestionMVP = "reelIngestionMVP"
+    case timeEstimatesMVP = "timeEstimatesMVP"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .reelIngestionMVP: return "Reel Ingestion MVP"
+        case .mainRoam: return "Main Roam"
+        case .reelIngestionMVP: return "Reel queue only"
         case .timeEstimatesMVP: return "Time estimates MVP"
         }
     }
@@ -69,17 +73,17 @@ final class AppConfig {
 
     var isNetworkEnabled: Bool { networkEnv != .mock }
 
-    /// Effective base URL for API calls. Nil in mock mode.
+    /// Effective base URL for API calls (no trailing slash). `APIClient` paths are `/api/...` like `frontend/src/lib/api.ts`.
     var baseURL: String? {
         switch networkEnv {
         case .mock:
             return nil
         case .local:
-            return "http://localhost:8000"
+            return Self.defaultLocalBaseURL
         case .staging:
-            return stagingBaseURLOverride ?? Self.defaultStagingBaseURL
+            return Self.normalizedBaseURL(stagingBaseURLOverride ?? Self.defaultStagingBaseURL)
         case .production:
-            return Self.defaultProductionBaseURL
+            return Self.normalizedBaseURL(Self.defaultProductionBaseURL)
         }
     }
 
@@ -89,12 +93,25 @@ final class AppConfig {
         return baseURL
     }
 
-    private static var defaultStagingBaseURL: String {
-        (Bundle.main.infoDictionary?["ROAM_STAGING_BASE_URL"] as? String) ?? "https://your-staging-url.run.app"
+    private static var defaultLocalBaseURL: String {
+        let fromPlist = Bundle.main.infoDictionary?[RoamBuildEnvironment.localBaseURLPlistKey] as? String
+        return Self.normalizedBaseURL(fromPlist ?? "http://localhost:8000")
     }
 
+    private static var defaultStagingBaseURL: String {
+        let fromPlist = Bundle.main.infoDictionary?[RoamBuildEnvironment.stagingBaseURLPlistKey] as? String
+        return Self.normalizedBaseURL(fromPlist ?? "https://your-staging-url.run.app")
+    }
+
+    /// Default prod API host (same as `VITE_API_BASE_URL` when frontend points at gateway). Paths add `/api/...`.
     private static var defaultProductionBaseURL: String {
-        (Bundle.main.infoDictionary?["ROAM_PRODUCTION_BASE_URL"] as? String) ?? ""
+        let fromPlist = Bundle.main.infoDictionary?[RoamBuildEnvironment.productionBaseURLPlistKey] as? String
+        return Self.normalizedBaseURL(fromPlist ?? "https://roam-gateway-cm0ahzq6.ue.gateway.dev")
+    }
+
+    private static func normalizedBaseURL(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     init() {
@@ -104,13 +121,13 @@ final class AppConfig {
 
         if networkEnvRaw == nil, let legacy = legacyRaw, NetworkEnv(rawValue: legacy) != nil {
             UserDefaults.standard.set(legacy, forKey: networkEnvKey)
-            UserDefaults.standard.set(AppMode.reelIngestionMVP.rawValue, forKey: appModeKey)
+            UserDefaults.standard.set(AppMode.mainRoam.rawValue, forKey: appModeKey)
         }
 
-        let envRaw = UserDefaults.standard.string(forKey: networkEnvKey) ?? NetworkEnv.local.rawValue
-        let modeRaw = UserDefaults.standard.string(forKey: appModeKey) ?? AppMode.reelIngestionMVP.rawValue
-        self.networkEnv = NetworkEnv(rawValue: envRaw) ?? .local
-        self.appMode = AppMode(rawValue: modeRaw) ?? .reelIngestionMVP
+        let envRaw = UserDefaults.standard.string(forKey: networkEnvKey) ?? NetworkEnv.production.rawValue
+        let modeRaw = UserDefaults.standard.string(forKey: appModeKey) ?? AppMode.mainRoam.rawValue
+        self.networkEnv = NetworkEnv(rawValue: envRaw) ?? .production
+        self.appMode = AppMode(rawValue: modeRaw) ?? .mainRoam
         self.stagingBaseURLOverride = UserDefaults.standard.string(forKey: stagingURLKey)
     }
 }

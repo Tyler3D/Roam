@@ -4,10 +4,10 @@ import SwiftUI
 @main
 struct RoamApp: App {
     init() {
-        let envRaw = UserDefaults.standard.string(forKey: "roam_network_env") ?? UserDefaults.standard.string(forKey: "roam_app_mode") ?? NetworkEnv.local.rawValue
-        if envRaw != NetworkEnv.mock.rawValue {
-            FirebaseApp.configure()
-        }
+        // Always configure Firebase at launch. Mock network mode uses `AuthManager(isMock: true)`,
+        // which never touches `Auth.auth()` in `init`, but switching Mock → Prod must find Firebase
+        // already configured before a real `AuthManager` is created.
+        FirebaseApp.configure()
     }
 
     var body: some Scene {
@@ -42,7 +42,6 @@ private struct RootView: View {
                 if isMock {
                     authManager = AuthManager(isMock: true)
                 } else {
-                    if FirebaseApp.app() == nil { FirebaseApp.configure() }
                     authManager = AuthManager(isMock: false)
                 }
                 apiClient = APIClient(authManager: authManager, appConfig: appConfig)

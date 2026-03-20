@@ -1,36 +1,30 @@
 import UIKit
-import Social
 import UniformTypeIdentifiers
 
-class ShareViewController: SLComposeServiceViewController {
+/// Saves URL/text from the share sheet into app-group [`SharedStore`](Roam/SharedStore.swift) and completes immediately (no compose UI).
+final class ShareViewController: UIViewController {
 
-    override func isContentValid() -> Bool {
-        return true
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        extractAndSave()
     }
 
-    override func didSelectPost() {
-        let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] ?? []
+    private func extractAndSave() {
+        guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
+            close()
+            return
+        }
 
         let group = DispatchGroup()
         var sharedURL: String?
         var sharedText: String?
         var typeIdentifiers: [String] = []
 
-        // Grab any text the user typed in the compose box
-        if let composedText = contentText, !composedText.isEmpty {
-            sharedText = composedText
-        }
-
         for item in extensionItems {
-            if let content = item.attributedContentText?.string,
-               sharedText == nil {
-                sharedText = content
-            }
+            guard let attachments = item.attachments else { continue }
 
-            for provider in item.attachments ?? [] {
-                typeIdentifiers.append(
-                    contentsOf: provider.registeredTypeIdentifiers
-                )
+            for provider in attachments {
+                typeIdentifiers.append(contentsOf: provider.registeredTypeIdentifiers)
 
                 if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     group.enter()
@@ -52,7 +46,7 @@ class ShareViewController: SLComposeServiceViewController {
                             if sharedURL == nil, let url = URL(string: text),
                                url.scheme == "http" || url.scheme == "https" {
                                 sharedURL = text
-                            } else {
+                            } else if sharedText == nil {
                                 sharedText = text
                             }
                         }
@@ -71,7 +65,11 @@ class ShareViewController: SLComposeServiceViewController {
                 attachmentTypeIdentifiers: typeIdentifiers
             )
             SharedStore.save(newItem)
-            self.extensionContext?.completeRequest(returningItems: nil)
+            self.close()
         }
+    }
+
+    private func close() {
+        extensionContext?.completeRequest(returningItems: nil)
     }
 }

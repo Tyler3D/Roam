@@ -1,11 +1,13 @@
 import SwiftUI
 
 private struct APIClientKey: EnvironmentKey {
-    static let defaultValue: APIClient? = nil
+    static var defaultValue: APIClient {
+        APIClient.previewForSwiftUIPreviews
+    }
 }
 
 extension EnvironmentValues {
-    var apiClient: APIClient? {
+    var apiClient: APIClient {
         get { self[APIClientKey.self] }
         set { self[APIClientKey.self] = newValue }
     }

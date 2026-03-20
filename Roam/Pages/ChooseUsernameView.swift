@@ -59,7 +59,7 @@ struct ChooseUsernameView: View {
 
     private func submit() async {
         let trimmed = username.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let apiClient else { return }
+        guard !trimmed.isEmpty else { return }
         isLoading = true
         errorText = nil
         defer { isLoading = false }

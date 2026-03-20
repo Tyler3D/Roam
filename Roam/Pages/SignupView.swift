@@ -145,9 +145,7 @@ struct SignupView: View {
         do {
             try await authManager.signUp(email: email, password: password)
 
-            if let apiClient {
-                try await apiClient.ensureBackendUser(username: username)
-            }
+            try await apiClient.ensureBackendUser(username: username)
 
             dismiss()
         } catch {

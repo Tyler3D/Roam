@@ -60,11 +60,6 @@ struct AuthGateView<MainContent: View>: View {
     }
 
     private func sync() async {
-        guard let apiClient else {
-            syncError = "No API client"
-            syncCompleted = true
-            return
-        }
         do {
             hasBackendUser = try await apiClient.syncBackendUser()
             syncCompleted = true

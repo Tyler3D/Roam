@@ -1,6 +1,6 @@
 # OpenAPI integration (web ↔ FastAPI)
 
-How the **TypeScript web app** stays aligned with the **FastAPI** JSON API using **OpenAPI** as the contract. This is separate from the **Google Cloud API Gateway** OpenAPI config used to route public traffic to Cloud Run ([ARCHITECTURE.md](ARCHITECTURE.md)); that gateway spec describes infrastructure, not the typings in this repo.
+How the **TypeScript web app** stays aligned with the **FastAPI** JSON API using **OpenAPI** as the contract. This is separate from the **Google Cloud API Gateway** OpenAPI config used to route public traffic to Cloud Run ([ARCHITECTURE.md](ARCHITECTURE.md)); that gateway spec lives at **`contracts/openapi-roam-gateway.yaml`** (infrastructure routing, not the typings artifact).
 
 ---
 
@@ -11,7 +11,7 @@ How the **TypeScript web app** stays aligned with the **FastAPI** JSON API using
 - **Local:** `http://localhost:8000/openapi.json` (or whatever host/port you use).
 - **Prod:** same path on the deployed API base URL if you need to diff against a running revision.
 
-There is no checked-in “golden” `openapi.json` in this repo today; regeneration assumes you can reach a running backend (or you save a snapshot yourself and use the file-based script below).
+The checked-in snapshot **`contracts/openapi.json`** is updated by **`scripts/export_openapi.sh`** (run from a Python env that can import the FastAPI app). **GitHub Actions** (`.github/workflows/openapi-contract.yml`) fails PRs/pushes when the backend changes but this file was not regenerated (`scripts/verify_openapi_contract.py`). For ad-hoc typing against a live server without exporting first, use `generate:api` below.
 
 ---
 
@@ -22,7 +22,7 @@ Tool: **[openapi-typescript](https://github.com/drwpow/openapi-typescript)** (v7
 | Script | Command | Use when |
 |--------|---------|----------|
 | `generate:api` | `openapi-typescript http://localhost:8000/openapi.json --enum -o src/models/generated/api.d.ts` | Backend is running locally on port **8000**. |
-| `generate:api:file` | `openapi-typescript scripts/openapi.json --enum -o src/models/generated/api.d.ts` | You have saved a copy of the spec at `frontend/scripts/openapi.json` (create the file/dir if you use this). |
+| `generate:api:file` | `openapi-typescript ../contracts/openapi.json --enum -o src/models/generated/api.d.ts` | Uses the repo snapshot at **`contracts/openapi.json`** (run `export_openapi.sh` first if the backend changed). |
 
 The **`--enum`** flag emits string-literal unions / enums for Pydantic enums so shared values (e.g. idea status) match the server.
 
