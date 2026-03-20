@@ -1,13 +1,11 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Saves URL/text from the share sheet into app-group [`SharedStore`](Roam/SharedStore.swift), opens the host app, then completes (minimal chrome).
-///
-/// Instagram and other hosts sometimes never invoke some `loadItem` callbacks; we use a timeout so the extension never hangs.
+/// Saves the share payload into the app-group [`ShareQueueStore`](Roam/ShareQueue/ShareQueueStore.swift), enriches with
+/// [`ReelMetadataService`](Roam/Services/ReelMetadataService.swift), then dismisses **without** launching the host app.
 final class ShareViewController: UIViewController {
 
-    private let extractTimeoutSeconds: TimeInterval = 5
-    private let openFallbackSeconds: TimeInterval = 1.5
+    private let extractTimeoutSeconds: TimeInterval = 2
     private var didFinishExtension = false
 
     override func loadView() {
@@ -24,7 +22,7 @@ final class ShareViewController: UIViewController {
 
     private func extractAndSave() {
         guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            saveOpenAndClose(url: nil, text: nil, typeIds: [])
+            saveQueueAndClose(url: nil, text: nil, typeIds: [])
             return
         }
 
@@ -48,6 +46,11 @@ final class ShareViewController: UIViewController {
         }
 
         mergeFromAttributedItems()
+
+        if sharedURL != nil || !(sharedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            return
+        }
 
         let urlTypeIds = [
             UTType.url.identifier,
@@ -103,7 +106,7 @@ final class ShareViewController: UIViewController {
         func completeExtraction() {
             guard !didScheduleCompletion else { return }
             didScheduleCompletion = true
-            saveOpenAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
         }
 
         group.notify(queue: .main) {
@@ -115,31 +118,26 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    private func saveOpenAndClose(url: String?, text: String?, typeIds: [String]) {
-        let newItem = SharedItem(
-            id: UUID(),
-            url: url,
-            text: text,
-            dateShared: Date(),
-            attachmentTypeIdentifiers: typeIds
-        )
-        SharedStore.save(newItem)
-        SharedStore.markPendingShareHandoff()
-        openHostAppThenFinish()
-    }
-
-    private func openHostAppThenFinish() {
-        guard let url = URL(string: "roam://share") else {
+    private func saveQueueAndClose(url: String?, text: String?, typeIds: [String]) {
+        let reelUrl: String? = {
+            if let u = url?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
+            if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let u = URL(string: t), u.scheme == "http" || u.scheme == "https" {
+                return t
+            }
+            return nil
+        }()
+        guard let u = reelUrl else {
             closeExtension()
             return
         }
 
-        extensionContext?.open(url) { [weak self] _ in
-            self?.closeExtension()
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + openFallbackSeconds) { [weak self] in
-            self?.closeExtension()
+        let id = ShareQueueStore.enqueue(reelUrl: u, shareText: text, attachmentTypeIdentifiers: typeIds)
+        Task { @MainActor in
+            defer { closeExtension() }
+            guard let urlObj = URL(string: u) else { return }
+            let pack = await ReelMetadataService.extract(url: urlObj, shareText: text)
+            ShareQueueStore.attachPack(id: id, pack: pack)
         }
     }
 

@@ -45,6 +45,10 @@ BEGIN
       'friend_request'
     );
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'savedReelStatus') THEN
+    CREATE TYPE "savedReelStatus" AS ENUM ('processing', 'needs_review', 'promoted', 'failed');
+  END IF;
 END $$;
 
 -- ============================================================
@@ -288,8 +292,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_reel"
 -- Saved reels (server-side grid + GCS thumbnail)
 -- ============================================================
 
-CREATE TYPE "savedReelStatus" AS ENUM ('processing', 'needs_review', 'promoted', 'failed');
-
 CREATE TABLE IF NOT EXISTS "saved_reels" (
   "id"                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "userId"              uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -298,16 +300,27 @@ CREATE TABLE IF NOT EXISTS "saved_reels" (
   "reelUrl"             text NOT NULL,
   "title"               text NOT NULL DEFAULT '',
   "status"              "savedReelStatus" NOT NULL DEFAULT 'processing',
+  "ingestRetryCount"    integer NOT NULL DEFAULT 0,
   "createdAt"           timestamptz NOT NULL DEFAULT now(),
   "updatedAt"           timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE "saved_reels" ADD COLUMN IF NOT EXISTS "ingestRetryCount" integer NOT NULL DEFAULT 0;
+
 CREATE INDEX IF NOT EXISTS "idx_saved_reels_userId_createdAt"
   ON "saved_reels" ("userId", "createdAt" DESC);
 
-ALTER TABLE "ideas" DROP CONSTRAINT IF EXISTS "ideas_savedReelId_fkey";
-ALTER TABLE "ideas" ADD CONSTRAINT "ideas_savedReelId_fkey"
-  FOREIGN KEY ("savedReelId") REFERENCES "saved_reels"("id") ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'ideas_savedReelId_fkey'
+      AND conrelid = '"ideas"'::regclass
+  ) THEN
+    ALTER TABLE "ideas" ADD CONSTRAINT "ideas_savedReelId_fkey"
+      FOREIGN KEY ("savedReelId") REFERENCES "saved_reels"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "reel_ingest_candidates" (
   "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid(),

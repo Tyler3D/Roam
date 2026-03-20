@@ -1,17 +1,20 @@
 import logging
+from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy import and_, exists, func, or_
 from sqlmodel import Session, col, select
 
 from app.api.ideas import _ideaReadWithExtras
+from app.api.ingest import MAX_FRAMES, MAX_UPLOAD_BYTES, _initialSavedReelTitle
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.ideas import IdeaModel, IdeaRead, IdeaStatus, IdeaWithPlanCountView
 from app.models.ingestion import IngestionJobModel, JobStatus
-from app.models.pipeline import PipelineResultModel
+from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
 from app.models.savedReels import (
     CreateIdeaOnReelBody,
@@ -27,10 +30,13 @@ from app.models.savedReels import (
     ReelIngestCandidateModel,
 )
 from app.models.users import UserModel
-from app.services.gcsReels import signedUrlForObject
+from app.services.gcsReels import signedUrlForObject, uploadReelThumbnail
+from app.services.reelIngestion import processIngestionJob
 from app.services.reelPromote import promoteSavedReel
 
 logger = logging.getLogger("roam.reels")
+
+MAX_INGEST_RETRIES_PER_REEL = 5
 
 reelsRouter = APIRouter()
 
@@ -226,6 +232,7 @@ def getReel(
         title=r.title,
         status=r.status,
         thumbnailSignedUrl=_thumbUrl(r.thumbnailObjectPath, reelId=str(r.id)),
+        ingestRetryCount=r.ingestRetryCount,
         jobStatus=jobStatusVal,
         jobError=jobErr,
         candidates=candReads,
@@ -234,6 +241,113 @@ def getReel(
         createdAt=r.createdAt,
         updatedAt=r.updatedAt,
     )
+
+
+@reelsRouter.post("/reels/{reelId}/retry-ingest", status_code=status.HTTP_202_ACCEPTED)
+async def retryReelIngest(
+    background_tasks: BackgroundTasks,
+    reelId: UUID,
+    user: UserModel = Depends(getCurrentUser),
+    shareText: Optional[str] = Form(None),
+    reelTitle: Optional[str] = Form(None),
+    ogDescription: Optional[str] = Form(None),
+    ogKeywords: Optional[str] = Form(None),
+    thumbnail: Optional[UploadFile] = File(None),
+    frames: list[UploadFile] = File(default=[]),
+    session: Session = Depends(getSession),
+) -> dict:
+    """Re-run vision ingest for a reel whose job ended in `failed` (e.g. \"Processing failed\")."""
+    if len(frames) > MAX_FRAMES:
+        raise BadRequest(f"Too many frames; maximum is {MAX_FRAMES}")
+
+    r = session.get(SavedReelModel, reelId)
+    if not r:
+        raise NotFound("Reel not found")
+    if r.userId != user.id:
+        raise Forbidden("Not your reel")
+    if r.status != SavedReelStatus.failed:
+        raise BadRequest("Retry is only available when reel processing has failed")
+
+    job = session.get(IngestionJobModel, r.jobId)
+    if not job:
+        raise NotFound("Ingest job not found for this reel")
+    if job.status != JobStatus.failed:
+        raise BadRequest("Only a failed ingest job can be retried")
+    if r.ingestRetryCount >= MAX_INGEST_RETRIES_PER_REEL:
+        raise BadRequest(f"Maximum of {MAX_INGEST_RETRIES_PER_REEL} retries reached for this reel")
+
+    frames_data: list[bytes] = []
+    thumbnail_data: bytes | None = None
+    if thumbnail:
+        thumbnail_data = await thumbnail.read()
+    for frame in frames:
+        frames_data.append(await frame.read())
+
+    total_bytes = (len(thumbnail_data) if thumbnail_data else 0) + sum(len(b) for b in frames_data)
+    if total_bytes > MAX_UPLOAD_BYTES:
+        raise BadRequest(
+            f"Upload too large ({(total_bytes / (1024 * 1024)):.1f} MB); maximum is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
+        )
+
+    for pr in session.exec(select(PipelineResultModel).where(PipelineResultModel.jobId == job.id)).all():
+        if pr.ideaId is not None:
+            continue
+        for sug in session.exec(
+            select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == pr.id)
+        ).all():
+            session.delete(sug)
+        session.delete(pr)
+
+    for c in session.exec(
+        select(ReelIngestCandidateModel).where(ReelIngestCandidateModel.savedReelId == r.id)
+    ).all():
+        session.delete(c)
+
+    if shareText is not None and shareText.strip():
+        job.shareText = shareText
+    if reelTitle is not None and reelTitle.strip():
+        job.reelTitle = reelTitle.strip()[:500]
+        r.title = _initialSavedReelTitle(reelTitle, job.shareText, r.reelUrl)
+    if ogDescription is not None:
+        job.ogDescription = ogDescription
+    if ogKeywords is not None:
+        job.ogKeywords = ogKeywords
+    job.status = JobStatus.processing
+    job.error = None
+    job.updatedAt = datetime.utcnow()
+    session.add(job)
+
+    r.status = SavedReelStatus.processing
+    r.updatedAt = datetime.utcnow()
+    r.ingestRetryCount += 1
+    session.add(r)
+
+    if thumbnail_data:
+        thumb_path = uploadReelThumbnail(user_id=user.id, job_id=job.id, data=thumbnail_data)
+        if thumb_path:
+            r.thumbnailObjectPath = thumb_path
+            session.add(r)
+
+    session.commit()
+    session.refresh(job)
+    session.refresh(r)
+
+    metadata = {
+        "reelUrl": r.reelUrl,
+        "shareText": job.shareText,
+        "reelTitle": job.reelTitle,
+        "ogDescription": job.ogDescription,
+        "ogKeywords": job.ogKeywords,
+    }
+    background_tasks.add_task(processIngestionJob, str(job.id), frames_data, thumbnail_data, metadata)
+
+    logger.info(
+        "reel_retry_ingest_scheduled reelId=%s jobId=%s userId=%s",
+        reelId,
+        job.id,
+        user.id,
+    )
+    return {"jobId": str(job.id), "status": "processing", "reelId": str(r.id)}
 
 
 @reelsRouter.post(

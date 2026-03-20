@@ -131,6 +131,12 @@ struct MainTabShell: View {
             glassTabBar(stores: stores)
         }
         .preferredColorScheme(.light)
+        .onAppear {
+            if shareIngress.pendingSwitchToReels {
+                tab = .reels
+                shareIngress.clearPendingSwitchToReels()
+            }
+        }
         .sheet(isPresented: $showInbox) {
             NavigationStack {
                 InboxPage()
@@ -155,21 +161,18 @@ struct MainTabShell: View {
         }
         .onChange(of: bootstrapped) { _, ok in
             if ok {
-                Task { await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores) }
+                Task {
+                    await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+                    await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores)
+                }
             }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, bootstrapped {
-                Task { await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores) }
-            }
-        }
-        .onChange(of: shareIngress.pendingIdeaNavigationId) { _, id in
-            guard let id, !id.isEmpty else { return }
-            tab = .ideas
-            navigationPathIdeas = NavigationPath()
-            navigationPathIdeas.append(id)
-            Task { @MainActor in
-                shareIngress.clearPendingNavigation()
+                Task {
+                    await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+                    await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores)
+                }
             }
         }
         .onChange(of: shareIngress.pendingSwitchToReels) { _, go in

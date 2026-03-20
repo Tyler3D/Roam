@@ -3,6 +3,8 @@ import SwiftUI
 struct ReelDetailPage: View {
     let reelId: String
 
+    private static let maxIngestRetries = 5
+
     @Environment(\.apiClient) private var apiClient
     @Environment(\.roamStores) private var stores
     @State private var detail: APIClient.SavedReelDetailDTO?
@@ -13,6 +15,8 @@ struct ReelDetailPage: View {
     @State private var promoteError: String?
     @State private var showOriginalSuggestions = false
     @State private var showAddIdea = false
+    @State private var isRetryingIngest = false
+    @State private var retryIngestError: String?
 
     var body: some View {
         Group {
@@ -54,10 +58,43 @@ struct ReelDetailPage: View {
     private func content(_ d: APIClient.SavedReelDetailDTO) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let err = d.jobError, d.jobStatus == "failed" {
-                    Text(err)
-                        .font(RoamFont.mono(10))
-                        .foregroundStyle(RoamColors.error)
+                if d.jobStatus == "failed" || d.status == "failed" {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let err = d.jobError?.trimmingCharacters(in: .whitespacesAndNewlines), !err.isEmpty {
+                            Text(err)
+                                .font(RoamFont.mono(10))
+                                .foregroundStyle(RoamColors.error)
+                        } else {
+                            Text("Processing failed")
+                                .font(RoamFont.mono(10))
+                                .foregroundStyle(RoamColors.error)
+                        }
+                        if d.ingestRetriesUsed < Self.maxIngestRetries {
+                            if let retryIngestError {
+                                Text(retryIngestError)
+                                    .font(RoamFont.mono(10))
+                                    .foregroundStyle(RoamColors.error)
+                            }
+                            Button {
+                                Task { await retryFailedIngest(d) }
+                            } label: {
+                                if isRetryingIngest {
+                                    ProgressView()
+                                        .scaleEffect(0.85)
+                                } else {
+                                    Text("retry")
+                                        .font(RoamFont.mono(11, weight: .medium))
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(RoamColors.loganDeep)
+                            .disabled(isRetryingIngest)
+                        } else {
+                            Text("Retry limit reached (\(Self.maxIngestRetries) attempts).")
+                                .font(RoamFont.mono(10))
+                                .foregroundStyle(RoamColors.textMuted)
+                        }
+                    }
                 }
 
                 if let rid = UUID(uuidString: reelId) {
@@ -70,6 +107,12 @@ struct ReelDetailPage: View {
                 Text(d.title.isEmpty ? d.reelUrl : d.title)
                     .font(RoamFont.mono(12, weight: .medium))
                     .foregroundStyle(RoamColors.loganDark)
+
+                if d.status == "needs_review", d.ideasNonEmpty.isEmpty {
+                    Text("Nothing matched—tap add idea to create one yourself.")
+                        .font(RoamFont.mono(10))
+                        .foregroundStyle(RoamColors.textMuted)
+                }
 
                 ideasSection(d)
 
@@ -256,6 +299,32 @@ struct ReelDetailPage: View {
             await load()
         } catch {
             promoteError = error.localizedDescription
+        }
+    }
+
+    private func retryFailedIngest(_ d: APIClient.SavedReelDetailDTO) async {
+        retryIngestError = nil
+        guard let url = URL(string: d.reelUrl) else {
+            retryIngestError = "Invalid reel URL"
+            return
+        }
+        isRetryingIngest = true
+        defer { isRetryingIngest = false }
+        let pack = await ReelMetadataService.extract(url: url, shareText: nil)
+        do {
+            _ = try await apiClient.retryFailedReelIngest(
+                reelId: reelId,
+                shareText: nil,
+                reelTitle: pack.ingestReelTitle,
+                ogDescription: pack.ingestOgDescription,
+                ogKeywords: pack.ingestOgKeywords,
+                thumbnailJPEG: pack.thumbnailJPEG,
+                frameJPEGs: pack.frameJPEGs
+            )
+            await load()
+            await stores.reels.refresh()
+        } catch {
+            retryIngestError = error.localizedDescription
         }
     }
 }

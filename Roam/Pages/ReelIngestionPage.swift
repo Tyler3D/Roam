@@ -5,6 +5,7 @@ struct ReelsPage: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.roamStores) private var stores
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var shareIngress: ShareIngressCoordinator
     @State private var path = NavigationPath()
     @State private var localItems: [SharedItem] = []
     @State private var ingestError: String?
@@ -22,16 +23,31 @@ struct ReelsPage: View {
                     if !localItems.isEmpty {
                         localInboxSection
                     }
+                    onDeviceQueueSection
+                    if shareIngress.ingestScanState != nil {
+                        scanningBanner
+                    }
                     reelsGridSection
                 }
+                .id(shareIngress.shareQueueEpoch)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 120)
             }
             .navigationTitle("reels")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: String.self) { reelId in
-                ReelDetailPage(reelId: reelId)
+            .navigationDestination(for: String.self) { token in
+                if token.hasPrefix("q:") {
+                    let rest = String(token.dropFirst(2))
+                    if let u = UUID(uuidString: rest) {
+                        QueuedReelPreviewPage(queueId: u)
+                    } else {
+                        Text("invalid link")
+                            .font(RoamFont.mono(11))
+                    }
+                } else {
+                    ReelDetailPage(reelId: token)
+                }
             }
             .toolbar {
                 if !localItems.isEmpty {
@@ -58,9 +74,84 @@ struct ReelsPage: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     reloadLocal()
-                    Task { await stores.reels.refresh() }
+                    Task {
+                        await stores.reels.refresh()
+                        await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+                    }
                 }
             }
+            .task {
+                await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+            }
+        }
+    }
+
+    private var onDeviceQueueSection: some View {
+        let rows = ShareQueueStore.itemsForGrid()
+        return Group {
+            if !rows.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("on this device")
+                        .font(RoamFont.mono(10, weight: .medium))
+                        .foregroundStyle(RoamColors.textMuted)
+                        .textCase(.uppercase)
+                        .tracking(1)
+
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                        ForEach(rows) { q in
+                            Button {
+                                path.append("q:\(q.id.uuidString.lowercased())")
+                            } label: {
+                                queuedReelCell(q)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func queuedReelCell(_ q: QueuedReelIngest) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let path = ShareQueueStore.thumbnailFileURL(for: q),
+                       let ui = UIImage(contentsOfFile: path.path) {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        RoamColors.logan.opacity(0.12)
+                    }
+                }
+                .frame(minHeight: 120)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                Text(queuedStatusChip(q.uploadStatus))
+                    .font(RoamFont.mono(8, weight: .medium))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(6)
+            }
+
+            Text(q.displayTitle)
+                .font(RoamFont.mono(10))
+                .lineLimit(2)
+                .foregroundStyle(RoamColors.loganDark)
+        }
+        .padding(2)
+    }
+
+    private func queuedStatusChip(_ status: QueuedUploadStatus) -> String {
+        switch status {
+        case .pendingUpload: return "device"
+        case .uploading: return "…"
+        case .failed: return "retry"
         }
     }
 
@@ -123,11 +214,11 @@ struct ReelsPage: View {
                 Text(err)
                     .font(RoamFont.mono(10))
                     .foregroundStyle(RoamColors.error)
-            } else if stores.reels.reels.isEmpty && localItems.isEmpty {
+            } else if stores.reels.reels.isEmpty && localItems.isEmpty && ShareQueueStore.itemsForGrid().isEmpty {
                 RoamEmptyState(
                     icon: "▦",
                     title: "no reels yet",
-                    subtitle: "Share from Instagram or save a link from the inbox above."
+                    subtitle: "Share from Instagram — it saves here on your phone first, then uploads when you open Roam."
                 )
                 .padding(.top, 24)
             } else if stores.reels.reels.isEmpty {
@@ -144,7 +235,7 @@ struct ReelsPage: View {
                     Button {
                         path.append(reel.id.uuidString.lowercased())
                     } label: {
-                        reelCell(reel)
+                        reelCell(reel, highlight: isScanHighlightReel(reel))
                     }
                     .buttonStyle(.plain)
                 }
@@ -152,7 +243,22 @@ struct ReelsPage: View {
         }
     }
 
-    private func reelCell(_ reel: APIClient.SavedReelListItemDTO) -> some View {
+    private var scanningBanner: some View {
+        Text("Scanning for Roamable ideas")
+            .font(RoamFont.mono(11, weight: .medium))
+            .foregroundStyle(RoamColors.loganDark)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoamColors.logan.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func isScanHighlightReel(_ reel: APIClient.SavedReelListItemDTO) -> Bool {
+        guard let rid = shareIngress.ingestScanState?.reelId else { return false }
+        return reel.id.uuidString.lowercased() == rid
+    }
+
+    private func reelCell(_ reel: APIClient.SavedReelListItemDTO, highlight: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 ReelThumbnailImageView(reelId: reel.id, signedUrl: reel.thumbnailSignedUrl, contentMode: .fill)
@@ -175,6 +281,11 @@ struct ReelsPage: View {
                 .lineLimit(2)
                 .foregroundStyle(RoamColors.loganDark)
         }
+        .padding(2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(highlight ? RoamColors.loganDeep : Color.clear, lineWidth: highlight ? 2 : 0)
+        )
     }
 
     private func statusChip(_ status: String) -> String {

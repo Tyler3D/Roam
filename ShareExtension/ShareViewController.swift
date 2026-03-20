@@ -1,11 +1,10 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Same resilience as `reel-ingestion` target: timeout + fallback close so Instagram never leaves the sheet stuck.
-class ShareViewController: UIViewController {
+/// Same behavior as `reel-ingestion` target: queue to app group + metadata, no host-app URL.
+final class ShareViewController: UIViewController {
 
-    private let extractTimeoutSeconds: TimeInterval = 5
-    private let openFallbackSeconds: TimeInterval = 1.5
+    private let extractTimeoutSeconds: TimeInterval = 2
     private var didFinishExtension = false
 
     override func loadView() {
@@ -22,7 +21,7 @@ class ShareViewController: UIViewController {
 
     private func extractAndSave() {
         guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            saveOpenAndClose(url: nil, text: nil, typeIds: [])
+            saveQueueAndClose(url: nil, text: nil, typeIds: [])
             return
         }
 
@@ -46,6 +45,11 @@ class ShareViewController: UIViewController {
         }
 
         mergeFromAttributedItems()
+
+        if sharedURL != nil || !(sharedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            return
+        }
 
         let urlTypeIds = [
             UTType.url.identifier,
@@ -101,7 +105,7 @@ class ShareViewController: UIViewController {
         func completeExtraction() {
             guard !didScheduleCompletion else { return }
             didScheduleCompletion = true
-            saveOpenAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
         }
 
         group.notify(queue: .main) {
@@ -113,31 +117,26 @@ class ShareViewController: UIViewController {
         }
     }
 
-    private func saveOpenAndClose(url: String?, text: String?, typeIds: [String]) {
-        let item = SharedItem(
-            id: UUID(),
-            url: url,
-            text: text,
-            dateShared: Date(),
-            attachmentTypeIdentifiers: typeIds
-        )
-        SharedStore.save(item)
-        SharedStore.markPendingShareHandoff()
-        openHostAppThenFinish()
-    }
-
-    private func openHostAppThenFinish() {
-        guard let url = URL(string: "roam://share") else {
+    private func saveQueueAndClose(url: String?, text: String?, typeIds: [String]) {
+        let reelUrl: String? = {
+            if let u = url?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
+            if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let u = URL(string: t), u.scheme == "http" || u.scheme == "https" {
+                return t
+            }
+            return nil
+        }()
+        guard let u = reelUrl else {
             closeExtension()
             return
         }
 
-        extensionContext?.open(url) { [weak self] _ in
-            self?.closeExtension()
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + openFallbackSeconds) { [weak self] in
-            self?.closeExtension()
+        let id = ShareQueueStore.enqueue(reelUrl: u, shareText: text, attachmentTypeIdentifiers: typeIds)
+        Task { @MainActor in
+            defer { closeExtension() }
+            guard let urlObj = URL(string: u) else { return }
+            let pack = await ReelMetadataService.extract(url: urlObj, shareText: text)
+            ShareQueueStore.attachPack(id: id, pack: pack)
         }
     }
 

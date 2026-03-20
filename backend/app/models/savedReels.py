@@ -33,6 +33,8 @@ class SavedReelModel(SQLModel, table=True):
             default=SavedReelStatus.processing,
         )
     )
+    # How many times retry-ingest was accepted (cap enforced server-side).
+    ingestRetryCount: int = Field(default=0, nullable=False)
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     updatedAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -87,6 +89,7 @@ class SavedReelDetailRead(SQLModel):
     title: str
     status: SavedReelStatus
     thumbnailSignedUrl: Optional[str] = None
+    ingestRetryCount: int = 0
     jobStatus: str
     jobError: Optional[str] = None
     candidates: list[ReelIngestCandidateRead] = Field(default_factory=list)

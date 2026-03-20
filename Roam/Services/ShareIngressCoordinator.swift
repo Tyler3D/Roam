@@ -2,19 +2,25 @@ import Combine
 import Foundation
 import SwiftUI
 
+/// Tracks an ingest job so Reels can show a scanning banner until the job finishes.
+struct IngestScanState: Equatable {
+    let jobId: String
+    let reelId: String?
+}
+
 /// After Instagram → Roam share: extension saves a `SharedItem`, sets a handoff flag, opens `roam://share`.
-/// Main app uploads ingest, refreshes lists; opens **Ideas** when the job auto-created one idea, else switches to **Reels** for review.
+/// Main app uploads ingest, refreshes lists, switches to **Reels** with a scanning banner until the job settles.
 @MainActor
 final class ShareIngressCoordinator: ObservableObject {
-    @Published var pendingIdeaNavigationId: String?
     @Published var pendingSwitchToReels = false
+    /// Non-nil while polling `GET /api/ingest/{jobId}` for terminal status.
+    @Published var ingestScanState: IngestScanState?
     @Published var lastError: String?
+    /// Bumps when the on-device share queue changes (extension save or upload flush).
+    @Published private(set) var shareQueueEpoch = 0
 
     private var isRunning = false
-
-    func clearPendingNavigation() {
-        pendingIdeaNavigationId = nil
-    }
+    private var isFlushingQueue = false
 
     func clearPendingSwitchToReels() {
         pendingSwitchToReels = false
@@ -22,6 +28,50 @@ final class ShareIngressCoordinator: ObservableObject {
 
     func dismissError() {
         lastError = nil
+    }
+
+    /// When the host app opens `roam://share`, switch to Reels immediately (before ingest / metadata work).
+    func prioritizeReelsTabForShareHandoff() {
+        pendingSwitchToReels = true
+    }
+
+    /// Uploads items saved by the share extension from the app group (no need to have opened the app from the sheet).
+    func flushShareQueue(apiClient: APIClient, stores: RoamStores) async {
+        guard !isFlushingQueue else { return }
+        guard apiClient.isUserSignedIn else { return }
+        let pending = ShareQueueStore.itemsPendingUpload()
+        guard !pending.isEmpty else { return }
+        isFlushingQueue = true
+        defer { isFlushingQueue = false }
+
+        for item in pending {
+            ShareQueueStore.markUploading(id: item.id)
+            shareQueueEpoch += 1
+            do {
+                let thumb = ShareQueueStore.loadThumbnailData(for: item)
+                let frames = ShareQueueStore.loadFrameData(for: item)
+                let resp = try await apiClient.submitIngest(
+                    reelUrl: item.reelUrl,
+                    shareText: item.shareText,
+                    reelTitle: item.reelTitle,
+                    ogDescription: item.ogDescription,
+                    ogKeywords: item.ogKeywords,
+                    thumbnailJPEG: thumb,
+                    frameJPEGs: frames
+                )
+                ReelThumbnailDiskCache.saveAfterIngest(reelIdString: resp.reelId, jpegData: thumb)
+                ShareQueueStore.remove(id: item.id)
+                await stores.ideas.refresh()
+                await stores.reels.refresh()
+            } catch {
+                if let apiErr = error as? APIError, case .httpError(let status, _) = apiErr, status == 401 {
+                    ShareQueueStore.resetToPending(id: item.id)
+                } else {
+                    ShareQueueStore.markFailed(id: item.id, message: error.localizedDescription)
+                }
+            }
+            shareQueueEpoch += 1
+        }
     }
 
     func runIfNeeded(apiClient: APIClient, stores: RoamStores) async {
@@ -32,6 +82,9 @@ final class ShareIngressCoordinator: ObservableObject {
             lastError = "No URL in shared item"
             return
         }
+
+        // Jump to Reels before slow OG/thumbnail extraction and network ingest so the user isn't stuck on another tab under the system dimming.
+        pendingSwitchToReels = true
 
         isRunning = true
         lastError = nil
@@ -53,16 +106,16 @@ final class ShareIngressCoordinator: ObservableObject {
             await stores.ideas.refresh()
             await stores.reels.refresh()
 
-            if let immediate = resp.firstNavigableIdeaId, !immediate.isEmpty {
-                pendingIdeaNavigationId = immediate.lowercased()
-            } else if let ideaId = try await pollFirstIdeaOrNil(apiClient: apiClient, jobId: resp.jobId) {
-                pendingIdeaNavigationId = ideaId.lowercased()
-            } else {
-                pendingSwitchToReels = true
-            }
+            let jobId = resp.jobId.lowercased()
+            let reelNorm: String? = {
+                guard let s = resp.reelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+                return s.lowercased()
+            }()
 
-            Task {
-                try? await Self.refreshWhenJobSettles(apiClient: apiClient, jobId: resp.jobId, stores: stores)
+            ingestScanState = IngestScanState(jobId: jobId, reelId: reelNorm)
+
+            Task { [weak self] in
+                await self?.pollUntilSettled(apiClient: apiClient, jobId: jobId, stores: stores)
             }
         } catch {
             lastError = error.localizedDescription
@@ -77,35 +130,39 @@ final class ShareIngressCoordinator: ObservableObject {
         return nil
     }
 
-    /// After job completes: idea id if auto-promoted, `nil` if user should review in Reels.
-    private func pollFirstIdeaOrNil(apiClient: APIClient, jobId: String) async throws -> String? {
+    private func pollUntilSettled(apiClient: APIClient, jobId: String, stores: RoamStores) async {
         let maxAttempts = 120
-        for _ in 0..<maxAttempts {
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            let job = try await apiClient.getIngestJob(jobId: jobId)
-            switch job.status {
-            case "done":
-                return job.firstIdeaId?.uuidString
-            case "failed":
-                let trimmed = job.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let msg = trimmed.isEmpty ? "Ingest failed" : trimmed
-                throw APIError.httpError(status: 500, message: msg)
-            default:
-                break
+        for attempt in 0..<maxAttempts {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            do {
+                let job = try await apiClient.getIngestJob(jobId: jobId)
+                switch job.status {
+                case "done":
+                    await stores.ideas.refresh()
+                    await stores.reels.refresh()
+                    ingestScanState = nil
+                    return
+                case "failed":
+                    await stores.ideas.refresh()
+                    await stores.reels.refresh()
+                    let trimmed = job.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let msg = trimmed.isEmpty ? "Ingest failed" : trimmed
+                    ingestScanState = nil
+                    lastError = msg
+                    return
+                default:
+                    break
+                }
+            } catch {
+                // Transient errors: keep polling until timeout.
             }
         }
-        throw APIError.httpError(status: 408, message: "Ingest timed out")
-    }
 
-    private static func refreshWhenJobSettles(apiClient: APIClient, jobId: String, stores: RoamStores) async throws {
-        for _ in 0..<120 {
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            let job = try await apiClient.getIngestJob(jobId: jobId)
-            if job.status == "done" || job.status == "failed" {
-                await stores.ideas.refresh()
-                await stores.reels.refresh()
-                return
-            }
-        }
+        await stores.ideas.refresh()
+        await stores.reels.refresh()
+        ingestScanState = nil
+        lastError = "Ingest timed out"
     }
 }

@@ -38,6 +38,7 @@ private struct RootView: View {
             .onOpenURL { url in
                 if url.scheme?.lowercased() == "roam", url.host?.lowercased() == "share" {
                     SharedStore.markPendingShareHandoff()
+                    shareIngress.prioritizeReelsTabForShareHandoff()
                 }
             }
     }

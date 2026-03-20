@@ -18,6 +18,9 @@ final class APIClient {
         self.appConfig = appConfig
     }
 
+    /// Used to skip network work (e.g. share-queue upload) when there is no Firebase session.
+    var isUserSignedIn: Bool { authManager.isSignedIn }
+
     // MARK: - Transport
 
     func apiFetch<T: Decodable>(
@@ -330,6 +333,83 @@ final class APIClient {
         return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
     }
 
+    /// Re-run ingest for a saved reel whose server job is `failed` (same multipart shape as `submitIngest`, without `reelUrl`).
+    func retryFailedReelIngest(
+        reelId: String,
+        shareText: String?,
+        reelTitle: String? = nil,
+        ogDescription: String? = nil,
+        ogKeywords: String? = nil,
+        thumbnailJPEG: Data? = nil,
+        frameJPEGs: [Data] = []
+    ) async throws -> IngestCreateResponse {
+        let baseURL = appConfig.baseURL
+        let token = try await authManager.getIdToken()
+        let rid = reelId.lowercased()
+        guard let url = URL(string: "\(baseURL)/api/reels/\(rid)/retry-ingest") else {
+            throw APIError.invalidURL
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let bearer = "Bearer \(token)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(bearer, forHTTPHeaderField: "Authorization")
+        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func appendField(name: String, value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append(value.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+
+        func appendFile(name: String, filename: String, mimeType: String, data: Data) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append(
+                "Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n"
+                    .data(using: .utf8)!
+            )
+            body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+            body.append(data)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+
+        if let shareText, !shareText.isEmpty {
+            appendField(name: "shareText", value: shareText)
+        }
+        if let reelTitle, !reelTitle.isEmpty {
+            appendField(name: "reelTitle", value: reelTitle)
+        }
+        if let ogDescription, !ogDescription.isEmpty {
+            appendField(name: "ogDescription", value: ogDescription)
+        }
+        if let ogKeywords, !ogKeywords.isEmpty {
+            appendField(name: "ogKeywords", value: ogKeywords)
+        }
+        if let thumbnailJPEG, !thumbnailJPEG.isEmpty {
+            appendFile(name: "thumbnail", filename: "thumb.jpg", mimeType: "image/jpeg", data: thumbnailJPEG)
+        }
+        for (i, frameData) in frameJPEGs.enumerated() where !frameData.isEmpty {
+            appendFile(name: "frames", filename: "frame\(i).jpg", mimeType: "image/jpeg", data: frameData)
+        }
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = try? JSONDecoder().decode(ErrorDetail.self, from: data)
+            throw APIError.httpError(status: httpResponse.statusCode, message: detail?.detail ?? "Retry failed")
+        }
+        return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
+    }
+
     // MARK: - Reels (saved reels + promote)
 
     struct ReelsSummaryResponse: Decodable {
@@ -380,6 +460,8 @@ final class APIClient {
         let title: String
         let status: String
         let thumbnailSignedUrl: String?
+        /// Server may omit on older deployments; treat as 0.
+        let ingestRetryCount: Int?
         let jobStatus: String
         let jobError: String?
         let candidates: [ReelCandidateDetailDTO]
@@ -390,6 +472,8 @@ final class APIClient {
         let updatedAt: Date
 
         var ideasNonEmpty: [SavedReelIdeaSummaryDTO] { ideas ?? [] }
+
+        var ingestRetriesUsed: Int { ingestRetryCount ?? 0 }
     }
 
     struct PromoteReelResponseDTO: Decodable {

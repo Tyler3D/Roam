@@ -58,8 +58,11 @@
 		4567DC692F4A9C85001700F7 /* Exceptions for "Roam" folder in "reel-ingestion" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Services/ReelMetadataService.swift,
 				SharedItem.swift,
 				SharedStore.swift,
+				ShareQueue/QueuedReelIngest.swift,
+				ShareQueue/ShareQueueStore.swift,
 			);
 			target = 4567DC572F4A9AB4001700F7 /* reel-ingestion */;
 		};
