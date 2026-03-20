@@ -1,5 +1,7 @@
 # Entity Relationship Diagram
 
+Reflects `sql/schema.sql` (including `pipeline_results.promptVersion` and `user_oauth_tokens`).
+
 ```mermaid
 erDiagram
     users {
@@ -30,7 +32,7 @@ erDiagram
         double longitude
         text category
         jsonb openingHours
-        text_arr placeTypes
+        text placeTypes "postgres text[]"
         timestamptz createdAt
     }
 
@@ -42,6 +44,7 @@ erDiagram
         text refinedTitle
         text category
         integer estimatedMinutes
+        text promptVersion "nullable"
         text modelName
         jsonb rawOutput
         timestamptz createdAt
@@ -129,13 +132,24 @@ erDiagram
         timestamptz createdAt
     }
 
+    user_oauth_tokens {
+        uuid id PK
+        uuid userId FK
+        text provider
+        text encryptedAccessToken
+        text encryptedRefreshToken "nullable"
+        timestamptz expiresAt "nullable"
+        timestamptz createdAt
+        timestamptz updatedAt
+    }
+
     notifications {
         uuid id PK
         uuid userId FK
         notificationType type
         uuid planId FK "nullable"
         text title
-        text body
+        text body "nullable"
         boolean isRead
         timestamptz createdAt
     }
@@ -162,9 +176,10 @@ erDiagram
     users ||--o{ plan_messages : "sends"
     users ||--o{ notifications : "receives"
     users ||--o{ reel_ingestion_jobs : "submits"
+    users ||--o{ user_oauth_tokens : "stores"
 
-    pipeline_results ||--o{ ideas : "enriches"
-    pipeline_results ||--o{ reel_ingestion_jobs : "from reel"
+    ideas ||--o{ pipeline_results : "results"
+    reel_ingestion_jobs ||--o{ pipeline_results : "produces"
     pipeline_results ||--o{ place_suggestions : "has"
 
     place_suggestions }o--|| places : "references"
@@ -180,8 +195,6 @@ erDiagram
     plans ||--o{ notifications : "triggers"
 
     plan_members ||--o{ plan_tasks : "assigned"
-
-    reel_ingestion_jobs ||--o{ pipeline_results : "produces"
 ```
 
 ## Enums
@@ -205,7 +218,7 @@ erDiagram
 | `plans.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
 | `ideas.userId` | `users.id` | many-to-one | CASCADE |
 | `ideas.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
-| `pipeline_results.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
+| `pipeline_results.ideaId` | `ideas.id` | many-to-one (nullable) | CASCADE |
 | `pipeline_results.jobId` | `reel_ingestion_jobs.id` | many-to-one (nullable) | SET NULL |
 | `place_suggestions.resultId` | `pipeline_results.id` | many-to-one | CASCADE |
 | `place_suggestions.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
@@ -220,6 +233,23 @@ erDiagram
 | `notifications.userId` | `users.id` | many-to-one | CASCADE |
 | `notifications.planId` | `plans.id` | many-to-one (nullable) | CASCADE |
 | `reel_ingestion_jobs.userId` | `users.id` | many-to-one | CASCADE |
+| `user_oauth_tokens.userId` | `users.id` | many-to-one | CASCADE |
+
+### Unique constraints (indexes)
+
+| Table | Constraint |
+|-------|------------|
+| `user_oauth_tokens` | `UNIQUE ("userId", "provider")` |
+| `friendships` | `UNIQUE` on `(LEAST(requesterId, addresseeId), GREATEST(requesterId, addresseeId))` (one row per unordered pair) |
+| `reel_ingestion_jobs` | `UNIQUE ("userId", "reelUrl")` |
+
+### Check constraints
+
+| Table | Rule |
+|-------|------|
+| `pipeline_results` | `reel_result_has_idea`: if `jobId` is set, `ideaId` must be set (`jobId IS NULL OR ideaId IS NOT NULL`) |
+| `friendships` | `requesterId <> addresseeId` |
+| `plans` / `plan_members` | `rating` in 1–5 when present (see schema `CHECK`) |
 
 ## Views
 
