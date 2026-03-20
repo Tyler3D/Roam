@@ -11,6 +11,7 @@ from sqlmodel import Session, select, col
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import getSession, handleIntegrityConflict
+from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, IngestionJobRead, JobStatus
 from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
@@ -24,6 +25,17 @@ ingestRouter = APIRouter()
 # Upload limits for stability and abuse prevention (tune as needed)
 MAX_FRAMES = 10
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB total for thumbnail + all frames
+
+
+def _initial_reel_idea_title(reelTitle: Optional[str], shareText: Optional[str]) -> str:
+    t = (reelTitle or "").strip()
+    if t:
+        return t[:500]
+    st = (shareText or "").strip()
+    if st:
+        line = st.split("\n")[0].strip()
+        return (line[:500] if line else "Shared reel")
+    return "Shared reel"
 
 
 class IngestJobResponse(IngestionJobRead):
@@ -60,8 +72,19 @@ async def createIngestionJob(
             f"Upload too large ({(totalBytes / (1024 * 1024)):.1f} MB); maximum is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
         )
 
+    idea = IdeaModel(
+        userId=user.id,
+        title=_initial_reel_idea_title(reelTitle, shareText),
+        notes="",
+        sourceUrl=reelUrl,
+        status=IdeaStatus.suggesting,
+    )
+    session.add(idea)
+    session.flush()
+
     job = IngestionJobModel(
         userId=user.id,
+        ideaId=idea.id,
         reelUrl=reelUrl,
         shareText=shareText,
         reelTitle=reelTitle,
@@ -81,7 +104,22 @@ async def createIngestionJob(
                     IngestionJobModel.reelUrl == reelUrl
                 )
             ).first()
-            return {"jobId": str(existing.id), "status": existing.status.value} if existing else None
+            if not existing:
+                return None
+            idea_id = existing.ideaId
+            if not idea_id:
+                pr = session.exec(
+                    select(PipelineResultModel)
+                    .where(PipelineResultModel.jobId == existing.id)
+                    .order_by(col(PipelineResultModel.createdAt).desc())
+                    .limit(1)
+                ).first()
+                if pr and pr.ideaId:
+                    idea_id = pr.ideaId
+            payload: dict = {"jobId": str(existing.id), "status": existing.status.value}
+            if idea_id:
+                payload["ideaId"] = str(idea_id)
+            return payload
 
         payload = handleIntegrityConflict(session, lookupExisting, "Duplicate reel URL")
         return JSONResponse(status_code=202, content=payload)
@@ -96,8 +134,11 @@ async def createIngestionJob(
 
     backgroundTasks.add_task(processIngestionJob, str(job.id), framesData, thumbnailData, metadata)
 
-    logger.info("ingest_job_created", extra={"jobId": str(job.id), "reelUrl": reelUrl})
-    return {"jobId": str(job.id), "status": "processing"}
+    logger.info(
+        "ingest_job_created",
+        extra={"jobId": str(job.id), "reelUrl": reelUrl, "ideaId": str(idea.id)},
+    )
+    return {"jobId": str(job.id), "status": "processing", "ideaId": str(idea.id)}
 
 
 @ingestRouter.get("/ingest/{jobId}", response_model=IngestJobResponse)

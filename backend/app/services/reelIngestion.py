@@ -146,7 +146,7 @@ def _build_gemini_contents(framesData: list[bytes], thumbnailData: bytes | None,
         text_parts.append(f"URL: {metadata['reelUrl']}")
 
     if text_parts:
-        parts.append(types.Part.from_text("\n".join(text_parts)))
+        parts.append(types.Part.from_text(text="\n".join(text_parts)))
 
     all_images = []
     if thumbnailData:
@@ -157,7 +157,7 @@ def _build_gemini_contents(framesData: list[bytes], thumbnailData: bytes | None,
         parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
 
     if not parts:
-        parts.append(types.Part.from_text("No metadata or images available."))
+        parts.append(types.Part.from_text(text="No metadata or images available."))
 
     return parts
 
@@ -342,19 +342,38 @@ def processIngestionJob(
             return
 
         title = metadata.get("reelTitle") or metadata.get("shareText") or "Untitled reel"
-        idea = IdeaModel(
-            userId=job.userId,
-            title=title[:500],
-            sourceUrl=metadata.get("reelUrl"),
-            status=IdeaStatus.captured,
-        )
-        session.add(idea)
-        session.flush()
 
-        idea.status = IdeaStatus.suggesting
-        idea.updatedAt = datetime.utcnow()
-        session.add(idea)
-        session.flush()
+        if job.ideaId:
+            idea = session.get(IdeaModel, job.ideaId)
+            if not idea or idea.userId != job.userId:
+                logger.error(
+                    "reel_ingestion_missing_idea",
+                    extra={"jobId": jobId, "ideaId": str(job.ideaId) if job.ideaId else None},
+                )
+                return
+            if (metadata.get("reelTitle") or "").strip():
+                idea.title = title[:500]
+            url = metadata.get("reelUrl")
+            if url:
+                idea.sourceUrl = url
+            idea.status = IdeaStatus.suggesting
+            idea.updatedAt = datetime.utcnow()
+            session.add(idea)
+            session.flush()
+        else:
+            idea = IdeaModel(
+                userId=job.userId,
+                title=title[:500],
+                sourceUrl=metadata.get("reelUrl"),
+                status=IdeaStatus.captured,
+            )
+            session.add(idea)
+            session.flush()
+
+            idea.status = IdeaStatus.suggesting
+            idea.updatedAt = datetime.utcnow()
+            session.add(idea)
+            session.flush()
 
         parsed = _call_vision_reel(framesData, thumbnailData, metadata)
         filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
