@@ -164,6 +164,7 @@ struct MainTabShell: View {
                 Task {
                     await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
                     await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores)
+                    shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
                 }
             }
         }
@@ -172,6 +173,7 @@ struct MainTabShell: View {
                 Task {
                     await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
                     await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores)
+                    shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
                 }
             }
         }

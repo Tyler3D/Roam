@@ -21,6 +21,14 @@ final class ShareIngressCoordinator: ObservableObject {
 
     private var isRunning = false
     private var isFlushingQueue = false
+    /// In-flight `GET /api/ingest/{jobId}` loops (banner-led or background from processing reels).
+    private var activeIngestPollJobIds = Set<String>()
+
+    private enum IngestPollOutcome {
+        case done
+        case failed(String)
+        case timeout
+    }
 
     func clearPendingSwitchToReels() {
         pendingSwitchToReels = false
@@ -63,6 +71,7 @@ final class ShareIngressCoordinator: ObservableObject {
                 ShareQueueStore.remove(id: item.id)
                 await stores.ideas.refresh()
                 await stores.reels.refresh()
+                beginIngestJobTracking(jobId: resp.jobId, reelId: resp.reelId, apiClient: apiClient, stores: stores)
             } catch {
                 if let apiErr = error as? APIError, case .httpError(let status, _) = apiErr, status == 401 {
                     ShareQueueStore.resetToPending(id: item.id)
@@ -120,8 +129,33 @@ final class ShareIngressCoordinator: ObservableObject {
             return s.lowercased()
         }()
         ingestScanState = IngestScanState(jobId: jobNorm, reelId: reelNorm)
-        Task { [weak self] in
-            await self?.pollUntilSettled(apiClient: apiClient, jobId: jobNorm, stores: stores)
+        if activeIngestPollJobIds.contains(jobNorm) { return }
+        activeIngestPollJobIds.insert(jobNorm)
+        Task { @MainActor [weak self] in
+            defer { self?.activeIngestPollJobIds.remove(jobNorm) }
+            await self?.finishBannerPollAfterTerminal(apiClient: apiClient, jobId: jobNorm, stores: stores)
+        }
+    }
+
+    /// When the reels grid still has `processing` rows (e.g. cold launch), poll each distinct `jobId` ~1s until terminal without requiring a share handoff.
+    func ensurePollingForProcessingReels(apiClient: APIClient, stores: RoamStores) {
+        guard apiClient.isUserSignedIn else { return }
+        for reel in stores.reels.reels where reel.status == "processing" {
+            let jid = reel.jobId.uuidString.lowercased()
+            guard !activeIngestPollJobIds.contains(jid) else { continue }
+            activeIngestPollJobIds.insert(jid)
+            Task { @MainActor [weak self] in
+                defer { self?.activeIngestPollJobIds.remove(jid) }
+                let outcome = await self?.pollIngestJobUntilTerminal(apiClient: apiClient, jobId: jid, stores: stores) ?? .timeout
+                switch outcome {
+                case .done:
+                    break
+                case .failed(let msg):
+                    self?.lastError = msg
+                case .timeout:
+                    self?.lastError = "Ingest timed out"
+                }
+            }
         }
     }
 
@@ -133,7 +167,7 @@ final class ShareIngressCoordinator: ObservableObject {
         return nil
     }
 
-    private func pollUntilSettled(apiClient: APIClient, jobId: String, stores: RoamStores) async {
+    private func pollIngestJobUntilTerminal(apiClient: APIClient, jobId: String, stores: RoamStores) async -> IngestPollOutcome {
         let maxAttempts = 120
         for attempt in 0..<maxAttempts {
             if attempt > 0 {
@@ -145,16 +179,13 @@ final class ShareIngressCoordinator: ObservableObject {
                 case "done":
                     await stores.ideas.refresh()
                     await stores.reels.refresh()
-                    ingestScanState = nil
-                    return
+                    return .done
                 case "failed":
                     await stores.ideas.refresh()
                     await stores.reels.refresh()
                     let trimmed = job.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     let msg = trimmed.isEmpty ? "Ingest failed" : trimmed
-                    ingestScanState = nil
-                    lastError = msg
-                    return
+                    return .failed(msg)
                 default:
                     break
                 }
@@ -165,7 +196,19 @@ final class ShareIngressCoordinator: ObservableObject {
 
         await stores.ideas.refresh()
         await stores.reels.refresh()
+        return .timeout
+    }
+
+    private func finishBannerPollAfterTerminal(apiClient: APIClient, jobId: String, stores: RoamStores) async {
+        let outcome = await pollIngestJobUntilTerminal(apiClient: apiClient, jobId: jobId, stores: stores)
         ingestScanState = nil
-        lastError = "Ingest timed out"
+        switch outcome {
+        case .done:
+            break
+        case .failed(let msg):
+            lastError = msg
+        case .timeout:
+            lastError = "Ingest timed out"
+        }
     }
 }

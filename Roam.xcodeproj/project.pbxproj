@@ -62,6 +62,7 @@
 				SharedItem.swift,
 				SharedStore.swift,
 				ShareQueue/QueuedReelIngest.swift,
+				ShareQueue/ReelsGridPreviewSnapshot.swift,
 				ShareQueue/ShareQueueStore.swift,
 			);
 			target = 4567DC572F4A9AB4001700F7 /* reel-ingestion */;

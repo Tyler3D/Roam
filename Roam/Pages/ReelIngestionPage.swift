@@ -68,23 +68,28 @@ struct ReelsPage: View {
                 }
             }
             .refreshable {
+                await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
                 await stores.reels.refresh()
+                shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
             }
             .onAppear {
                 reloadLocal()
-                Task { await stores.reels.refresh() }
+                shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     reloadLocal()
                     Task {
-                        await stores.reels.refresh()
                         await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+                        await stores.reels.refresh()
+                        shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
                     }
                 }
             }
             .task {
                 await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
+                await stores.reels.refresh()
+                shareIngress.ensurePollingForProcessingReels(apiClient: apiClient, stores: stores)
             }
         }
     }
@@ -118,11 +123,14 @@ struct ReelsPage: View {
     @ViewBuilder
     private func queuedReelCell(_ q: QueuedReelIngest) -> some View {
         let uploadFailed = q.uploadStatus == .failed
+        let deviceProcessing = !uploadFailed
+            && (q.uploadStatus == .pendingUpload || q.uploadStatus == .uploading)
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topTrailing) {
                     Color.clear
                         .aspectRatio(Self.gridThumbnailAspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
                         .overlay {
                             Group {
                                 if let path = ShareQueueStore.thumbnailFileURL(for: q),
@@ -137,7 +145,7 @@ struct ReelsPage: View {
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    if !uploadFailed {
+                    if !uploadFailed, !deviceProcessing {
                         Text(queuedStatusChip(q.uploadStatus))
                             .font(RoamFont.mono(8, weight: .medium))
                             .padding(.horizontal, 6)
@@ -152,6 +160,13 @@ struct ReelsPage: View {
                     ReelAttentionRibbon(title: "Upload failed", fill: RoamColors.error)
                         .padding(.top, 6)
                         .padding(.leading, 6)
+                } else if deviceProcessing {
+                    ReelAttentionRibbon(
+                        title: q.uploadStatus == .uploading ? "Uploading…" : "Reel processing",
+                        fill: RoamColors.processingTeal
+                    )
+                    .padding(.top, 6)
+                    .padding(.leading, 6)
                 }
             }
 
@@ -163,7 +178,10 @@ struct ReelsPage: View {
         .padding(2)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(uploadFailed ? RoamColors.error : Color.clear, lineWidth: uploadFailed ? 2.5 : 0)
+                .stroke(
+                    uploadFailed ? RoamColors.error : (deviceProcessing ? RoamColors.processingTeal : Color.clear),
+                    lineWidth: uploadFailed || deviceProcessing ? 2.5 : 0
+                )
         )
     }
 
@@ -289,6 +307,7 @@ struct ReelsPage: View {
                 ZStack(alignment: .topTrailing) {
                     Color.clear
                         .aspectRatio(Self.gridThumbnailAspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
                         .overlay {
                             ReelThumbnailImageView(reelId: reel.id, signedUrl: reel.thumbnailSignedUrl, contentMode: .fill)
                         }
@@ -393,26 +412,28 @@ struct ReelsPage: View {
 private enum ReelCellAttention {
     case none
     case scanning
+    case processing
     case needsReview
     case failed
 
     static func forSavedReel(_ reel: APIClient.SavedReelListItemDTO, scanReelId: String?) -> ReelCellAttention {
-        switch reel.status {
-        case "failed": return .failed
-        case "needs_review": return .needsReview
-        default: break
-        }
         let rid = reel.id.uuidString.lowercased()
         if let s = scanReelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty, s == rid {
             return .scanning
         }
-        return .none
+        switch reel.status {
+        case "failed": return .failed
+        case "needs_review": return .needsReview
+        case "processing": return .processing
+        default: return .none
+        }
     }
 
     var outlineColor: Color {
         switch self {
         case .none: return .clear
         case .scanning: return RoamColors.loganDeep
+        case .processing: return RoamColors.processingTeal
         case .needsReview: return RoamColors.actionRequired
         case .failed: return RoamColors.error
         }
@@ -422,13 +443,14 @@ private enum ReelCellAttention {
         switch self {
         case .none: return 0
         case .scanning: return 2
-        case .needsReview, .failed: return 2.5
+        case .processing, .needsReview, .failed: return 2.5
         }
     }
 
     var ribbon: (title: String, fill: Color)? {
         switch self {
         case .scanning: return ("Searching…", RoamColors.loganDeep)
+        case .processing: return ("Reel processing", RoamColors.processingTeal)
         case .needsReview: return ("Action required", RoamColors.actionRequired)
         case .failed: return ("Upload failed", RoamColors.error)
         case .none: return nil
@@ -437,7 +459,7 @@ private enum ReelCellAttention {
 
     var showTrailingStatusChip: Bool {
         switch self {
-        case .scanning, .needsReview, .failed: return false
+        case .scanning, .processing, .needsReview, .failed: return false
         case .none: return true
         }
     }

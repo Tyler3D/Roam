@@ -60,6 +60,18 @@ final class ReelsQueryStore {
             reels: reels
         )
         SavedReelsListDiskCache.save(userId: uid, envelope: envelope)
+        let previewTiles = reels.prefix(ReelsGridPreviewSnapshot.maxTileCount).map { r in
+            ReelsGridPreviewTile(id: r.id.uuidString.lowercased(), title: Self.previewLine(for: r))
+        }
+        ReelsGridPreviewSnapshot.removeAllPreviewThumbnails()
+        ReelsGridPreviewSnapshot.save(tiles: Array(previewTiles))
+        Self.copyDiskThumbnailsToAppGroup(for: Array(reels.prefix(ReelsGridPreviewSnapshot.maxTileCount)))
+    }
+
+    private static func previewLine(for r: APIClient.SavedReelListItemDTO) -> String {
+        let t = r.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { return String(t.prefix(240)) }
+        return String(r.reelUrl.prefix(240))
     }
 
     private func mergeSummaryIntoDiskCache() {
@@ -71,5 +83,21 @@ final class ReelsQueryStore {
             reels: existing.reels
         )
         SavedReelsListDiskCache.save(userId: uid, envelope: merged)
+        let previewTiles = existing.reels.prefix(ReelsGridPreviewSnapshot.maxTileCount).map { r in
+            ReelsGridPreviewTile(id: r.id.uuidString.lowercased(), title: Self.previewLine(for: r))
+        }
+        ReelsGridPreviewSnapshot.removeAllPreviewThumbnails()
+        ReelsGridPreviewSnapshot.save(tiles: Array(previewTiles))
+        Self.copyDiskThumbnailsToAppGroup(for: Array(existing.reels.prefix(ReelsGridPreviewSnapshot.maxTileCount)))
+    }
+
+    private static func copyDiskThumbnailsToAppGroup(for reels: [APIClient.SavedReelListItemDTO]) {
+        for r in reels {
+            guard let data = ReelThumbnailDiskCache.load(reelId: r.id), !data.isEmpty else { continue }
+            ReelsGridPreviewSnapshot.writePreviewThumbnail(
+                reelIdLowercased: r.id.uuidString.lowercased(),
+                jpegData: data
+            )
+        }
     }
 }

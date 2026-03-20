@@ -95,6 +95,7 @@ final class AuthManager {
             user = nil
             ReelThumbnailDiskCache.clearAll()
             SavedReelsListDiskCache.clearAll()
+            ReelsGridPreviewSnapshot.clear()
         } catch {
             errorMessage = error.localizedDescription
         }

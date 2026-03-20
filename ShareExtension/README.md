@@ -1,5 +1,11 @@
 # ShareExtension (reference only)
 
-This folder is **not** wired as an Xcode target in `Roam.xcodeproj`. The app embeds and ships the **`reel-ingestion`** share extension (`reel-ingestion/`), which uses the same flow: extract URL/text → `SharedStore.save` → app group `group.columbiastartupstudio.Roam`.
+This folder is **not** wired as an Xcode target in `Roam.xcodeproj`. The app embeds and ships the **`reel-ingestion`** share extension (`reel-ingestion/`), which:
 
-Files here mirror that logic for documentation or future extraction into a shared framework. Edit **`reel-ingestion/ShareViewController.swift`** for behavior changes.
+1. Extracts URL/text from the share sheet  
+2. Enqueues into app-group [`ShareQueueStore`](../Roam/ShareQueue/ShareQueueStore.swift) and runs [`ReelMetadataService`](../Roam/Services/ReelMetadataService.swift)  
+3. Presents [`ShareReelsConfirmationView`](../reel-ingestion/ShareReelsConfirmationView.swift) (reels-style grid + “Reel saved” ribbon) before dismissing  
+
+The main app writes a slim [`ReelsGridPreviewSnapshot`](../Roam/ShareQueue/ReelsGridPreviewSnapshot.swift) into the app group when reels refresh so the extension can show placeholder tiles next to the new item.
+
+Edit **`reel-ingestion/ShareViewController.swift`** and **`reel-ingestion/ShareReelsConfirmationView.swift`** for share UX changes.

@@ -25,6 +25,9 @@ enum RoamColors {
     /// Reels grid: outline for items that need a user decision (review / promote).
     static let actionRequired = Color(red: 52 / 255, green: 120 / 255, blue: 246 / 255)
 
+    /// Reels grid / device queue: server `processing` or pending upload to Roam.
+    static let processingTeal = Color(red: 32 / 255, green: 150 / 255, blue: 155 / 255)
+
     /// Glass bar tint over material blur (see `.glass-bar` in frontend `index.css`).
     static let glassTint = Color(red: 245 / 255, green: 243 / 255, blue: 250 / 255).opacity(0.92)
 

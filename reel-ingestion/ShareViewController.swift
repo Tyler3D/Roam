@@ -1,12 +1,13 @@
+import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Saves the share payload into the app-group [`ShareQueueStore`](Roam/ShareQueue/ShareQueueStore.swift), enriches with
-/// [`ReelMetadataService`](Roam/Services/ReelMetadataService.swift), then dismisses **without** launching the host app.
+/// Saves the share payload into the app-group queue, enriches with metadata, then shows a reels-style confirmation before dismissing.
 final class ShareViewController: UIViewController {
 
     private let extractTimeoutSeconds: TimeInterval = 2
     private var didFinishExtension = false
+    private var hostingChild: UIViewController?
 
     override func loadView() {
         let v = UIView()
@@ -22,7 +23,7 @@ final class ShareViewController: UIViewController {
 
     private func extractAndSave() {
         guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            saveQueueAndClose(url: nil, text: nil, typeIds: [])
+            saveQueueAndFinish(url: nil, text: nil, typeIds: [])
             return
         }
 
@@ -48,7 +49,7 @@ final class ShareViewController: UIViewController {
         mergeFromAttributedItems()
 
         if sharedURL != nil || !(sharedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
-            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            saveQueueAndFinish(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
             return
         }
 
@@ -106,7 +107,7 @@ final class ShareViewController: UIViewController {
         func completeExtraction() {
             guard !didScheduleCompletion else { return }
             didScheduleCompletion = true
-            saveQueueAndClose(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
+            saveQueueAndFinish(url: sharedURL, text: sharedText, typeIds: typeIdentifiers)
         }
 
         group.notify(queue: .main) {
@@ -118,7 +119,7 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    private func saveQueueAndClose(url: String?, text: String?, typeIds: [String]) {
+    private func saveQueueAndFinish(url: String?, text: String?, typeIds: [String]) {
         let reelUrl: String? = {
             if let u = url?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
             if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -128,17 +129,75 @@ final class ShareViewController: UIViewController {
             return nil
         }()
         guard let u = reelUrl else {
-            closeExtension()
+            presentNoLinkChrome()
             return
         }
 
         let id = ShareQueueStore.enqueue(reelUrl: u, shareText: text, attachmentTypeIdentifiers: typeIds)
         Task { @MainActor in
-            defer { closeExtension() }
-            guard let urlObj = URL(string: u) else { return }
+            guard let urlObj = URL(string: u) else {
+                presentNoLinkChrome()
+                return
+            }
             let pack = await ReelMetadataService.extract(url: urlObj, shareText: text)
             ShareQueueStore.attachPack(id: id, pack: pack)
+            presentConfirmation(queueItemId: id)
         }
+    }
+
+    private func presentNoLinkChrome() {
+        let root = ShareExtensionNoLinkView { [weak self] in
+            self?.teardownHostingAndComplete()
+        }
+        embedFullScreen(UIHostingController(rootView: root))
+    }
+
+    private func presentConfirmation(queueItemId: UUID) {
+        let root = ShareReelsConfirmationView(
+            queueItemId: queueItemId,
+            onDone: { [weak self] in
+                self?.teardownHostingAndComplete()
+            },
+            onOpenRoam: { [weak self] in
+                self?.openRoamAppThenFinish()
+            }
+        )
+        embedFullScreen(UIHostingController(rootView: root))
+    }
+
+    private func embedFullScreen<V: View>(_ host: UIHostingController<V>) {
+        teardownHosting()
+        host.view.backgroundColor = .clear
+        addChild(host)
+        view.addSubview(host.view)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        host.didMove(toParent: self)
+        hostingChild = host
+    }
+
+    private func teardownHosting() {
+        hostingChild?.willMove(toParent: nil)
+        hostingChild?.view.removeFromSuperview()
+        hostingChild?.removeFromParent()
+        hostingChild = nil
+    }
+
+    private func teardownHostingAndComplete() {
+        teardownHosting()
+        closeExtension()
+    }
+
+    private func openRoamAppThenFinish() {
+        if let url = URL(string: "roam://share") {
+            extensionContext?.open(url, completionHandler: nil)
+        }
+        teardownHostingAndComplete()
     }
 
     private func closeExtension() {
