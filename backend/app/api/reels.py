@@ -35,8 +35,17 @@ logger = logging.getLogger("roam.reels")
 reelsRouter = APIRouter()
 
 
-def _thumbUrl(path: str | None) -> str | None:
-    return signedUrlForObject(path) if path else None
+def _thumbUrl(path: str | None, *, reelId: str | None = None) -> str | None:
+    if not path:
+        return None
+    url = signedUrlForObject(path)
+    if url is None:
+        logger.debug(
+            "reel_thumbnail_signed_url_unavailable reelId=%s objectPath=%s",
+            reelId or "",
+            path,
+        )
+    return url
 
 
 def _pendingCandidatesExist():
@@ -95,7 +104,7 @@ def listReels(
                 reelUrl=r.reelUrl,
                 title=r.title,
                 status=r.status,
-                thumbnailSignedUrl=_thumbUrl(r.thumbnailObjectPath),
+                thumbnailSignedUrl=_thumbUrl(r.thumbnailObjectPath, reelId=str(r.id)),
                 createdAt=r.createdAt,
                 updatedAt=r.updatedAt,
             )
@@ -216,7 +225,7 @@ def getReel(
         reelUrl=r.reelUrl,
         title=r.title,
         status=r.status,
-        thumbnailSignedUrl=_thumbUrl(r.thumbnailObjectPath),
+        thumbnailSignedUrl=_thumbUrl(r.thumbnailObjectPath, reelId=str(r.id)),
         jobStatus=jobStatusVal,
         jobError=jobErr,
         candidates=candReads,

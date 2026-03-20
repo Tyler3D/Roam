@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form
@@ -16,7 +17,7 @@ from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSu
 from app.models.places import PlaceModel
 from app.models.savedReels import SavedReelModel, SavedReelStatus
 from app.models.users import UserModel
-from app.services.gcsReels import uploadReelThumbnail
+from app.services.gcsReels import gcsReelsConfigured, uploadReelThumbnail
 from app.services.reelIngestion import processIngestionJob
 
 logger = logging.getLogger("roam.ingest")
@@ -26,6 +27,33 @@ ingestRouter = APIRouter()
 # Upload limits for stability and abuse prevention (tune as needed)
 MAX_FRAMES = 10
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB total for thumbnail + all frames
+
+
+def _duplicateIngestPayload(session: Session, user: UserModel, reelUrl: str) -> dict | None:
+    """If this user already has a job for reelUrl, return the same JSON shape as a duplicate 202."""
+    existing = session.exec(
+        select(IngestionJobModel).where(
+            IngestionJobModel.userId == user.id,
+            IngestionJobModel.reelUrl == reelUrl,
+        )
+    ).first()
+    if not existing:
+        return None
+    payload: dict = {"jobId": str(existing.id), "status": existing.status.value}
+    sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == existing.id)).first()
+    if sr:
+        payload["reelId"] = str(sr.id)
+    if existing.status == JobStatus.done:
+        prs = session.exec(
+            select(PipelineResultModel)
+            .where(PipelineResultModel.jobId == existing.id)
+            .order_by(col(PipelineResultModel.createdAt).asc())
+        ).all()
+        ideaIds = [str(p.ideaId) for p in prs if p.ideaId]
+        if ideaIds:
+            payload["ideaIds"] = ideaIds
+            payload["ideaId"] = ideaIds[0]
+    return payload
 
 
 def _initialSavedReelTitle(
@@ -94,6 +122,23 @@ async def createIngestionJob(
             f"Upload too large ({(totalBytes / (1024 * 1024)):.1f} MB); maximum is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
         )
 
+    reel_host = ""
+    try:
+        reel_host = urlparse(reelUrl).netloc or ""
+    except Exception:
+        pass
+    thumb_len = len(thumbnailData) if thumbnailData else 0
+    logger.info(
+        "ingest_multipart_received userId=%s reelHost=%s frameCount=%d thumbnailBytes=%d "
+        "totalMultipartBytes=%d gcsConfigured=%s",
+        user.id,
+        reel_host[:200] if reel_host else "?",
+        len(framesData),
+        thumb_len,
+        totalBytes,
+        gcsReelsConfigured(),
+    )
+
     job = IngestionJobModel(
         userId=user.id,
         reelUrl=reelUrl,
@@ -104,11 +149,39 @@ async def createIngestionJob(
         status=JobStatus.processing,
     )
     session.add(job)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError:
+        payload = handleIntegrityConflict(
+            session,
+            lambda: _duplicateIngestPayload(session, user, reelUrl),
+            "Duplicate reel URL",
+        )
+        logger.info(
+            "ingest_duplicate_reel_url userId=%s reelHost=%s phase=flush",
+            user.id,
+            reel_host[:200] if reel_host else "?",
+        )
+        return JSONResponse(status_code=202, content=payload)
 
     thumbPath = None
     if thumbnailData:
         thumbPath = uploadReelThumbnail(user_id=user.id, job_id=job.id, data=thumbnailData)
+        if thumbPath is None:
+            logger.warning(
+                "ingest_thumbnail_bytes_not_persisted jobId=%s userId=%s thumbnailBytes=%d gcsConfigured=%s",
+                job.id,
+                user.id,
+                thumb_len,
+                gcsReelsConfigured(),
+            )
+    else:
+        logger.info(
+            "ingest_no_thumbnail_in_request jobId=%s userId=%s gcsConfigured=%s",
+            job.id,
+            user.id,
+            gcsReelsConfigured(),
+        )
 
     savedReel = SavedReelModel(
         userId=user.id,
@@ -125,32 +198,16 @@ async def createIngestionJob(
         session.refresh(job)
         session.refresh(savedReel)
     except IntegrityError:
-        def lookupExisting() -> dict | None:
-            existing = session.exec(
-                select(IngestionJobModel).where(
-                    IngestionJobModel.userId == user.id,
-                    IngestionJobModel.reelUrl == reelUrl,
-                )
-            ).first()
-            if not existing:
-                return None
-            payload: dict = {"jobId": str(existing.id), "status": existing.status.value}
-            sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == existing.id)).first()
-            if sr:
-                payload["reelId"] = str(sr.id)
-            if existing.status == JobStatus.done:
-                prs = session.exec(
-                    select(PipelineResultModel)
-                    .where(PipelineResultModel.jobId == existing.id)
-                    .order_by(col(PipelineResultModel.createdAt).asc())
-                ).all()
-                ideaIds = [str(p.ideaId) for p in prs if p.ideaId]
-                if ideaIds:
-                    payload["ideaIds"] = ideaIds
-                    payload["ideaId"] = ideaIds[0]
-            return payload
-
-        payload = handleIntegrityConflict(session, lookupExisting, "Duplicate reel URL")
+        payload = handleIntegrityConflict(
+            session,
+            lambda: _duplicateIngestPayload(session, user, reelUrl),
+            "Duplicate reel URL",
+        )
+        logger.info(
+            "ingest_duplicate_reel_url userId=%s reelHost=%s phase=commit",
+            user.id,
+            reel_host[:200] if reel_host else "?",
+        )
         return JSONResponse(status_code=202, content=payload)
 
     metadata = {
@@ -164,8 +221,13 @@ async def createIngestionJob(
     backgroundTasks.add_task(processIngestionJob, str(job.id), framesData, thumbnailData, metadata)
 
     logger.info(
-        "ingest_job_created",
-        extra={"jobId": str(job.id), "reelUrl": reelUrl, "reelId": str(savedReel.id)},
+        "ingest_job_created jobId=%s reelId=%s userId=%s reelHost=%s thumbnailStored=%s thumbnailObjectPath=%s",
+        job.id,
+        savedReel.id,
+        user.id,
+        reel_host[:200] if reel_host else "?",
+        thumbPath is not None,
+        thumbPath or "",
     )
     return {"jobId": str(job.id), "status": "processing", "reelId": str(savedReel.id)}
 

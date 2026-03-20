@@ -55,19 +55,56 @@ def gcsReelsConfigured() -> bool:
 
 
 def uploadReelThumbnail(*, user_id: UUID, job_id: UUID, data: bytes, content_type: str = "image/jpeg") -> str | None:
-    """Return object path relative to bucket, or None if GCS not configured."""
-    client = _client()
+    """Return object path relative to bucket, or None if GCS not configured or upload fails."""
+    if not data:
+        return None
+    if not getGcsServiceAccountJson():
+        logger.warning(
+            "gcs_thumbnail_upload_skipped reason=missing_GCS_SERVICE_ACCOUNT_JSON jobId=%s userId=%s",
+            job_id,
+            user_id,
+        )
+        return None
     bucket_name = getGcsReelBucketName()
-    if not client or not bucket_name or not data:
+    if not bucket_name:
+        logger.warning(
+            "gcs_thumbnail_upload_skipped reason=missing_GCS_REEL_BUCKET_NAME jobId=%s userId=%s",
+            job_id,
+            user_id,
+        )
+        return None
+    client = _client()
+    if not client:
+        logger.warning(
+            "gcs_thumbnail_upload_skipped reason=gcs_client_unavailable jobId=%s userId=%s "
+            "(check invalid SA JSON; see prior roam.gcsReels errors)",
+            job_id,
+            user_id,
+        )
         return None
     path = f"reels/{user_id}/{job_id}/thumb.jpg"
     try:
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(path)
         blob.upload_from_string(data, content_type=content_type)
+        logger.info(
+            "gcs_thumbnail_uploaded jobId=%s userId=%s bucket=%s objectPath=%s bytes=%d contentType=%s",
+            job_id,
+            user_id,
+            bucket_name,
+            path,
+            len(data),
+            content_type,
+        )
         return path
     except Exception:
-        logger.exception("gcs_upload_failed", extra={"path": path})
+        logger.exception(
+            "gcs_upload_failed bucket=%s objectPath=%s jobId=%s userId=%s",
+            bucket_name,
+            path,
+            job_id,
+            user_id,
+        )
         return None
 
 
