@@ -20,7 +20,3 @@ export const firebaseAuth = getAuth(firebaseApp);
  * Set VITE_FIREBASE_AUTH_DOMAIN to your real site host (e.g. roam-alpha.web.app).
  * @see https://firebase.google.com/docs/auth/web/redirect-best-practices
  */
-if (typeof window !== "undefined") {
-  console.log("[roam-auth] firebaseConfig", firebaseConfig);
-}
-
