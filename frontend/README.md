@@ -78,6 +78,19 @@ This project is built with:
 
 The `firebase.json` in this folder is already set to use `dist` as the public directory and to rewrite all routes to `/index.html` for the SPA.
 
+### Google `signInWithRedirect` on `*.web.app`
+
+If users return from Google still logged out and `getRedirectResult` logs “no user”, your **`authDomain` is almost certainly wrong for Hosting**.
+
+1. Set **`VITE_FIREBASE_AUTH_DOMAIN`** (GitHub Actions secret / `.env`) to the **same host** users use in the browser, e.g. `roam-alpha.web.app` — **not** `roam-alpha.firebaseapp.com`.
+2. In **Firebase Console → Authentication → Settings → Authorized domains**, keep that host listed.
+3. In **Google Cloud Console → APIs & Services → Credentials → your Web OAuth client**, add **Authorized redirect URI**:  
+   `https://<YOUR_HOST>/__/auth/handler`  
+   (same host as step 1; the `/__/auth/handler` path is required).
+
+Why: Firebase documents that apps on Firebase Hosting’s **`web.app` subdomain** must use that domain as `authDomain` so the auth helper isn’t third-party storage (Chrome / Firefox / Safari block it otherwise).  
+[Redirect best practices](https://firebase.google.com/docs/auth/web/redirect-best-practices)
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
