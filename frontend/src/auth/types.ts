@@ -6,6 +6,8 @@ export type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<User>;
   signUp: (email: string, password: string) => Promise<User>;
   signInWithGoogle: () => Promise<void>;
+  /** Google sign-in users only: OAuth redirect/popup with Calendar scope (optional; requires verified OAuth app for all users). */
+  requestGoogleCalendarAccess: () => Promise<void>;
   signOutUser: () => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;

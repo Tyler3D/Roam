@@ -10,6 +10,7 @@ import {
   signInWithRedirect,
   signOut,
   type User,
+  type UserInfo,
 } from "firebase/auth";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -61,8 +62,10 @@ export function useAuthSessionValue(
         return credential.user;
       },
       signInWithGoogle: async () => {
+        // Keep sign-in to default Firebase Google scopes only. Requesting
+        // calendar.events here triggers Google's "unverified app" sensitive-scope
+        // flow and often breaks redirect sign-in before the user is created.
         const provider = new GoogleAuthProvider();
-        provider.addScope("https://www.googleapis.com/auth/calendar.events");
         if (import.meta.env.DEV) {
           console.log("[roam-auth] signInWithPopup (local dev)");
           const result = await signInWithPopup(firebaseAuth, provider);
@@ -72,6 +75,26 @@ export function useAuthSessionValue(
           }
         } else {
           console.log("[roam-auth] signInWithRedirect");
+          await signInWithRedirect(firebaseAuth, provider);
+        }
+      },
+      requestGoogleCalendarAccess: async () => {
+        const u = firebaseAuth.currentUser;
+        const isGoogle =
+          u?.providerData.some((p: UserInfo) => p.providerId === "google.com") ??
+          false;
+        if (!u || !isGoogle) {
+          throw new Error("Sign in with Google first to connect Calendar.");
+        }
+        const provider = new GoogleAuthProvider();
+        provider.addScope("https://www.googleapis.com/auth/calendar.events");
+        if (import.meta.env.DEV) {
+          const result = await signInWithPopup(firebaseAuth, provider);
+          const payload = readGoogleOAuthFromUserCredential(result);
+          if (payload) {
+            storeOAuthToken.mutate(payload, { onError: () => {} });
+          }
+        } else {
           await signInWithRedirect(firebaseAuth, provider);
         }
       },

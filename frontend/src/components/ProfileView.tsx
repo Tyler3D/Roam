@@ -1,4 +1,5 @@
 import { useDeferredValue, useState } from "react";
+import type { UserInfo } from "firebase/auth";
 import { useAuth } from "@/auth";
 import { useMe, useSearchUsers } from "@/api/users";
 import { useFriends, useFriendRequests, useAcceptFriendRequest, useSendFriendRequest } from "@/api/friends";
@@ -8,7 +9,10 @@ import type { Friendship } from "@/models/friendship";
 import type { User } from "@/models/user";
 
 export default function ProfileView() {
-  const { user, signOutUser } = useAuth();
+  const { user, signOutUser, requestGoogleCalendarAccess } = useAuth();
+  const isGoogleUser =
+    user?.providerData.some((p: UserInfo) => p.providerId === "google.com") ??
+    false;
   const { data: profile } = useMe();
   const { data: friends = [] } = useFriends();
   const { data: requests = [] } = useFriendRequests();
@@ -16,6 +20,7 @@ export default function ProfileView() {
   const sendRequest = useSendFriendRequest();
 
   const [searchInput, setSearchInput] = useState("");
+  const [calendarConnectError, setCalendarConnectError] = useState("");
   const deferredQuery = useDeferredValue(searchInput.trim());
   const { data: searchResults = [], isFetching } = useSearchUsers(deferredQuery);
 
@@ -114,6 +119,36 @@ export default function ProfileView() {
           </div>
         )}
       </div>
+
+      {isGoogleUser && (
+        <div className="anim d3b mb-6 text-center">
+          <p className="label-mono mb-2.5">google calendar</p>
+          <p className="font-notes text-[12px] text-roam-text-muted mb-2.5 px-1">
+            Connect so plans can create events on your calendar (optional).
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              setCalendarConnectError("");
+              try {
+                await requestGoogleCalendarAccess();
+              } catch (e: unknown) {
+                setCalendarConnectError(
+                  e instanceof Error ? e.message : "Could not connect Calendar",
+                );
+              }
+            }}
+            className="font-mono text-[10px] tracking-[1px] uppercase bg-roam-surface border border-roam-logan/25 rounded-xl py-2.5 px-4 text-roam-text cursor-pointer w-full max-w-xs"
+          >
+            connect calendar
+          </button>
+          {calendarConnectError && (
+            <p className="font-mono text-[11px] text-roam-error mt-2 m-0">
+              {calendarConnectError}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="anim d4 text-center">
         <button onClick={() => signOutUser()} className="font-mono text-[11px] text-roam-text-muted bg-transparent border-none cursor-pointer py-3 px-5">sign out</button>

@@ -34,7 +34,18 @@ export function useProcessGoogleOAuthRedirect() {
     queryKey: ["auth", "googleRedirectResult"],
     queryFn: async () => {
       console.log("[roam-auth] calling getRedirectResult");
-      const result = await getRedirectResult(firebaseAuth);
+      let result: Awaited<ReturnType<typeof getRedirectResult>>;
+      try {
+        result = await getRedirectResult(firebaseAuth);
+      } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        console.error(
+          "[roam-auth] getRedirectResult error",
+          err?.code ?? e,
+          err?.message,
+        );
+        return null;
+      }
       console.log(
         "[roam-auth] getRedirectResult done",
         result?.user?.uid ?? "no user",
