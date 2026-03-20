@@ -1,6 +1,6 @@
 # Entity Relationship Diagram
 
-Reflects `sql/schema.sql` (including `pipeline_results.promptVersion` and `user_oauth_tokens`).
+Reflects `sql/schema.sql` (including `pipeline_results.promptVersion` and `user_oauth_tokens`). For **request/infrastructure** flow, see [ARCHITECTURE.md](ARCHITECTURE.md). For **HTTP JSON types** generated from FastAPI, see [OPENAPI.md](OPENAPI.md).
 
 ```mermaid
 erDiagram
