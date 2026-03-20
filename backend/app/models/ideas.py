@@ -28,6 +28,7 @@ class IdeaWithPlanCountView(SQLModel, table=True):
     sourceUrl: str = Field(default="")
     displayName: Optional[str] = Field(default=None)
     placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    savedReelId: Optional[UUID] = Field(default=None, foreign_key="saved_reels.id")
     status: IdeaStatus = Field(
         sa_column=Column(
             SAEnum(IdeaStatus, name="ideaStatus", create_type=False),
@@ -49,6 +50,7 @@ class IdeaModel(SQLModel, table=True):
     sourceUrl: str = Field(default="")
     displayName: Optional[str] = Field(default=None)
     placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    savedReelId: Optional[UUID] = Field(default=None, foreign_key="saved_reels.id")
     status: IdeaStatus = Field(
         sa_column=Column(
             SAEnum(IdeaStatus, name="ideaStatus", create_type=False),
@@ -75,6 +77,7 @@ class IdeaRead(SQLModel):
     sourceUrl: str
     displayName: Optional[str] = None
     placeId: Optional[UUID] = None
+    savedReelId: Optional[UUID] = None
     status: IdeaStatus
     planCount: int = 0
     createdAt: datetime
@@ -91,3 +94,4 @@ class IdeaUpdate(SQLModel):
     sourceUrl: Optional[str] = None
     displayName: Optional[str] = None
     status: Optional[IdeaStatus] = None
+    placeId: Optional[UUID] = None

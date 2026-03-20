@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS "ideas" (
   "placeId"       uuid REFERENCES "places"("id") ON DELETE SET NULL,
   "displayName"  text,
   "status"        "ideaStatus" NOT NULL DEFAULT 'captured',
+  "savedReelId"   uuid,
   "createdAt"     timestamptz NOT NULL DEFAULT now(),
   "updatedAt"     timestamptz NOT NULL DEFAULT now()
 );
@@ -134,6 +135,9 @@ CREATE INDEX IF NOT EXISTS "idx_ideas_userId"
 
 CREATE INDEX IF NOT EXISTS "idx_ideas_status"
   ON "ideas" ("status");
+
+CREATE INDEX IF NOT EXISTS "idx_ideas_savedReelId"
+  ON "ideas" ("savedReelId", "createdAt" DESC);
 
 -- ============================================================
 -- Plans
@@ -279,6 +283,44 @@ CREATE TABLE IF NOT EXISTS "reel_ingestion_jobs" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "unique_user_reel"
   ON "reel_ingestion_jobs" ("userId", "reelUrl");
+
+-- ============================================================
+-- Saved reels (server-side grid + GCS thumbnail)
+-- ============================================================
+
+CREATE TYPE "savedReelStatus" AS ENUM ('processing', 'needs_review', 'promoted', 'failed');
+
+CREATE TABLE IF NOT EXISTS "saved_reels" (
+  "id"                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"              uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "jobId"               uuid NOT NULL UNIQUE REFERENCES "reel_ingestion_jobs"("id") ON DELETE CASCADE,
+  "thumbnailObjectPath" text,
+  "reelUrl"             text NOT NULL,
+  "title"               text NOT NULL DEFAULT '',
+  "status"              "savedReelStatus" NOT NULL DEFAULT 'processing',
+  "createdAt"           timestamptz NOT NULL DEFAULT now(),
+  "updatedAt"           timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "idx_saved_reels_userId_createdAt"
+  ON "saved_reels" ("userId", "createdAt" DESC);
+
+ALTER TABLE "ideas" DROP CONSTRAINT IF EXISTS "ideas_savedReelId_fkey";
+ALTER TABLE "ideas" ADD CONSTRAINT "ideas_savedReelId_fkey"
+  FOREIGN KEY ("savedReelId") REFERENCES "saved_reels"("id") ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS "reel_ingest_candidates" (
+  "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "savedReelId"      uuid NOT NULL REFERENCES "saved_reels"("id") ON DELETE CASCADE,
+  "sortIndex"        integer NOT NULL DEFAULT 0,
+  "llmRawOutput"     jsonb NOT NULL DEFAULT '{}',
+  "resolvedPlaceId"  uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "promotedIdeaId"   uuid REFERENCES "ideas"("id") ON DELETE SET NULL,
+  "createdAt"        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "idx_reel_ingest_candidates_savedReelId_sort"
+  ON "reel_ingest_candidates" ("savedReelId", "sortIndex");
 
 -- ============================================================
 -- Pipeline Results (unified output from scribble + reel pipelines)

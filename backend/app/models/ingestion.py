@@ -22,7 +22,6 @@ class IngestionJobModel(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     userId: UUID = Field(foreign_key="users.id", nullable=False, index=True)
-    ideaId: Optional[UUID] = Field(default=None, foreign_key="ideas.id", nullable=True)
     reelUrl: str = Field(nullable=False)
     shareText: Optional[str] = None
     reelTitle: Optional[str] = None
@@ -51,7 +50,6 @@ class IngestionJobCreate(SQLModel):
 class IngestionJobRead(SQLModel):
     id: UUID
     userId: UUID
-    ideaId: Optional[UUID] = None
     reelUrl: str
     shareText: Optional[str] = None
     reelTitle: Optional[str] = None

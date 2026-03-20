@@ -105,6 +105,15 @@ def getSendGridApiKey() -> str | None:
     return getOptionalEnv("SENDGRID_API_KEY")
 
 
+def getGcsServiceAccountJson() -> str | None:
+    """JSON string for a GCS-enabled service account. Secret — never log."""
+    return getOptionalEnv("GCS_SERVICE_ACCOUNT_JSON")
+
+
+def getGcsReelBucketName() -> str | None:
+    return getOptionalEnv("GCS_REEL_BUCKET_NAME")
+
+
 def getOAuthEncryptionKey() -> str:
     """Base64-encoded 32-byte key for Fernet. Required for OAuth token storage."""
     key = getOptionalEnv("OAUTH_ENCRYPTION_KEY")

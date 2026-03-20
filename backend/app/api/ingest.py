@@ -1,21 +1,22 @@
 import logging
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, col
 
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import getSession, handleIntegrityConflict
-from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, IngestionJobRead, JobStatus
 from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
+from app.models.savedReels import SavedReelModel, SavedReelStatus
 from app.models.users import UserModel
+from app.services.gcsReels import uploadReelThumbnail
 from app.services.reelIngestion import processIngestionJob
 
 logger = logging.getLogger("roam.ingest")
@@ -27,7 +28,9 @@ MAX_FRAMES = 10
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB total for thumbnail + all frames
 
 
-def _initial_reel_idea_title(reelTitle: Optional[str], shareText: Optional[str]) -> str:
+def _initialSavedReelTitle(
+    reelTitle: Optional[str], shareText: Optional[str], reelUrl: str
+) -> str:
     t = (reelTitle or "").strip()
     if t:
         return t[:500]
@@ -35,11 +38,30 @@ def _initial_reel_idea_title(reelTitle: Optional[str], shareText: Optional[str])
     if st:
         line = st.split("\n")[0].strip()
         return (line[:500] if line else "Shared reel")
-    return "Shared reel"
+    return (reelUrl[:200] if reelUrl else "Reel")[:500]
+
+
+def _pipelineResultToRead(session: Session, result: PipelineResultModel) -> PipelineResultRead:
+    suggestions = session.exec(
+        select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
+    ).all()
+    read = PipelineResultRead.model_validate(result)
+    read.placeSuggestions = []
+    for s in suggestions:
+        sr = PlaceSuggestionRead.model_validate(s)
+        if s.placeId:
+            place = session.get(PlaceModel, s.placeId)
+            if place:
+                sr.placeName = place.name
+        read.placeSuggestions.append(sr)
+    return read
 
 
 class IngestJobResponse(IngestionJobRead):
+    """GET /ingest/{jobId}: one reel job can produce multiple ideas (one pipeline_result per candidate)."""
+
     pipelineResult: PipelineResultRead | None = None
+    pipelineResults: list[PipelineResultRead] = Field(default_factory=list)
 
 
 @ingestRouter.post("/ingest", status_code=202)
@@ -72,19 +94,8 @@ async def createIngestionJob(
             f"Upload too large ({(totalBytes / (1024 * 1024)):.1f} MB); maximum is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
         )
 
-    idea = IdeaModel(
-        userId=user.id,
-        title=_initial_reel_idea_title(reelTitle, shareText),
-        notes="",
-        sourceUrl=reelUrl,
-        status=IdeaStatus.suggesting,
-    )
-    session.add(idea)
-    session.flush()
-
     job = IngestionJobModel(
         userId=user.id,
-        ideaId=idea.id,
         reelUrl=reelUrl,
         shareText=shareText,
         reelTitle=reelTitle,
@@ -93,32 +104,50 @@ async def createIngestionJob(
         status=JobStatus.processing,
     )
     session.add(job)
+    session.flush()
+
+    thumbPath = None
+    if thumbnailData:
+        thumbPath = uploadReelThumbnail(user_id=user.id, job_id=job.id, data=thumbnailData)
+
+    savedReel = SavedReelModel(
+        userId=user.id,
+        jobId=job.id,
+        reelUrl=reelUrl,
+        title=_initialSavedReelTitle(reelTitle, shareText, reelUrl),
+        thumbnailObjectPath=thumbPath,
+        status=SavedReelStatus.processing,
+    )
+    session.add(savedReel)
+
     try:
         session.commit()
         session.refresh(job)
+        session.refresh(savedReel)
     except IntegrityError:
         def lookupExisting() -> dict | None:
             existing = session.exec(
                 select(IngestionJobModel).where(
                     IngestionJobModel.userId == user.id,
-                    IngestionJobModel.reelUrl == reelUrl
+                    IngestionJobModel.reelUrl == reelUrl,
                 )
             ).first()
             if not existing:
                 return None
-            idea_id = existing.ideaId
-            if not idea_id:
-                pr = session.exec(
+            payload: dict = {"jobId": str(existing.id), "status": existing.status.value}
+            sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == existing.id)).first()
+            if sr:
+                payload["reelId"] = str(sr.id)
+            if existing.status == JobStatus.done:
+                prs = session.exec(
                     select(PipelineResultModel)
                     .where(PipelineResultModel.jobId == existing.id)
-                    .order_by(col(PipelineResultModel.createdAt).desc())
-                    .limit(1)
-                ).first()
-                if pr and pr.ideaId:
-                    idea_id = pr.ideaId
-            payload: dict = {"jobId": str(existing.id), "status": existing.status.value}
-            if idea_id:
-                payload["ideaId"] = str(idea_id)
+                    .order_by(col(PipelineResultModel.createdAt).asc())
+                ).all()
+                ideaIds = [str(p.ideaId) for p in prs if p.ideaId]
+                if ideaIds:
+                    payload["ideaIds"] = ideaIds
+                    payload["ideaId"] = ideaIds[0]
             return payload
 
         payload = handleIntegrityConflict(session, lookupExisting, "Duplicate reel URL")
@@ -136,9 +165,9 @@ async def createIngestionJob(
 
     logger.info(
         "ingest_job_created",
-        extra={"jobId": str(job.id), "reelUrl": reelUrl, "ideaId": str(idea.id)},
+        extra={"jobId": str(job.id), "reelUrl": reelUrl, "reelId": str(savedReel.id)},
     )
-    return {"jobId": str(job.id), "status": "processing", "ideaId": str(idea.id)}
+    return {"jobId": str(job.id), "status": "processing", "reelId": str(savedReel.id)}
 
 
 @ingestRouter.get("/ingest/{jobId}", response_model=IngestJobResponse)
@@ -154,28 +183,20 @@ def getIngestionJob(
     if job.userId != user.id:
         raise Forbidden("Not your job")
 
-    pipeline_result: PipelineResultRead | None = None
+    pipelineReads: list[PipelineResultRead] = []
     if job.status == JobStatus.done:
-        result = session.exec(
+        results = session.exec(
             select(PipelineResultModel)
             .where(PipelineResultModel.jobId == jobId)
-            .order_by(col(PipelineResultModel.createdAt).desc())
-            .limit(1)
-        ).first()
-        if result:
-            suggestions = session.exec(
-                select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
-            ).all()
-            read = PipelineResultRead.model_validate(result)
-            read.placeSuggestions = []
-            for s in suggestions:
-                sr = PlaceSuggestionRead.model_validate(s)
-                if s.placeId:
-                    place = session.get(PlaceModel, s.placeId)
-                    if place:
-                        sr.placeName = place.name
-                read.placeSuggestions.append(sr)
-            pipeline_result = read
+            .order_by(col(PipelineResultModel.createdAt).asc())
+        ).all()
+        for result in results:
+            pipelineReads.append(_pipelineResultToRead(session, result))
 
     jobRead = IngestionJobRead.model_validate(job)
-    return IngestJobResponse(**jobRead.model_dump(), pipelineResult=pipeline_result)
+    first = pipelineReads[0] if pipelineReads else None
+    return IngestJobResponse(
+        **jobRead.model_dump(),
+        pipelineResult=first,
+        pipelineResults=pipelineReads,
+    )

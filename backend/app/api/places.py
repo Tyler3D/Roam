@@ -6,22 +6,13 @@ from app.auth.auth import getCurrentUser
 from app.common.db import getSession
 from app.models.places import PlaceModel, PlaceRead
 from app.models.users import UserModel
-from app.services.places import search_google_places, estimate_duration
+from app.services.places import estimate_duration, search_google_places, search_google_places_many
 
 logger = logging.getLogger("roam.places")
 placesRouter = APIRouter()
 
 
-@placesRouter.get("/places/search", response_model=PlaceRead | None)
-def searchPlaces(
-    q: str = Query(..., min_length=2),
-    user: UserModel = Depends(getCurrentUser),
-    session: Session = Depends(getSession),
-) -> PlaceRead | None:
-    place_data = search_google_places(q)
-    if not place_data:
-        return None
-
+def _get_or_create_place_read(session: Session, place_data: dict, fallback_name: str) -> PlaceRead:
     google_place_id = place_data.get("googlePlaceId")
     if google_place_id:
         existing = session.exec(
@@ -36,7 +27,7 @@ def searchPlaces(
 
     place = PlaceModel(
         googlePlaceId=google_place_id,
-        name=place_data.get("name", q),
+        name=place_data.get("name", fallback_name),
         address=place_data.get("address"),
         city=place_data.get("city"),
         latitude=place_data.get("latitude"),
@@ -54,3 +45,29 @@ def searchPlaces(
         place.name, place.placeTypes or []
     )
     return read
+
+
+@placesRouter.get("/places/search", response_model=PlaceRead | None)
+def searchPlaces(
+    q: str = Query(..., min_length=2),
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> PlaceRead | None:
+    place_data = search_google_places(q)
+    if not place_data:
+        return None
+    return _get_or_create_place_read(session, place_data, q)
+
+
+@placesRouter.get("/places/search-list", response_model=list[PlaceRead])
+def searchPlacesList(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(default=8, ge=1, le=15),
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> list[PlaceRead]:
+    rows = search_google_places_many(q, limit=limit)
+    out: list[PlaceRead] = []
+    for place_data in rows:
+        out.append(_get_or_create_place_read(session, place_data, q))
+    return out

@@ -44,12 +44,28 @@ def estimate_duration(title: str, place_types: list[str] | None = None) -> int:
     return 60
 
 
-def search_google_places(query: str) -> dict[str, Any] | None:
+def _text_search_result_to_dict(top: dict[str, Any], query_fallback: str) -> dict[str, Any]:
+    location = top.get("geometry", {}).get("location", {})
+    types = top.get("types", [])
+    opening_hours = top.get("opening_hours", {})
+    return {
+        "googlePlaceId": top.get("place_id"),
+        "name": top.get("name", query_fallback),
+        "address": top.get("formatted_address"),
+        "city": _extract_city(top.get("formatted_address", "")),
+        "latitude": location.get("lat"),
+        "longitude": location.get("lng"),
+        "category": _classify_place_types(types),
+        "placeTypes": types,
+        "openingHours": opening_hours.get("periods", []),
+    }
+
+
+def _google_text_search(query: str) -> list[dict[str, Any]]:
     api_key = getGoogleMapsApiKey()
     if not api_key:
         logger.warning("Google Maps API key not configured")
-        return None
-
+        return []
     try:
         with httpx.Client(timeout=10) as client:
             resp = client.get(
@@ -58,30 +74,28 @@ def search_google_places(query: str) -> dict[str, Any] | None:
             )
             resp.raise_for_status()
             data = resp.json()
-
-        results = data.get("results", [])
-        if not results:
-            return None
-
-        top = results[0]
-        location = top.get("geometry", {}).get("location", {})
-        types = top.get("types", [])
-        opening_hours = top.get("opening_hours", {})
-
-        return {
-            "googlePlaceId": top.get("place_id"),
-            "name": top.get("name", query),
-            "address": top.get("formatted_address"),
-            "city": _extract_city(top.get("formatted_address", "")),
-            "latitude": location.get("lat"),
-            "longitude": location.get("lng"),
-            "category": _classify_place_types(types),
-            "placeTypes": types,
-            "openingHours": opening_hours.get("periods", []),
-        }
+        return list(data.get("results", []))
     except Exception:
         logger.exception("Google Places search failed", extra={"query": query})
+        return []
+
+
+def search_google_places(query: str) -> dict[str, Any] | None:
+    results = _google_text_search(query)
+    if not results:
         return None
+    return _text_search_result_to_dict(results[0], query)
+
+
+def search_google_places_many(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    """Top Text Search hits as place dicts (same shape as search_google_places)."""
+    raw = _google_text_search(query)
+    if not raw:
+        return []
+    out: list[dict[str, Any]] = []
+    for top in raw[: max(1, min(limit, 15))]:
+        out.append(_text_search_result_to_dict(top, query))
+    return out
 
 
 def _extract_city(address: str) -> str | None:

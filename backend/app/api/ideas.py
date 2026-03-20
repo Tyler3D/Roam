@@ -32,10 +32,10 @@ logger = logging.getLogger("roam.ideas")
 ideasRouter = APIRouter()
 
 
-def _get_latest_pipeline_result(session: Session, idea_id: UUID) -> PipelineResultRead | None:
+def _getLatestPipelineResult(session: Session, ideaId: UUID) -> PipelineResultRead | None:
     result = session.exec(
         select(PipelineResultModel)
-        .where(PipelineResultModel.ideaId == idea_id)
+        .where(PipelineResultModel.ideaId == ideaId)
         .order_by(col(PipelineResultModel.createdAt).desc())
         .limit(1)
     ).first()
@@ -56,14 +56,14 @@ def _get_latest_pipeline_result(session: Session, idea_id: UUID) -> PipelineResu
     return read
 
 
-def _idea_read_with_extras(
+def _ideaReadWithExtras(
     session: Session,
     idea: IdeaModel | IdeaWithPlanCountView,
-    plan_count: int | None = None,
+    planCount: int | None = None,
 ) -> IdeaRead:
     read = IdeaRead.model_validate(idea)
-    read.planCount = getattr(idea, "planCount", 0) if plan_count is None else plan_count
-    read.pipelineResult = _get_latest_pipeline_result(session, idea.id)
+    read.planCount = getattr(idea, "planCount", 0) if planCount is None else planCount
+    read.pipelineResult = _getLatestPipelineResult(session, idea.id)
     if idea.placeId:
         place = session.get(PlaceModel, idea.placeId)
         if place:
@@ -86,7 +86,7 @@ def listIdeas(
 
     results: list[IdeaRead] = []
     for row in rows:
-        results.append(_idea_read_with_extras(session, row))
+        results.append(_ideaReadWithExtras(session, row))
     return results
 
 
@@ -108,7 +108,7 @@ def createIdea(
     )
     session.add(idea)
     commitAndRefresh(session, idea)
-    return _idea_read_with_extras(session, idea, 0)
+    return _ideaReadWithExtras(session, idea, 0)
 
 
 @ideasRouter.get("/ideas/{ideaId}", response_model=IdeaRead)
@@ -122,10 +122,10 @@ def getIdea(
         raise NotFound("Idea not found")
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
-    view_row = session.exec(
+    viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _idea_read_with_extras(session, view_row if view_row else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
 
 
 @ideasRouter.patch("/ideas/{ideaId}", response_model=IdeaRead)
@@ -141,17 +141,21 @@ def updateIdea(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
-    update_data = body.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
+    updateData = body.model_dump(exclude_unset=True)
+    if "placeId" in updateData:
+        pid = updateData["placeId"]
+        if pid is not None and session.get(PlaceModel, pid) is None:
+            raise BadRequest("Invalid placeId")
+    for key, value in updateData.items():
         setattr(idea, key, value)
     idea.updatedAt = datetime.utcnow()
 
     session.add(idea)
     commitAndRefresh(session, idea)
-    view_row = session.exec(
+    viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _idea_read_with_extras(session, view_row if view_row else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
 
 
 @ideasRouter.delete("/ideas/{ideaId}", status_code=204)
@@ -169,7 +173,7 @@ def deleteIdea(
     session.commit()
 
 
-def _auto_select_place(
+def _autoSelectPlace(
     session: Session,
     idea: IdeaModel,
     result: PipelineResultModel,
@@ -211,56 +215,56 @@ def interpretIdea(
     session.add(idea)
     session.flush()
 
-    result_dict = interpret_idea(idea.title)
+    resultDict = interpret_idea(idea.title)
 
-    pipeline_result = PipelineResultModel(
+    pipelineResult = PipelineResultModel(
         ideaId=idea.id,
         jobId=None,
         source="scribble",
-        refinedTitle=result_dict.get("refinedTitle"),
-        category=result_dict.get("category"),
-        estimatedMinutes=result_dict.get("estimatedMinutes"),
-        modelName=result_dict.get("modelName"),
-        rawOutput=result_dict,
+        refinedTitle=resultDict.get("refinedTitle"),
+        category=resultDict.get("category"),
+        estimatedMinutes=resultDict.get("estimatedMinutes"),
+        modelName=resultDict.get("modelName"),
+        rawOutput=resultDict,
         promptVersion=get_scribble_prompt_version(),
     )
-    session.add(pipeline_result)
+    session.add(pipelineResult)
     session.flush()
 
     suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
-    search_query = result_dict.get("searchQuery")
-    if search_query:
-        place_data = search_google_places(search_query)
-        if place_data:
-            _upsert_place(session, idea, place_data)
+    searchQuery = resultDict.get("searchQuery")
+    if searchQuery:
+        placeData = search_google_places(searchQuery)
+        if placeData:
+            _upsertPlace(session, idea, placeData)
             place = session.get(PlaceModel, idea.placeId) if idea.placeId else None
-            place_name = place.name if place else place_data.get("name", "")
+            placeName = place.name if place else placeData.get("name", "")
             sugg = PlaceSuggestionModel(
-                resultId=pipeline_result.id,
+                resultId=pipelineResult.id,
                 placeId=idea.placeId,
-                rawName=place_name,
+                rawName=placeName,
                 confidence=1.0,
             )
             session.add(sugg)
             session.flush()
             suggestions.append((sugg, 1.0))
 
-    _auto_select_place(session, idea, pipeline_result, suggestions)
+    _autoSelectPlace(session, idea, pipelineResult, suggestions)
 
     # specificDatetime from AI stays in rawOutput; surfaced as slot option in PlanOverview
     idea.status = IdeaStatus.ready
     idea.updatedAt = datetime.utcnow()
     session.add(idea)
-    commitAndRefresh(session, idea, pipeline_result)
+    commitAndRefresh(session, idea, pipelineResult)
 
-    view_row = session.exec(
+    viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    read = _idea_read_with_extras(session, view_row if view_row else idea)
+    read = _ideaReadWithExtras(session, viewRow if viewRow else idea)
 
-    invitees = result_dict.get("invitees", [])
+    invitees = resultDict.get("invitees", [])
     if invitees and read.pipelineResult:
-        resolved = _resolve_invitees(session, user.id, invitees)
+        resolved = _resolveInvitees(session, user.id, invitees)
         read.pipelineResult.rawOutput = {
             **(read.pipelineResult.rawOutput or {}),
             "resolvedInvitees": resolved,
@@ -302,10 +306,10 @@ def selectPlaceSuggestion(
     session.add(idea)
     commitAndRefresh(session, idea)
 
-    view_row = session.exec(
+    viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _idea_read_with_extras(session, view_row if view_row else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
 
 
 @ideasRouter.post("/ideas/{ideaId}/suggest-slots")
@@ -321,25 +325,25 @@ def suggestSlotsForIdea(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
-    pipeline_result = _get_latest_pipeline_result(session, idea.id)
+    pipelineResult = _getLatestPipelineResult(session, idea.id)
     preference = "any"
-    estimated_minutes = 60
-    opening_hours = None
+    estimatedMinutes = 60
+    openingHours = None
 
-    if pipeline_result:
-        raw = pipeline_result.rawOutput or {}
+    if pipelineResult:
+        raw = pipelineResult.rawOutput or {}
         preference = raw.get("preference") or "any"
-        estimated_minutes = pipeline_result.estimatedMinutes or 60
+        estimatedMinutes = pipelineResult.estimatedMinutes or 60
 
     if idea.placeId:
         place = session.get(PlaceModel, idea.placeId)
         if place and place.openingHours:
-            opening_hours = place.openingHours
+            openingHours = place.openingHours
 
     slots = suggest_time_slots(
         preference=preference,
-        estimated_minutes=estimated_minutes,
-        opening_hours=opening_hours,
+        estimated_minutes=estimatedMinutes,
+        opening_hours=openingHours,
     )
     return {"slots": slots}
 
@@ -356,31 +360,31 @@ def promoteIdeaToPlan(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
-    pipeline_result = _get_latest_pipeline_result(session, idea.id)
-    estimated_minutes = 60
+    pipelineResult = _getLatestPipelineResult(session, idea.id)
+    estimatedMinutes = 60
     invitees: list[str] = []
-    plan_title = idea.title
+    planTitle = idea.title
 
-    if pipeline_result:
-        raw = pipeline_result.rawOutput or {}
-        estimated_minutes = pipeline_result.estimatedMinutes or 60
+    if pipelineResult:
+        raw = pipelineResult.rawOutput or {}
+        estimatedMinutes = pipelineResult.estimatedMinutes or 60
         invitees = raw.get("invitees", [])
-        if pipeline_result.refinedTitle:
-            plan_title = pipeline_result.refinedTitle
+        if pipelineResult.refinedTitle:
+            planTitle = pipelineResult.refinedTitle
 
     # Plan always starts as draft with scheduledAt = null. Time is set in PlanOverview.
-    share_code = secrets.token_urlsafe(8)
+    shareCode = secrets.token_urlsafe(8)
 
     plan = PlanModel(
         creatorId=user.id,
         placeId=idea.placeId,
         ideaId=idea.id,
-        title=plan_title,
+        title=planTitle,
         scheduledAt=None,
         status=PlanStatus.draft,
-        shareCode=share_code,
+        shareCode=shareCode,
         rawPrompt=idea.title,
-        estimatedMinutes=estimated_minutes,
+        estimatedMinutes=estimatedMinutes,
     )
     session.add(plan)
     session.flush()
@@ -394,7 +398,7 @@ def promoteIdeaToPlan(
     session.add(organizer)
 
     if invitees:
-        resolved = _resolve_invitees(session, user.id, invitees)
+        resolved = _resolveInvitees(session, user.id, invitees)
         for r in resolved:
             if r.get("userId") and str(r["userId"]) != str(user.id):
                 member = PlanMemberModel(
@@ -409,7 +413,7 @@ def promoteIdeaToPlan(
                     userId=UUID(str(r["userId"])),
                     type=NotificationType.invite_received,
                     planId=plan.id,
-                    title=f"{user.firstName or 'Someone'} invited you to {plan_title}",
+                    title=f"{user.firstName or 'Someone'} invited you to {planTitle}",
                 )
                 session.add(notification)
 
@@ -419,76 +423,76 @@ def promoteIdeaToPlan(
         select(PlanMemberModel).where(PlanMemberModel.planId == plan.id)
     ).all()
 
-    member_reads = []
+    memberReads = []
     for m in members:
         mr = PlanMemberRead.model_validate(m)
-        member_user = session.get(UserModel, m.userId)
-        if member_user:
-            mr.firstName = member_user.firstName
-            mr.lastName = member_user.lastName
-        member_reads.append(mr)
+        memberUser = session.get(UserModel, m.userId)
+        if memberUser:
+            mr.firstName = memberUser.firstName
+            mr.lastName = memberUser.lastName
+        memberReads.append(mr)
 
-    plan_read = PlanRead.model_validate(plan)
-    plan_read.members = member_reads
+    planRead = PlanRead.model_validate(plan)
+    planRead.members = memberReads
     if idea.placeId:
         place = session.get(PlaceModel, idea.placeId)
         if place:
-            plan_read.placeName = place.name
-    return plan_read
+            planRead.placeName = place.name
+    return planRead
 
 
-def _upsert_place(session: Session, idea: IdeaModel, place_data: dict) -> None:
-    google_place_id = place_data.get("googlePlaceId")
-    if google_place_id:
+def _upsertPlace(session: Session, idea: IdeaModel, placeData: dict) -> None:
+    googlePlaceId = placeData.get("googlePlaceId")
+    if googlePlaceId:
         existing = session.exec(
-            select(PlaceModel).where(PlaceModel.googlePlaceId == google_place_id)
+            select(PlaceModel).where(PlaceModel.googlePlaceId == googlePlaceId)
         ).first()
         if existing:
             idea.placeId = existing.id
             return
 
     place = PlaceModel(
-        googlePlaceId=google_place_id,
-        name=place_data.get("name", ""),
-        address=place_data.get("address"),
-        city=place_data.get("city"),
-        latitude=place_data.get("latitude"),
-        longitude=place_data.get("longitude"),
-        category=place_data.get("category"),
+        googlePlaceId=googlePlaceId,
+        name=placeData.get("name", ""),
+        address=placeData.get("address"),
+        city=placeData.get("city"),
+        latitude=placeData.get("latitude"),
+        longitude=placeData.get("longitude"),
+        category=placeData.get("category"),
     )
     session.add(place)
     session.flush()
     idea.placeId = place.id
 
 
-def _resolve_invitees(
-    session: Session, user_id: UUID, invitee_names: list[str]
+def _resolveInvitees(
+    session: Session, userId: UUID, inviteeNames: list[str]
 ) -> list[dict]:
     """Resolve @mention names to user IDs via friendships first, then all users."""
     resolved: list[dict] = []
 
-    friend_ids: set[UUID] = set()
+    friendIds: set[UUID] = set()
     friendships = session.exec(
         select(FriendshipModel).where(
             FriendshipModel.status == FriendshipStatus.accepted,
-            (FriendshipModel.requesterId == user_id)
-            | (FriendshipModel.addresseeId == user_id),
+            (FriendshipModel.requesterId == userId)
+            | (FriendshipModel.addresseeId == userId),
         )
     ).all()
     for f in friendships:
-        friend_ids.add(f.requesterId if f.addresseeId == user_id else f.addresseeId)
+        friendIds.add(f.requesterId if f.addresseeId == userId else f.addresseeId)
 
-    for name in invitee_names:
-        name_lower = name.lower()
+    for name in inviteeNames:
+        nameLower = name.lower()
         found = None
 
-        if friend_ids:
+        if friendIds:
             friends = session.exec(
                 select(UserModel).where(
-                    col(UserModel.id).in_(friend_ids),
+                    col(UserModel.id).in_(friendIds),
                     (
-                        col(UserModel.firstName).ilike(f"%{name_lower}%")
-                        | col(UserModel.lastName).ilike(f"%{name_lower}%")
+                        col(UserModel.firstName).ilike(f"%{nameLower}%")
+                        | col(UserModel.lastName).ilike(f"%{nameLower}%")
                     ),
                 )
             ).all()
@@ -496,21 +500,21 @@ def _resolve_invitees(
                 found = friends[0]
 
         if not found:
-            all_matches = session.exec(
+            allMatches = session.exec(
                 select(UserModel).where(
-                    col(UserModel.firstName).ilike(f"%{name_lower}%")
-                    | col(UserModel.lastName).ilike(f"%{name_lower}%")
+                    col(UserModel.firstName).ilike(f"%{nameLower}%")
+                    | col(UserModel.lastName).ilike(f"%{nameLower}%")
                 ).limit(1)
             ).all()
-            if all_matches:
-                found = all_matches[0]
+            if allMatches:
+                found = allMatches[0]
 
         if found:
             resolved.append({
                 "userId": str(found.id),
                 "firstName": found.firstName,
                 "lastName": found.lastName,
-                "isFriend": found.id in friend_ids,
+                "isFriend": found.id in friendIds,
             })
         else:
             resolved.append({"name": name, "userId": None, "isFriend": False})

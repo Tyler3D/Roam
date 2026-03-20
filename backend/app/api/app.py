@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.ingest import ingestRouter
+from app.api.reels import reelsRouter
 from app.api.users import usersRouter
 from app.api.ideas import ideasRouter
 from app.api.plans import plansRouter
@@ -98,6 +99,7 @@ def healthCheck() -> dict:
 
 app.include_router(usersRouter, prefix="/api")
 app.include_router(ingestRouter, prefix="/api")
+app.include_router(reelsRouter, prefix="/api")
 app.include_router(ideasRouter, prefix="/api")
 app.include_router(plansRouter, prefix="/api")
 app.include_router(tasksRouter, prefix="/api")

@@ -38,7 +38,7 @@ struct DebugMenuView: View {
                 } header: {
                     Text("App Network Env")
                 } footer: {
-                    Text("Mock disables auth. Local/Staging/Production connect to backend.")
+                    Text("Local, staging, and production point at different API base URLs (see Effective URL).")
                 }
 
                 Section {

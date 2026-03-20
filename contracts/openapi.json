@@ -343,6 +343,221 @@
         }
       }
     },
+    "/api/reels/summary": {
+      "get": {
+        "summary": "Reelssummary",
+        "operationId": "reelsSummary_api_reels_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReelsSummaryRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reels": {
+      "get": {
+        "summary": "Listreels",
+        "operationId": "listReels_api_reels_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedReelListItem"
+                  },
+                  "title": "Response Listreels Api Reels Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reels/{reelId}": {
+      "get": {
+        "summary": "Getreel",
+        "operationId": "getReel_api_reels__reelId__get",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReelDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reels/{reelId}/ideas": {
+      "post": {
+        "summary": "Createideaonreel",
+        "operationId": "createIdeaOnReel_api_reels__reelId__ideas_post",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIdeaOnReelBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reels/{reelId}/promote": {
+      "post": {
+        "summary": "Promotereel",
+        "operationId": "promoteReel_api_reels__reelId__promote_post",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteReelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteReelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ideas": {
       "get": {
         "summary": "Listideas",
@@ -1242,6 +1457,62 @@
         }
       }
     },
+    "/api/places/search-list": {
+      "get": {
+        "summary": "Searchplaceslist",
+        "operationId": "searchPlacesList_api_places_search_list_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 15,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlaceRead"
+                  },
+                  "title": "Response Searchplaceslist Api Places Search List Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/friends": {
       "get": {
         "summary": "Listfriends",
@@ -1694,6 +1965,36 @@
         ],
         "title": "Body_createIngestionJob_api_ingest_post"
       },
+      "CreateIdeaOnReelBody": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CreateIdeaOnReelBody"
+      },
       "FriendRequest": {
         "properties": {
           "targetUserId": {
@@ -1915,6 +2216,18 @@
             ],
             "title": "Placeid"
           },
+          "savedReelId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savedreelid"
+          },
           "status": {
             "$ref": "#/components/schemas/IdeaStatus"
           },
@@ -2055,6 +2368,18 @@
                 "type": "null"
               }
             ]
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
           }
         },
         "type": "object",
@@ -2153,6 +2478,13 @@
                 "type": "null"
               }
             ]
+          },
+          "pipelineResults": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineResultRead"
+            },
+            "type": "array",
+            "title": "Pipelineresults"
           }
         },
         "type": "object",
@@ -2164,7 +2496,8 @@
           "createdAt",
           "updatedAt"
         ],
-        "title": "IngestJobResponse"
+        "title": "IngestJobResponse",
+        "description": "GET /ingest/{jobId}: one reel job can produce multiple ideas (one pipeline_result per candidate)."
       },
       "JobStatus": {
         "type": "string",
@@ -2974,6 +3307,184 @@
         "type": "object",
         "title": "PlanUpdate"
       },
+      "PromoteReelRequest": {
+        "properties": {
+          "promotions": {
+            "items": {
+              "$ref": "#/components/schemas/ReelPromotionItem"
+            },
+            "type": "array",
+            "title": "Promotions"
+          }
+        },
+        "type": "object",
+        "title": "PromoteReelRequest"
+      },
+      "PromoteReelResponse": {
+        "properties": {
+          "ideaIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Ideaids"
+          },
+          "reelStatus": {
+            "$ref": "#/components/schemas/SavedReelStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reelStatus"
+        ],
+        "title": "PromoteReelResponse"
+      },
+      "ReelIngestCandidateRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "savedReelId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Savedreelid"
+          },
+          "sortIndex": {
+            "type": "integer",
+            "title": "Sortindex"
+          },
+          "previewTitle": {
+            "type": "string",
+            "title": "Previewtitle",
+            "default": ""
+          },
+          "isSynthetic": {
+            "type": "boolean",
+            "title": "Issynthetic",
+            "default": false
+          },
+          "resolvedPlaceId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedplaceid"
+          },
+          "promotedIdeaId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promotedideaid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "resolvedPlaceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedplacename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "savedReelId",
+          "sortIndex",
+          "createdAt"
+        ],
+        "title": "ReelIngestCandidateRead"
+      },
+      "ReelPromotionItem": {
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Candidateid"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "mapsQuery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapsquery"
+          },
+          "placeAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeaddress"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidateId"
+        ],
+        "title": "ReelPromotionItem"
+      },
+      "ReelsSummaryRead": {
+        "properties": {
+          "needsReviewCount": {
+            "type": "integer",
+            "title": "Needsreviewcount",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReelsSummaryRead"
+      },
       "RsvpRequest": {
         "properties": {
           "firstName": {
@@ -3069,6 +3580,214 @@
           "declined"
         ],
         "title": "RsvpStatus"
+      },
+      "SavedReelDetailRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Jobid"
+          },
+          "reelUrl": {
+            "type": "string",
+            "title": "Reelurl"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SavedReelStatus"
+          },
+          "thumbnailSignedUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailsignedurl"
+          },
+          "jobStatus": {
+            "type": "string",
+            "title": "Jobstatus"
+          },
+          "jobError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joberror"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ReelIngestCandidateRead"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "ideas": {
+            "items": {
+              "$ref": "#/components/schemas/SavedReelIdeaSummary"
+            },
+            "type": "array",
+            "title": "Ideas"
+          },
+          "ideaIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Ideaids"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "jobId",
+          "reelUrl",
+          "title",
+          "status",
+          "jobStatus",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SavedReelDetailRead"
+      },
+      "SavedReelIdeaSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/IdeaStatus"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
+          },
+          "placeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placename"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "SavedReelIdeaSummary"
+      },
+      "SavedReelListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Jobid"
+          },
+          "reelUrl": {
+            "type": "string",
+            "title": "Reelurl"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SavedReelStatus"
+          },
+          "thumbnailSignedUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailsignedurl"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "jobId",
+          "reelUrl",
+          "title",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SavedReelListItem"
+      },
+      "SavedReelStatus": {
+        "type": "string",
+        "enum": [
+          "processing",
+          "needs_review",
+          "promoted",
+          "failed"
+        ],
+        "title": "SavedReelStatus"
       },
       "TaskCreate": {
         "properties": {

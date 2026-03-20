@@ -38,3 +38,14 @@ from app.models.notifications import (  # noqa: F401
     NotificationRead,
 )
 from app.models.oauth_tokens import UserOAuthTokenModel, OAuthTokenUpsert  # noqa: F401
+from app.models.savedReels import (  # noqa: F401
+    SavedReelStatus,
+    SavedReelModel,
+    ReelIngestCandidateModel,
+    SavedReelListItem,
+    SavedReelDetailRead,
+    ReelIngestCandidateRead,
+    PromoteReelRequest,
+    PromoteReelResponse,
+    ReelsSummaryRead,
+)

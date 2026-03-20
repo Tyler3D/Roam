@@ -8,9 +8,9 @@ private let stagingURLKey = "roam_staging_base_url"
 // MARK: - App Mode (feature selection)
 
 enum AppMode: String, CaseIterable, Identifiable {
-    /// Full Roam tab shell (ideas, drafts, plans, map, shared).
+    /// Full Roam tab shell (ideas, drafts, plans, map, reels).
     case mainRoam = "mainRoam"
-    /// QA: only the shared-links queue (legacy name kept for UserDefaults compatibility).
+    /// QA: reels grid + inbox only (UserDefaults key name kept for compatibility).
     case reelIngestionMVP = "reelIngestionMVP"
     case timeEstimatesMVP = "timeEstimatesMVP"
 
@@ -28,7 +28,6 @@ enum AppMode: String, CaseIterable, Identifiable {
 // MARK: - Network Env (backend selection)
 
 enum NetworkEnv: String, CaseIterable, Identifiable {
-    case mock
     case local
     case staging
     case production
@@ -37,7 +36,6 @@ enum NetworkEnv: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .mock: return "Mock"
         case .local: return "Local"
         case .staging: return "Staging"
         case .production: return "Production"
@@ -68,16 +66,9 @@ final class AppConfig {
         }
     }
 
-    /// When true, auth is bypassed and mock sign-in is used.
-    var isMockAuth: Bool { networkEnv == .mock }
-
-    var isNetworkEnabled: Bool { networkEnv != .mock }
-
     /// Effective base URL for API calls (no trailing slash). `APIClient` paths are `/api/...` like `frontend/src/lib/api.ts`.
-    var baseURL: String? {
+    var baseURL: String {
         switch networkEnv {
-        case .mock:
-            return nil
         case .local:
             return Self.defaultLocalBaseURL
         case .staging:
@@ -87,11 +78,8 @@ final class AppConfig {
         }
     }
 
-    /// Shown in debug menu. Mock: "No network"; else the base URL.
-    var effectiveBaseURLDisplay: String {
-        guard let baseURL else { return "No network" }
-        return baseURL
-    }
+    /// Shown in debug menu.
+    var effectiveBaseURLDisplay: String { baseURL }
 
     private static var defaultLocalBaseURL: String {
         let fromPlist = Bundle.main.infoDictionary?[RoamBuildEnvironment.localBaseURLPlistKey] as? String
@@ -115,7 +103,9 @@ final class AppConfig {
     }
 
     init() {
-        // Migrate: old roam_app_mode held mock/local/staging/production (network env)
+        Self.migrateOffMockNetworkPreference()
+
+        // Migrate: old roam_app_mode held local/staging/production (network env)
         let networkEnvRaw = UserDefaults.standard.string(forKey: networkEnvKey)
         let legacyRaw = UserDefaults.standard.string(forKey: "roam_app_mode")
 
@@ -129,5 +119,16 @@ final class AppConfig {
         self.networkEnv = NetworkEnv(rawValue: envRaw) ?? .production
         self.appMode = AppMode(rawValue: modeRaw) ?? .mainRoam
         self.stagingBaseURLOverride = UserDefaults.standard.string(forKey: stagingURLKey)
+    }
+
+    /// Former "Mock" network mode stored `mock` in UserDefaults; map to production.
+    private static func migrateOffMockNetworkPreference() {
+        if UserDefaults.standard.string(forKey: networkEnvKey) == "mock" {
+            UserDefaults.standard.set(NetworkEnv.production.rawValue, forKey: networkEnvKey)
+        }
+        if UserDefaults.standard.string(forKey: "roam_app_mode") == "mock" {
+            UserDefaults.standard.set(NetworkEnv.production.rawValue, forKey: networkEnvKey)
+            UserDefaults.standard.set(AppMode.mainRoam.rawValue, forKey: appModeKey)
+        }
     }
 }

@@ -8,6 +8,13 @@ struct IdeasPage: View {
     @State private var submitError: String?
     @FocusState private var inputFocused: Bool
 
+    /// When set, shows a banner to jump to the Reels tab when reels need review.
+    var onSwitchToReels: (() -> Void)?
+
+    init(onSwitchToReels: (() -> Void)? = nil) {
+        self.onSwitchToReels = onSwitchToReels
+    }
+
     var body: some View {
         content(stores: stores)
     }
@@ -39,6 +46,38 @@ struct IdeasPage: View {
 
                 if let plan = nextUp {
                     nextUpCard(plan: plan)
+                }
+
+                if stores.reels.needsReviewCount > 0, let go = onSwitchToReels {
+                    Button {
+                        go()
+                    } label: {
+                        HStack(alignment: .center, spacing: 10) {
+                            Text("▦")
+                                .font(.system(size: 18))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(stores.reels.needsReviewCount) reel(s) to review")
+                                    .font(RoamFont.mono(11, weight: .medium))
+                                Text("open reels to turn suggestions into ideas")
+                                    .font(RoamFont.mono(9))
+                                    .foregroundStyle(RoamColors.textMuted)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(RoamColors.loganDeep)
+                        }
+                        .foregroundStyle(RoamColors.loganDark)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoamColors.lavender.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(RoamColors.logan.opacity(0.25), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 if stores.ideas.ideas.isEmpty && !stores.ideas.isLoading && stores.ideas.lastError == nil {
@@ -78,6 +117,7 @@ struct IdeasPage: View {
         .refreshable {
             await stores.ideas.refresh()
             await stores.plans.refresh()
+            await stores.reels.refreshSummaryOnly()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             commandBar(stores: stores)
@@ -85,6 +125,7 @@ struct IdeasPage: View {
         .task {
             await stores.ideas.loadIfStale()
             await stores.plans.loadIfStale()
+            await stores.reels.refreshSummaryOnly()
         }
     }
 

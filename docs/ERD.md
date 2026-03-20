@@ -1,6 +1,6 @@
 # Entity Relationship Diagram
 
-Reflects `sql/schema.sql` (including `pipeline_results.promptVersion` and `user_oauth_tokens`). For **request/infrastructure** flow, see [ARCHITECTURE.md](ARCHITECTURE.md). For **HTTP JSON types** generated from FastAPI, see [OPENAPI.md](OPENAPI.md).
+Reflects `sql/schema.sql` (including `pipeline_results.promptVersion` and `user_oauth_tokens`). **Reel thumbnail images** are not rows or BLOBs in Postgres: the DB stores an **object key** on `saved_reels.thumbnailObjectPath` pointing at a file in **Google Cloud Storage** (see [ARCHITECTURE.md](ARCHITECTURE.md) and [ENV.md](ENV.md)). For **request/infrastructure** flow, see [ARCHITECTURE.md](ARCHITECTURE.md). For **HTTP JSON types** generated from FastAPI, see [OPENAPI.md](OPENAPI.md).
 
 ```mermaid
 erDiagram
@@ -76,6 +76,7 @@ erDiagram
         text sourceUrl
         text displayName "nullable"
         uuid placeId FK "nullable"
+        uuid savedReelId FK "nullable"
         ideaStatus status
         integer planCount "computed via ideas_with_plan_count view"
         timestamptz createdAt
@@ -168,6 +169,28 @@ erDiagram
         timestamptz updatedAt
     }
 
+    saved_reels {
+        uuid id PK
+        uuid userId FK
+        uuid jobId FK "unique"
+        text thumbnailObjectPath "nullable; GCS object key in reel bucket"
+        text reelUrl
+        text title
+        savedReelStatus status
+        timestamptz createdAt
+        timestamptz updatedAt
+    }
+
+    reel_ingest_candidates {
+        uuid id PK
+        uuid savedReelId FK
+        int sortIndex
+        jsonb llmRawOutput
+        uuid resolvedPlaceId FK "nullable"
+        uuid promotedIdeaId FK "nullable"
+        timestamptz createdAt
+    }
+
     users ||--o{ friendships : "requests"
     users ||--o{ friendships : "receives"
     users ||--o{ ideas : "creates"
@@ -176,8 +199,12 @@ erDiagram
     users ||--o{ plan_messages : "sends"
     users ||--o{ notifications : "receives"
     users ||--o{ reel_ingestion_jobs : "submits"
+    users ||--o{ saved_reels : "saves"
     users ||--o{ user_oauth_tokens : "stores"
 
+    reel_ingestion_jobs ||--|| saved_reels : "has"
+    saved_reels ||--o{ reel_ingest_candidates : "stages"
+    saved_reels ||--o{ ideas : "optional"
     ideas ||--o{ pipeline_results : "results"
     reel_ingestion_jobs ||--o{ pipeline_results : "produces"
     pipeline_results ||--o{ place_suggestions : "has"
@@ -203,6 +230,7 @@ erDiagram
 |------|--------|---------|
 | `ideaStatus` | `captured`, `suggesting`, `ready`, `planned` (deprecated) | `ideas.status` — ideas stay `ready` after promotion; `planned` never set |
 | `jobStatus` | `processing`, `done`, `failed` | `reel_ingestion_jobs.status` |
+| `savedReelStatus` | `processing`, `needs_review`, `promoted`, `failed` | `saved_reels.status` |
 | `planStatus` | `draft`, `confirmed`, `completed`, `cancelled` | `plans.status` |
 | `rsvpStatus` | `pending`, `accepted`, `declined` | `plan_members.rsvpStatus` |
 | `memberRole` | `organizer`, `member` | `plan_members.role` |
@@ -218,6 +246,7 @@ erDiagram
 | `plans.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
 | `ideas.userId` | `users.id` | many-to-one | CASCADE |
 | `ideas.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
+| `ideas.savedReelId` | `saved_reels.id` | many-to-one (nullable) | SET NULL |
 | `pipeline_results.ideaId` | `ideas.id` | many-to-one (nullable) | CASCADE |
 | `pipeline_results.jobId` | `reel_ingestion_jobs.id` | many-to-one (nullable) | SET NULL |
 | `place_suggestions.resultId` | `pipeline_results.id` | many-to-one | CASCADE |
@@ -233,7 +262,20 @@ erDiagram
 | `notifications.userId` | `users.id` | many-to-one | CASCADE |
 | `notifications.planId` | `plans.id` | many-to-one (nullable) | CASCADE |
 | `reel_ingestion_jobs.userId` | `users.id` | many-to-one | CASCADE |
+| `saved_reels.userId` | `users.id` | many-to-one | CASCADE |
+| `saved_reels.jobId` | `reel_ingestion_jobs.id` | one-to-one | CASCADE |
+| `reel_ingest_candidates.savedReelId` | `saved_reels.id` | many-to-one | CASCADE |
+| `reel_ingest_candidates.resolvedPlaceId` | `places.id` | many-to-one (nullable) | SET NULL |
+| `reel_ingest_candidates.promotedIdeaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
 | `user_oauth_tokens.userId` | `users.id` | many-to-one | CASCADE |
+
+### Saved reels & staged candidates (design)
+
+- **`saved_reels.thumbnailObjectPath`** — When [GCS is configured](ENV.md), this column holds the **object key** inside **`GCS_REEL_BUCKET_NAME`** (e.g. `reels/{userId}/{jobId}/thumb.jpg`). There is **no SQL foreign key** to the bucket; consistency is enforced by the API at upload time. The API returns **signed URLs** derived from this path; clients never need the raw bucket name if they only use API fields.
+- **`ideas.savedReelId`** — Optional link from an **idea** back to the **saved reel** it came from (promotion, auto-ingest, or manual “add idea on reel”). User-edited titles, notes, and `placeId` live on the idea; **`reel_ingest_candidates`** stay as the immutable LLM snapshot.
+- **`reel_ingest_candidates.sortIndex`** — Ordering among candidates for a reel: **highest model confidence first** (`0` = top). Synthetic “no candidates above threshold” rows use a single row at `0`.
+- **`reel_ingest_candidates.savedReelId`** — Candidates are tied to the **user-facing saved reel** (the grid tile), not directly to `reel_ingestion_jobs`. The job remains on `saved_reels.jobId` for the worker and `pipeline_results.jobId`.
+- **`reel_ingest_candidates.llmRawOutput`** — JSON from the vision step: e.g. `candidate`, `fullStructured`, `metadata`, and flags like `synthetic` / `branch` — the raw input for user review and promote.
 
 ### Unique constraints (indexes)
 
@@ -260,8 +302,10 @@ erDiagram
 ## Data Flow
 
 ```
-Reel shared -> reel_ingestion_job -> idea (captured) -> suggesting -> pipeline_result + place_suggestions -> ready
-                                                                    -> places (created/matched)
+Reel shared -> reel_ingestion_job -> (vision) -> saved_reel row
+              -> optional: thumbnail -> GCS; path -> saved_reels.thumbnailObjectPath
+              -> N ideas (one per candidate) -> each: pipeline_result + place_suggestions -> ready
+              -> places (created/matched)
 
 User input -> idea (raw) -> suggesting -> pipeline_result + place_suggestions -> ready
                                                           -> place (resolved)

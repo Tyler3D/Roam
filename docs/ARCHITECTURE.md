@@ -1,6 +1,6 @@
 # Roam production architecture
 
-How the live system is shaped: clients, Firebase Hosting, API Gateway, Cloud Run, and **Neon** (managed Postgres). The diagram below is **runtime / request flow** only. For the **database entity-relationship diagram** (tables, FKs, enums), see **[ERD.md](ERD.md)**. For **OpenAPI → TypeScript** typing on the web app, see **[OPENAPI.md](OPENAPI.md)**.
+How the live system is shaped: clients, Firebase Hosting, API Gateway, Cloud Run, **Google Cloud Storage** (reel thumbnail bucket), and **Neon** (managed Postgres). The diagram below is **runtime / request flow** only. For the **database entity-relationship diagram** (tables, FKs, enums), see **[ERD.md](ERD.md)**. For **OpenAPI → TypeScript** typing on the web app, see **[OPENAPI.md](OPENAPI.md)**.
 
 For **CI/CD, Artifact Registry, and GitHub Secrets**, see [DEPLOYMENT.md](DEPLOYMENT.md). For **auth middleware, verification policy, and rate limits** inside FastAPI, see [AUTH_MIDDLEWARE.md](AUTH_MIDDLEWARE.md).
 
@@ -22,6 +22,7 @@ flowchart LR
     AG[API Gateway]
     CR[Cloud Run roam-api]
     SA[Gateway invoker SA]
+    GCS[(Cloud Storage\nreel thumbnails)]
   end
   subgraph neon [Neon]
     PG[(Postgres)]
@@ -34,11 +35,12 @@ flowchart LR
   AG -->|IAM ID token aud = Run URL| CR
   SA -.->|run.invoker| CR
   CR -->|DATABASE_URL TLS| PG
+  CR -->|upload + signed GET| GCS
 ```
 
 - **Web:** The React/Vite app is built as a static site and served by **Firebase Hosting** (e.g. `*.web.app`). The browser talks to **Firebase Auth** for sign-in and to the **API Gateway URL** for the Roam API.
 - **API:** Clients use the **gateway** hostname as `VITE_API_BASE_URL` / iOS base URL. The gateway forwards to **Cloud Run** (`roam-api`).
-- **Cloud Run** runs the FastAPI container with **Require authentication (IAM)**. Only callers with **Cloud Run Invoker**—here, the gateway’s **service account**—can invoke the service directly. The API connects to **Neon Postgres** using **`DATABASE_URL`** (see [Data: Neon Postgres](#data-neon-postgres)).
+- **Cloud Run** runs the FastAPI container with **Require authentication (IAM)**. Only callers with **Cloud Run Invoker**—here, the gateway’s **service account**—can invoke the service directly. The API connects to **Neon Postgres** using **`DATABASE_URL`** (see [Data: Neon Postgres](#data-neon-postgres)) and, when configured, to **Cloud Storage** for reel thumbnails (see [Object storage (reel thumbnails)](#object-storage-reel-thumbnails)).
 
 ---
 
@@ -56,7 +58,17 @@ The Roam **API** is a **FastAPI** app in a container on **Cloud Run**, service n
 
 **IAM:** The service requires **Cloud Run Invoker**. Under **CUIT** policy, it cannot be the **public** API surface; clients use the **gateway** hostname, not the raw Run URL.
 
-**Runtime configuration** (database URL, Firebase Admin credentials, API keys, CORS origins, etc.) is supplied as **environment variables and secrets** on the Cloud Run revision. See `docs/ENV.md` for the full list.
+**Runtime configuration** (database URL, Firebase Admin credentials, API keys, CORS origins, GCS bucket credentials for reels, etc.) is supplied as **environment variables and secrets** on the Cloud Run revision. See `docs/ENV.md` for the full list.
+
+---
+
+## Object storage (reel thumbnails)
+
+Reel ingestion can persist a **thumbnail image** in a **GCS bucket** named by **`GCS_REEL_BUCKET_NAME`**. The API uploads objects with a dedicated service account (**`GCS_SERVICE_ACCOUNT_JSON`**) and stores only the **object path** (key) on the row in **`saved_reels.thumbnailObjectPath`**—not a public URL. Clients receive **short-lived signed GET URLs** when listing or loading reel detail so the bucket can stay private.
+
+If GCS env vars are unset, ingestion and APIs still work; thumbnails may be absent and the UI may show placeholders. See [ENV.md](ENV.md) for variables and [ERD.md](ERD.md) for how the path relates to **`saved_reels`**.
+
+Implementation: `backend/app/services/gcsReels.py` (upload + signed URLs).
 
 ---
 
@@ -66,7 +78,7 @@ The Roam **API** is a **FastAPI** app in a container on **Cloud Run**, service n
 
 The FastAPI app uses **SQLModel** with a SQLAlchemy engine; table definitions and the canonical DDL live in `backend/` and `sql/schema.sql`. Neon provides branching, serverless scaling, and backups per your Neon project settings.
 
-**Data model diagram:** [ERD.md](ERD.md) (Mermaid `erDiagram` + FK / enum tables). OpenAPI DTOs describe the **HTTP** contract; the ERD describes **persistence**.
+**Data model diagram:** [ERD.md](ERD.md) (Mermaid `erDiagram` + FK / enum tables, plus notes on **GCS** for reel thumbnails). OpenAPI DTOs describe the **HTTP** contract; the ERD describes **relational** persistence; binary thumbnail bytes live in the bucket, not in Postgres.
 
 ---
 
@@ -125,4 +137,4 @@ Implementations: web `frontend/src/lib/api.ts`, iOS `Roam/Services/APIClient.swi
 | [ERD.md](ERD.md)                         | Database ER diagram and constraints                                              |
 | [OPENAPI.md](OPENAPI.md)                 | FastAPI `/openapi.json` → `openapi-typescript` / `api.d.ts`                    |
 | [AUTH_MIDDLEWARE.md](AUTH_MIDDLEWARE.md) | FastAPI auth gate, email verification, exempt paths                            |
-| [ENV.md](ENV.md)                         | Backend environment variables                                                  |
+| [ENV.md](ENV.md)                         | Backend environment variables (incl. GCS bucket / SA for reels)                |

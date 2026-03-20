@@ -66,9 +66,9 @@ Hosting does **not** provide server-side environment variables or runtime inject
 
 Typical secrets (names must match what the workflow passes through):
 
-- `VITE_API_BASE_URL` — public API Gateway base URL  
-- `VITE_FIREBASE_*` — Firebase web config (`apiKey`, `authDomain`, `projectId`, etc.)  
-- `VITE_ENVIRONMENT`, `VITE_GOOGLE_MAPS_API_KEY`, etc., as needed  
+- `VITE_API_BASE_URL` — public API Gateway base URL
+- `VITE_FIREBASE_*` — Firebase web config (`apiKey`, `authDomain`, `projectId`, etc.)
+- `VITE_ENVIRONMENT`, `VITE_GOOGLE_MAPS_API_KEY`, etc., as needed
 - `FIREBASE_TOKEN`, `FIREBASE_PROJECT_ID` — for `firebase deploy`
 
 **Important:** Changing a secret does nothing until the next workflow run rebuilds and redeploys; there is no redeploy-without-rebuild path for env changes.
@@ -79,10 +79,10 @@ Typical secrets (names must match what the workflow passes through):
 
 On push to `main` that touches `backend/` or `.github/workflows/deploy-backend.yml`, `.github/workflows/deploy-backend.yml`:
 
-1. Authenticates to GCP with **`GCP_SA_KEY`** (JSON key for a deploy service account).  
-2. Configures Docker for **Artifact Registry** in **`us-east1`**.  
-3. **Builds** the image from `backend/Dockerfile` (context `backend/`).  
-4. **Pushes** to `us-east1-docker.pkg.dev/<GCP_PROJECT_ID>/roam/backend:<git-sha>` and `:latest`.  
+1. Authenticates to GCP with **`GCP_SA_KEY`** (JSON key for a deploy service account).
+2. Configures Docker for **Artifact Registry** in **`us-east1`**.
+3. **Builds** the image from `backend/Dockerfile` (context `backend/`).
+4. **Pushes** to `us-east1-docker.pkg.dev/<GCP_PROJECT_ID>/roam/backend:<git-sha>` and `:latest`.
 5. **Deploys** to Cloud Run service **`roam-api`** in **`us-east1`** with that image.
 
 Required secrets include **`GCP_SA_KEY`** and **`GCP_PROJECT_ID`**. Cloud Run **runtime** env vars and secrets (database, Firebase Admin, API keys) are **not** all defined in this file—they are set in the Cloud Run console (or extended in the workflow with `--set-env-vars` / `--set-secrets`). See `docs/ENV.md`.
@@ -91,13 +91,13 @@ Required secrets include **`GCP_SA_KEY`** and **`GCP_PROJECT_ID`**. Cloud Run **
 
 The account behind `GCP_SA_KEY` typically needs:
 
-- **Artifact Registry Writer** — push images  
-- **Cloud Run Admin** — deploy `roam-api`  
-- **Service Account User** — if the Run service runs as another identity  
+- **Artifact Registry Writer** — push images
+- **Cloud Run Admin** — deploy `roam-api`
+- **Service Account User** — if the Run service runs as another identity
 
 ### Artifact Registry
 
-- **Repository:** `roam`, format **Docker**, region **`us-east1`** (aligned with Cloud Run and the workflow).  
+- **Repository:** `roam`, format **Docker**, region **`us-east1`** (aligned with Cloud Run and the workflow).
 - **Image:** `roam/backend` — tags per commit SHA and `latest`.
 
 The workflow creates images on push; you do not need to seed the image manually beyond creating the registry repository once.
@@ -110,8 +110,8 @@ The workflow may include `--allow-unauthenticated` on `gcloud run deploy`. **Col
 
 ## Summary
 
-| Surface | Mechanism | Config / secrets |
-|--------|-----------|------------------|
-| **Web static assets** | Firebase Hosting | Build-time `VITE_*` via GitHub Secrets → Vite → `firebase deploy` |
-| **API container** | Cloud Run `roam-api` | Image from GHA → Artifact Registry; runtime env in Cloud Run |
-| **Public API URL** | API Gateway | OpenAPI + gateway SA with `run.invoker` on `roam-api` |
+| Surface               | Mechanism            | Config / secrets                                                  |
+| --------------------- | -------------------- | ----------------------------------------------------------------- |
+| **Web static assets** | Firebase Hosting     | Build-time `VITE_*` via GitHub Secrets → Vite → `firebase deploy` |
+| **API container**     | Cloud Run `roam-api` | Image from GHA → Artifact Registry; runtime env in Cloud Run      |
+| **Public API URL**    | API Gateway          | OpenAPI + gateway SA with `run.invoker` on `roam-api`             |

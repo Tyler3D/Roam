@@ -6,7 +6,7 @@ private enum MainTab: Int, CaseIterable {
     case drafts = 1
     case plans = 2
     case map = 3
-    case shared = 4
+    case reels = 4
 
     var symbol: String {
         switch self {
@@ -14,7 +14,7 @@ private enum MainTab: Int, CaseIterable {
         case .drafts: return "⊟"
         case .plans: return "⊕"
         case .map: return "◎"
-        case .shared: return "↑"
+        case .reels: return "▦"
         }
     }
 
@@ -24,7 +24,7 @@ private enum MainTab: Int, CaseIterable {
         case .drafts: return "drafts"
         case .plans: return "plans"
         case .map: return "map"
-        case .shared: return "shared"
+        case .reels: return "reels"
         }
     }
 }
@@ -32,6 +32,8 @@ private enum MainTab: Int, CaseIterable {
 struct MainTabShell: View {
     let apiClient: APIClient
     @Binding var showDebugMenu: Bool
+    @EnvironmentObject private var shareIngress: ShareIngressCoordinator
+    @Environment(\.scenePhase) private var scenePhase
     @State private var stores: RoamStores
     @State private var bootstrapped = false
     @State private var tab: MainTab = .ideas
@@ -75,14 +77,37 @@ struct MainTabShell: View {
                 DotGridBackground(dotOpacity: 0.28)
                     .ignoresSafeArea()
 
+                if let err = shareIngress.lastError, !err.isEmpty {
+                    VStack {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(err)
+                                .font(RoamFont.mono(10))
+                                .foregroundStyle(RoamColors.error)
+                                .multilineTextAlignment(.leading)
+                            Button("OK") {
+                                shareIngress.dismissError()
+                            }
+                            .font(RoamFont.mono(10, weight: .medium))
+                            .foregroundStyle(RoamColors.loganDeep)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoamColors.background.opacity(0.92))
+                        Spacer()
+                    }
+                    .zIndex(2)
+                }
+
                 Group {
                     switch tab {
                     case .ideas:
                         NavigationStack(path: $navigationPathIdeas) {
-                            IdeasPage()
-                                .navigationDestination(for: String.self) { id in
-                                    IdeaDetailPage(ideaId: id)
-                                }
+                            IdeasPage {
+                                tab = .reels
+                            }
+                            .navigationDestination(for: String.self) { id in
+                                IdeaDetailPage(ideaId: id)
+                            }
                         }
                     case .drafts:
                         NavigationStack {
@@ -96,10 +121,8 @@ struct MainTabShell: View {
                         NavigationStack {
                             MapPage()
                         }
-                    case .shared:
-                        NavigationStack {
-                            ReelIngestionPage()
-                        }
+                    case .reels:
+                        ReelsPage()
                     }
                 }
             }
@@ -125,9 +148,34 @@ struct MainTabShell: View {
                     .environment(\.roamStores, stores)
             }
         }
-        .onChange(of: tab) { _, newTab in
-            if newTab == .ideas {
+        .onChange(of: tab) { oldTab, newTab in
+            if oldTab == .ideas && newTab != .ideas {
                 navigationPathIdeas = NavigationPath()
+            }
+        }
+        .onChange(of: bootstrapped) { _, ok in
+            if ok {
+                Task { await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores) }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, bootstrapped {
+                Task { await shareIngress.runIfNeeded(apiClient: apiClient, stores: stores) }
+            }
+        }
+        .onChange(of: shareIngress.pendingIdeaNavigationId) { _, id in
+            guard let id, !id.isEmpty else { return }
+            tab = .ideas
+            navigationPathIdeas = NavigationPath()
+            navigationPathIdeas.append(id)
+            Task { @MainActor in
+                shareIngress.clearPendingNavigation()
+            }
+        }
+        .onChange(of: shareIngress.pendingSwitchToReels) { _, go in
+            if go {
+                tab = .reels
+                shareIngress.clearPendingSwitchToReels()
             }
         }
         #if DEBUG
@@ -180,6 +228,16 @@ struct MainTabShell: View {
                                 .padding(.horizontal, stores.plans.drafts.count > 9 ? 4 : 0)
                                 .frame(minWidth: 14, minHeight: 14)
                                 .background(RoamColors.loganDark)
+                                .clipShape(Capsule())
+                                .offset(x: -8, y: 4)
+                        }
+                        if item == .reels, stores.reels.needsReviewCount > 0 {
+                            Text(stores.reels.needsReviewCount > 99 ? "99+" : "\(stores.reels.needsReviewCount)")
+                                .font(RoamFont.mono(9, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, stores.reels.needsReviewCount > 9 ? 4 : 0)
+                                .frame(minWidth: 14, minHeight: 14)
+                                .background(RoamColors.loganDeep)
                                 .clipShape(Capsule())
                                 .offset(x: -8, y: 4)
                         }

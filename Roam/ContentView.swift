@@ -10,9 +10,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if appConfig.isMockAuth {
-                featureContent
-            } else if authManager.isLoading {
+            if authManager.isLoading {
                 ProgressView("Loading...")
             } else if authManager.isSignedIn {
                 AuthGateView { featureContent }
@@ -35,7 +33,8 @@ struct ContentView: View {
             MainTabShell(apiClient: apiClient, showDebugMenu: showDebugMenuBinding)
         case .reelIngestionMVP:
             NavigationStack {
-                ReelIngestionPage()
+                ReelsPage()
+                    .environment(\.roamStores, RoamStores(api: apiClient))
                     #if DEBUG
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
@@ -69,4 +68,5 @@ struct ContentView: View {
         .environment(AppConfig())
         .environment(AuthManager())
         .environment(\.apiClient, APIClient(authManager: AuthManager(), appConfig: AppConfig()))
+        .environmentObject(ShareIngressCoordinator())
 }

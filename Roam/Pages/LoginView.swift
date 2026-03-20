@@ -3,7 +3,6 @@ import GoogleSignInSwift
 
 struct LoginView: View {
     @Environment(AuthManager.self) private var authManager
-    @Environment(AppConfig.self) private var appConfig
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -123,14 +122,6 @@ struct LoginView: View {
                 Task { await signInWithGoogle() }
             }
             .disabled(isLoading)
-
-            if appConfig.isMockAuth {
-                Button("Sign in (Mock)") {
-                    Task { @MainActor in authManager.signInMock() }
-                }
-                .buttonStyle(.bordered)
-                .disabled(isLoading)
-            }
 
             VStack(alignment: .leading, spacing: 12) {
                 Button("Forgot password?") {

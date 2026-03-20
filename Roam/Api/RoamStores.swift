@@ -19,12 +19,14 @@ extension EnvironmentValues {
 @Observable
 final class RoamStores {
     let ideas: IdeasQueryStore
+    let reels: ReelsQueryStore
     let plans: PlansQueryStore
     let notifications: NotificationsQueryStore
     let user: UserQueryStore
 
     init(api: APIClient) {
         ideas = IdeasQueryStore(api: api)
+        reels = ReelsQueryStore(api: api)
         plans = PlansQueryStore(api: api)
         notifications = NotificationsQueryStore(api: api)
         user = UserQueryStore(api: api)
@@ -32,6 +34,7 @@ final class RoamStores {
 
     func refreshAll() async {
         await ideas.refresh()
+        await reels.refresh()
         await plans.refresh()
         await notifications.refresh()
         await user.refresh()

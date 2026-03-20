@@ -166,6 +166,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reels/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reelssummary */
+        get: operations["reelsSummary_api_reels_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listreels */
+        get: operations["listReels_api_reels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reels/{reelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Getreel */
+        get: operations["getReel_api_reels__reelId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reels/{reelId}/ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Createideaonreel */
+        post: operations["createIdeaOnReel_api_reels__reelId__ideas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reels/{reelId}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promotereel */
+        post: operations["promoteReel_api_reels__reelId__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ideas": {
         parameters: {
             query?: never;
@@ -413,6 +498,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/places/search-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searchplaceslist */
+        get: operations["searchPlacesList_api_places_search_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/friends": {
         parameters: {
             query?: never;
@@ -635,6 +737,18 @@ export interface components {
              */
             frames: string[];
         };
+        /** CreateIdeaOnReelBody */
+        CreateIdeaOnReelBody: {
+            /** Title */
+            title: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Placeid */
+            placeId?: string | null;
+        };
         /** FriendRequest */
         FriendRequest: {
             /**
@@ -731,6 +845,8 @@ export interface components {
             displayName?: string | null;
             /** Placeid */
             placeId?: string | null;
+            /** Savedreelid */
+            savedReelId?: string | null;
             status: components["schemas"]["IdeaStatus"];
             /**
              * Plancount
@@ -771,8 +887,13 @@ export interface components {
             /** Displayname */
             displayName?: string | null;
             status?: components["schemas"]["IdeaStatus"] | null;
+            /** Placeid */
+            placeId?: string | null;
         };
-        /** IngestJobResponse */
+        /**
+         * IngestJobResponse
+         * @description GET /ingest/{jobId}: one reel job can produce multiple ideas (one pipeline_result per candidate).
+         */
         IngestJobResponse: {
             /**
              * Id
@@ -808,6 +929,8 @@ export interface components {
              */
             updatedAt: string;
             pipelineResult?: components["schemas"]["PipelineResultRead"] | null;
+            /** Pipelineresults */
+            pipelineResults?: components["schemas"]["PipelineResultRead"][];
         };
         /**
          * JobStatus
@@ -884,6 +1007,8 @@ export interface components {
             estimatedMinutes?: number | null;
             /** Modelname */
             modelName?: string | null;
+            /** Promptversion */
+            promptVersion?: string | null;
             /** Rawoutput */
             rawOutput?: {
                 [key: string]: unknown;
@@ -1071,6 +1196,77 @@ export interface components {
             /** Tasknotes */
             taskNotes?: string | null;
         };
+        /** PromoteReelRequest */
+        PromoteReelRequest: {
+            /** Promotions */
+            promotions?: components["schemas"]["ReelPromotionItem"][];
+        };
+        /** PromoteReelResponse */
+        PromoteReelResponse: {
+            /** Ideaids */
+            ideaIds?: string[];
+            reelStatus: components["schemas"]["SavedReelStatus"];
+        };
+        /** ReelIngestCandidateRead */
+        ReelIngestCandidateRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Savedreelid
+             * Format: uuid
+             */
+            savedReelId: string;
+            /** Sortindex */
+            sortIndex: number;
+            /**
+             * Previewtitle
+             * @default
+             */
+            previewTitle: string;
+            /**
+             * Issynthetic
+             * @default false
+             */
+            isSynthetic: boolean;
+            /** Resolvedplaceid */
+            resolvedPlaceId?: string | null;
+            /** Promotedideaid */
+            promotedIdeaId?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Resolvedplacename */
+            resolvedPlaceName?: string | null;
+        };
+        /** ReelPromotionItem */
+        ReelPromotionItem: {
+            /**
+             * Candidateid
+             * Format: uuid
+             */
+            candidateId: string;
+            /** Title */
+            title?: string | null;
+            /** Mapsquery */
+            mapsQuery?: string | null;
+            /** Placeaddress */
+            placeAddress?: string | null;
+            /** Category */
+            category?: string | null;
+        };
+        /** ReelsSummaryRead */
+        ReelsSummaryRead: {
+            /**
+             * Needsreviewcount
+             * @default 0
+             */
+            needsReviewCount: number;
+        };
         /** RsvpRequest */
         RsvpRequest: {
             /** Firstname */
@@ -1106,6 +1302,96 @@ export interface components {
          * @enum {string}
          */
         RsvpStatus: RsvpStatus;
+        /** SavedReelDetailRead */
+        SavedReelDetailRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Jobid
+             * Format: uuid
+             */
+            jobId: string;
+            /** Reelurl */
+            reelUrl: string;
+            /** Title */
+            title: string;
+            status: components["schemas"]["SavedReelStatus"];
+            /** Thumbnailsignedurl */
+            thumbnailSignedUrl?: string | null;
+            /** Jobstatus */
+            jobStatus: string;
+            /** Joberror */
+            jobError?: string | null;
+            /** Candidates */
+            candidates?: components["schemas"]["ReelIngestCandidateRead"][];
+            /** Ideas */
+            ideas?: components["schemas"]["SavedReelIdeaSummary"][];
+            /** Ideaids */
+            ideaIds?: string[];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** SavedReelIdeaSummary */
+        SavedReelIdeaSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            status: components["schemas"]["IdeaStatus"];
+            /** Placeid */
+            placeId?: string | null;
+            /** Placename */
+            placeName?: string | null;
+        };
+        /** SavedReelListItem */
+        SavedReelListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Jobid
+             * Format: uuid
+             */
+            jobId: string;
+            /** Reelurl */
+            reelUrl: string;
+            /** Title */
+            title: string;
+            status: components["schemas"]["SavedReelStatus"];
+            /** Thumbnailsignedurl */
+            thumbnailSignedUrl?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * SavedReelStatus
+         * @enum {string}
+         */
+        SavedReelStatus: SavedReelStatus;
         /** TaskCreate */
         TaskCreate: {
             /** Description */
@@ -1526,6 +1812,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reelsSummary_api_reels_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReelsSummaryRead"];
+                };
+            };
+        };
+    };
+    listReels_api_reels_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReelListItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReel_api_reels__reelId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReelDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createIdeaOnReel_api_reels__reelId__ideas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIdeaOnReelBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promoteReel_api_reels__reelId__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteReelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoteReelResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2181,6 +2620,38 @@ export interface operations {
             };
         };
     };
+    searchPlacesList_api_places_search_list_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listFriends_api_friends_get: {
         parameters: {
             query?: never;
@@ -2519,4 +2990,10 @@ export enum RsvpStatus {
     pending = "pending",
     accepted = "accepted",
     declined = "declined"
+}
+export enum SavedReelStatus {
+    processing = "processing",
+    needs_review = "needs_review",
+    promoted = "promoted",
+    failed = "failed"
 }

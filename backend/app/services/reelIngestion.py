@@ -18,21 +18,23 @@ from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
+from app.models.savedReels import ReelIngestCandidateModel, SavedReelModel, SavedReelStatus
 
 logger = logging.getLogger("roam.reel_ingestion")
 
 CONFIDENCE_THRESHOLD = 0.7
+MAX_IDEA_NOTES_LEN = 4000
 
 
-def _load_reel_prompt() -> str:
+def _loadReelPrompt() -> str:
     path = Path(__file__).resolve().parent.parent / "prompts" / "reel_interpret.md"
     return path.read_text(encoding="utf-8")
 
 
-REEL_SYSTEM_PROMPT = _load_reel_prompt()
+REEL_SYSTEM_PROMPT = _loadReelPrompt()
 
 
-def get_reel_prompt_version() -> str:
+def getReelPromptVersion() -> str:
     h = hashlib.md5(REEL_SYSTEM_PROMPT.encode()).hexdigest()[:8]
     return f"reel-{h}"
 
@@ -76,14 +78,14 @@ _LEGACY_CATEGORY_MAP: dict[str, str] = {
 }
 
 
-def _map_legacy_category(raw: str | None) -> str:
+def _mapLegacyCategory(raw: str | None) -> str:
     if not raw:
         return "other"
     key = raw.lower().strip()
     return _LEGACY_CATEGORY_MAP.get(key, "other")
 
 
-def _strip_json_fences(raw: str) -> str:
+def _stripJsonFences(raw: str) -> str:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -94,9 +96,9 @@ def _strip_json_fences(raw: str) -> str:
     return cleaned
 
 
-def _try_parse_legacy_list_json(text: str) -> ReelInterpretOutput | None:
+def _tryParseLegacyListJson(text: str) -> ReelInterpretOutput | None:
     """Support old array-of-places API shape stored in rawOutput."""
-    cleaned = _strip_json_fences(text)
+    cleaned = _stripJsonFences(text)
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError:
@@ -114,7 +116,7 @@ def _try_parse_legacy_list_json(text: str) -> ReelInterpretOutput | None:
                 title=name,
                 mapsQuery=name if name != "Unknown" else None,
                 placeAddress=item.get("placeAddress"),
-                category=_map_legacy_category(item.get("category")),
+                category=_mapLegacyCategory(item.get("category")),
                 tags=[],
                 confidence=float(item.get("confidence") or 0.0),
                 evidence="Legacy reel JSON array",
@@ -129,7 +131,7 @@ def _try_parse_legacy_list_json(text: str) -> ReelInterpretOutput | None:
     )
 
 
-def _build_gemini_contents(framesData: list[bytes], thumbnailData: bytes | None, metadata: dict) -> list:
+def _buildGeminiContents(framesData: list[bytes], thumbnailData: bytes | None, metadata: dict) -> list:
     """Build multimodal contents for Gemini: text + images."""
     parts: list = []
 
@@ -162,12 +164,12 @@ def _build_gemini_contents(framesData: list[bytes], thumbnailData: bytes | None,
     return parts
 
 
-def _call_vision_reel(
+def _callVisionReel(
     framesData: list[bytes], thumbnailData: bytes | None, metadata: dict
 ) -> ReelInterpretOutput:
     client = genai.Client(api_key=getGeminiApiKey())
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    contents = _build_gemini_contents(framesData, thumbnailData, metadata)
+    contents = _buildGeminiContents(framesData, thumbnailData, metadata)
 
     try:
         response = client.models.generate_content(
@@ -187,13 +189,13 @@ def _call_vision_reel(
         raise
 
     raw = response.text or "{}"
-    cleaned = _strip_json_fences(raw)
+    cleaned = _stripJsonFences(raw)
 
     try:
         return ReelInterpretOutput.model_validate_json(cleaned)
     except ValidationError:
         logger.warning("reel_structured_parse_failed_trying_legacy", extra={"raw": raw[:200]})
-        legacy = _try_parse_legacy_list_json(cleaned)
+        legacy = _tryParseLegacyListJson(cleaned)
         if legacy is not None:
             return legacy
         logger.error("reel_parse_failed", extra={"raw": raw[:200]})
@@ -205,7 +207,7 @@ def _call_vision_reel(
         )
 
 
-def _refined_title(parsed: ReelInterpretOutput, fallback: str, filtered: list[ReelCandidate]) -> str:
+def _refinedTitle(parsed: ReelInterpretOutput, fallback: str, filtered: list[ReelCandidate]) -> str:
     s = (parsed.reelSummary or "").strip()
     if s:
         return s[:500]
@@ -219,13 +221,13 @@ def _refined_title(parsed: ReelInterpretOutput, fallback: str, filtered: list[Re
     return fallback[:500]
 
 
-def _pipeline_category(filtered: list[ReelCandidate]) -> str | None:
+def _pipelineCategory(filtered: list[ReelCandidate]) -> str | None:
     if not filtered:
         return None
     return filtered[0].category
 
 
-def _should_resolve_maps(c: ReelCandidate) -> bool:
+def _shouldResolveMaps(c: ReelCandidate) -> bool:
     if c.kind == "location":
         return bool((c.mapsQuery or c.title or "").strip())
     return bool(c.mapsQuery and c.mapsQuery.strip())
@@ -270,7 +272,7 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
         return None
 
 
-def _create_or_get_place(
+def _createOrGetPlace(
     session: Session,
     place_name: str,
     address: str | None,
@@ -300,7 +302,81 @@ def _create_or_get_place(
     return place
 
 
-def _auto_select_place(
+def createIdeaPipelineFromCandidate(
+    session: Session,
+    *,
+    job_id: UUID,
+    user_id: UUID,
+    reel_url: str | None,
+    candidate: ReelCandidate,
+    raw_output: dict,
+    saved_reel_id: UUID | None = None,
+) -> UUID:
+    """Create idea + pipeline_result + optional place suggestion; return new idea id."""
+    estimated_minutes = 90
+    prompt_version = getReelPromptVersion()
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    idea_title = (candidate.title or "Suggestion")[:500]
+    notes = (candidate.evidence or candidate.confidenceReason or "").strip()
+
+    idea = IdeaModel(
+        userId=user_id,
+        title=idea_title,
+        notes=notes[:MAX_IDEA_NOTES_LEN],
+        sourceUrl=reel_url or "",
+        savedReelId=saved_reel_id,
+        status=IdeaStatus.suggesting,
+    )
+    session.add(idea)
+    session.flush()
+
+    pr = PipelineResultModel(
+        ideaId=idea.id,
+        jobId=job_id,
+        source="reel",
+        refinedTitle=(candidate.title or idea_title)[:500] if candidate.title or idea_title else None,
+        category=candidate.category,
+        estimatedMinutes=estimated_minutes,
+        modelName=model_name,
+        promptVersion=prompt_version,
+        rawOutput=raw_output,
+    )
+    session.add(pr)
+    session.flush()
+
+    suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
+    if _shouldResolveMaps(candidate):
+        query_key = (candidate.mapsQuery or candidate.title or "").strip()
+        if query_key:
+            resolved = _resolveGoogleMaps(query_key, candidate.placeAddress) or {}
+            place = _createOrGetPlace(
+                session,
+                place_name=candidate.title or query_key,
+                address=resolved.get("placeAddress", candidate.placeAddress),
+                google_place_id=resolved.get("googlePlaceId"),
+                category=candidate.category,
+                latitude=resolved.get("latitude"),
+                longitude=resolved.get("longitude"),
+            )
+            if place:
+                sugg = PlaceSuggestionModel(
+                    resultId=pr.id,
+                    placeId=place.id,
+                    rawName=candidate.title or query_key,
+                    confidence=candidate.confidence,
+                )
+                session.add(sugg)
+                session.flush()
+                suggestions.append((sugg, candidate.confidence))
+
+    _autoSelectPlace(session, idea, suggestions)
+    idea.status = IdeaStatus.ready
+    idea.updatedAt = datetime.utcnow()
+    session.add(idea)
+    return idea.id
+
+
+def _autoSelectPlace(
     session: Session,
     idea: IdeaModel,
     suggestions: list[tuple[PlaceSuggestionModel, float | None]],
@@ -324,6 +400,25 @@ def _auto_select_place(
             return
 
 
+def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | None:
+    if not _shouldResolveMaps(c):
+        return None
+    q = (c.mapsQuery or c.title or "").strip()
+    if not q:
+        return None
+    resolved = _resolveGoogleMaps(q, c.placeAddress) or {}
+    place = _createOrGetPlace(
+        session,
+        place_name=c.title or q,
+        address=resolved.get("placeAddress", c.placeAddress),
+        google_place_id=resolved.get("googlePlaceId"),
+        category=c.category,
+        latitude=resolved.get("latitude"),
+        longitude=resolved.get("longitude"),
+    )
+    return place.id if place else None
+
+
 def processIngestionJob(
     jobId: str,
     framesData: list[bytes],
@@ -341,106 +436,80 @@ def processIngestionJob(
             logger.error("Job not found", extra={"jobId": jobId})
             return
 
+        saved = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
+        if not saved:
+            logger.error("saved_reel_missing_for_job", extra={"jobId": jobId})
+            return
+
         title = metadata.get("reelTitle") or metadata.get("shareText") or "Untitled reel"
 
-        if job.ideaId:
-            idea = session.get(IdeaModel, job.ideaId)
-            if not idea or idea.userId != job.userId:
-                logger.error(
-                    "reel_ingestion_missing_idea",
-                    extra={"jobId": jobId, "ideaId": str(job.ideaId) if job.ideaId else None},
-                )
-                return
-            if (metadata.get("reelTitle") or "").strip():
-                idea.title = title[:500]
-            url = metadata.get("reelUrl")
-            if url:
-                idea.sourceUrl = url
-            idea.status = IdeaStatus.suggesting
-            idea.updatedAt = datetime.utcnow()
-            session.add(idea)
-            session.flush()
-        else:
-            idea = IdeaModel(
-                userId=job.userId,
-                title=title[:500],
-                sourceUrl=metadata.get("reelUrl"),
-                status=IdeaStatus.captured,
-            )
-            session.add(idea)
-            session.flush()
-
-            idea.status = IdeaStatus.suggesting
-            idea.updatedAt = datetime.utcnow()
-            session.add(idea)
-            session.flush()
-
-        parsed = _call_vision_reel(framesData, thumbnailData, metadata)
+        parsed = _callVisionReel(framesData, thumbnailData, metadata)
         filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
+        filtered_ordered = sorted(filtered, key=lambda c: c.confidence, reverse=True)
+        reel_url = metadata.get("reelUrl")
 
-        refined_title = _refined_title(parsed, title, filtered)
-        category = _pipeline_category(filtered)
-        estimated_minutes = 90
-        prompt_version = get_reel_prompt_version()
-
-        raw_output: dict = {
-            "structured": parsed.model_dump(),
-            "metadata": metadata,
-        }
-
-        pipeline_result = PipelineResultModel(
-            ideaId=idea.id,
-            jobId=UUID(jobId),
-            source="reel",
-            refinedTitle=refined_title,
-            category=category,
-            estimatedMinutes=estimated_minutes,
-            modelName=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            promptVersion=prompt_version,
-            rawOutput=raw_output,
-        )
-        session.add(pipeline_result)
+        saved.updatedAt = datetime.utcnow()
+        if (metadata.get("reelTitle") or "").strip():
+            saved.title = title[:500]
+        session.add(saved)
         session.flush()
 
-        suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
-        for candidate in filtered:
-            if not _should_resolve_maps(candidate):
-                continue
+        idea_ids: list[UUID] = []
 
-            query_key = (candidate.mapsQuery or candidate.title or "").strip()
-            if not query_key:
-                continue
-
-            place_address = candidate.placeAddress
-            category_cand = candidate.category
-            confidence = candidate.confidence
-
-            resolved = _resolveGoogleMaps(query_key, place_address) or {}
-            place = _create_or_get_place(
+        if len(filtered_ordered) == 1:
+            c = filtered_ordered[0]
+            raw_output = {
+                "candidate": c.model_dump(),
+                "fullStructured": parsed.model_dump(),
+                "metadata": metadata,
+            }
+            iid = createIdeaPipelineFromCandidate(
                 session,
-                place_name=candidate.title or query_key,
-                address=resolved.get("placeAddress", place_address),
-                google_place_id=resolved.get("googlePlaceId"),
-                category=category_cand,
-                latitude=resolved.get("latitude"),
-                longitude=resolved.get("longitude"),
+                job_id=UUID(jobId),
+                user_id=job.userId,
+                reel_url=reel_url,
+                candidate=c,
+                raw_output=raw_output,
+                saved_reel_id=saved.id,
             )
-            if place:
-                sugg = PlaceSuggestionModel(
-                    resultId=pipeline_result.id,
-                    placeId=place.id,
-                    rawName=candidate.title or query_key,
-                    confidence=confidence,
+            idea_ids.append(iid)
+            saved.status = SavedReelStatus.promoted
+        else:
+            if not filtered:
+                llm_raw = {
+                    "synthetic": True,
+                    "structured": parsed.model_dump(),
+                    "metadata": metadata,
+                    "branch": "no_candidates_above_threshold",
+                }
+                session.add(
+                    ReelIngestCandidateModel(
+                        savedReelId=saved.id,
+                        sortIndex=0,
+                        llmRawOutput=llm_raw,
+                        resolvedPlaceId=None,
+                    )
                 )
-                session.add(sugg)
-                session.flush()
-                suggestions.append((sugg, confidence))
+            else:
+                for idx, c in enumerate(filtered_ordered):
+                    rp = _resolvedPlaceForCandidate(session, c)
+                    llm_raw = {
+                        "candidate": c.model_dump(),
+                        "fullStructured": parsed.model_dump(),
+                        "metadata": metadata,
+                    }
+                    session.add(
+                        ReelIngestCandidateModel(
+                            savedReelId=saved.id,
+                            sortIndex=idx,
+                            llmRawOutput=llm_raw,
+                            resolvedPlaceId=rp,
+                        )
+                    )
+            saved.status = SavedReelStatus.needs_review
 
-        _auto_select_place(session, idea, suggestions)
-
-        idea.status = IdeaStatus.ready
-        idea.updatedAt = datetime.utcnow()
-        session.add(idea)
+        saved.updatedAt = datetime.utcnow()
+        session.add(saved)
 
         job.status = JobStatus.done
         job.updatedAt = datetime.utcnow()
@@ -451,9 +520,11 @@ def processIngestionJob(
             "reel_ingestion_complete",
             extra={
                 "jobId": jobId,
-                "ideaId": str(idea.id),
-                "suggestionCount": len(suggestions),
+                "ideaIds": [str(i) for i in idea_ids],
+                "ideaCount": len(idea_ids),
+                "savedReelStatus": saved.status.value,
                 "candidateCount": len(parsed.candidates),
+                "filteredCount": len(filtered),
             },
         )
     except ProviderRateLimitError as e:
@@ -465,6 +536,11 @@ def processIngestionJob(
                 job.error = str(e)
                 job.updatedAt = datetime.utcnow()
                 session.add(job)
+                sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
+                if sr:
+                    sr.status = SavedReelStatus.failed
+                    sr.updatedAt = datetime.utcnow()
+                    session.add(sr)
                 session.commit()
         except Exception:
             logger.exception("failed_to_update_job_status", extra={"jobId": jobId})
@@ -477,6 +553,11 @@ def processIngestionJob(
                 job.error = "Processing failed"
                 job.updatedAt = datetime.utcnow()
                 session.add(job)
+                sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
+                if sr:
+                    sr.status = SavedReelStatus.failed
+                    sr.updatedAt = datetime.utcnow()
+                    session.add(sr)
                 session.commit()
         except Exception:
             logger.exception("failed_to_update_job_status", extra={"jobId": jobId})

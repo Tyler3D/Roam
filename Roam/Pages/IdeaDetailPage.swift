@@ -99,7 +99,10 @@ struct IdeaDetailPage: View {
         .background(RoamColors.background)
         .navigationTitle("idea")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            await load()
+            await pollWhileReelSuggesting()
+        }
     }
 
     private func headline(for idea: Idea) -> String {
@@ -117,6 +120,20 @@ struct IdeaDetailPage: View {
             stores.ideas.replaceLocal(loaded)
         } catch {
             errorText = error.localizedDescription
+        }
+    }
+
+    /// Reel ingest creates the idea in `suggesting` before the vision job finishes; refresh until pipeline data arrives.
+    private func pollWhileReelSuggesting() async {
+        guard let start = idea, start.status == .suggesting, start.pipelineResult == nil else { return }
+        for _ in 0..<120 {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard let reloaded = try? await apiClient.getIdea(id: ideaId) else { continue }
+            idea = reloaded
+            stores.ideas.replaceLocal(reloaded)
+            if reloaded.pipelineResult != nil || reloaded.status != .suggesting {
+                break
+            }
         }
     }
 
