@@ -29,5 +29,9 @@
 	<string>https://roam-gateway-cm0ahzq6.ue.gateway.dev</string>
 	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>
 	<string>google.com,password</string>
+	<key>GOOGLE_MAPS_IOS_API_KEY</key>
+	<string></string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Roam uses your location to show where you are on the collection map.</string>
 </dict>
 </plist>

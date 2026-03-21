@@ -22,6 +22,7 @@ struct ReelDetailPage: View {
     @State private var showOriginalSuggestions = false
     @State private var showAddIdea = false
     @State private var showNewCollectionSheet = false
+    @State private var newCollectionBanner: (title: String, subtitle: String)?
     @State private var isRetryingIngest = false
     @State private var retryIngestError: String?
     @State private var loadedAutoSavedIdea: Idea?
@@ -74,10 +75,21 @@ struct ReelDetailPage: View {
             }
         }
         .sheet(isPresented: $showNewCollectionSheet) {
-            NewSharedCollectionSheet(apiClient: apiClient) { newId in
-                selectedSharedCollectionIds.insert(newId)
+            NewSharedCollectionSheet(apiClient: apiClient) { created, invitedFirstNames in
+                selectedSharedCollectionIds.insert(created.id)
                 showNewCollectionSheet = false
                 Task { await reloadCollectionsOnly() }
+                let sub = newCollectionBannerSubtitle(invitedFirstNames: invitedFirstNames)
+                newCollectionBanner = ("\(created.name) created", sub)
+            }
+            .presentationDetents([.fraction(0.92), .large])
+            .presentationDragIndicator(.visible)
+        }
+        .onChange(of: newCollectionBanner?.title) { _, newVal in
+            guard newVal != nil else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run { newCollectionBanner = nil }
             }
         }
         .task { await load() }
@@ -288,6 +300,12 @@ struct ReelDetailPage: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
 
+            if let b = newCollectionBanner {
+                newCollectionSuccessBanner(b)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
+
             ForEach(Array(ordered.enumerated()), id: \.element.id) { idx, c in
                 multiPlaceCandidateCard(d, c, rank: idx + 1)
                     .padding(.horizontal, 20)
@@ -404,51 +422,40 @@ struct ReelDetailPage: View {
     private func reviewSaveToBar(_: APIClient.SavedReelDetailDTO) -> some View {
         let personalName = collections.first { $0.isPersonalDefault }?.name ?? "My saves"
         return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
-                Text("Also add to:")
-                    .font(Font.system(size: 12))
-                    .foregroundStyle(RoamColors.textMuted)
+            Text("Also add to a shared collection with friends?")
+                .font(Font.system(size: 12))
+                .foregroundStyle(RoamColors.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(collections.filter { !$0.isPersonalDefault }) { c in
-                            let on = selectedSharedCollectionIds.contains(c.id)
-                            Button {
-                                if on { selectedSharedCollectionIds.remove(c.id) }
-                                else { selectedSharedCollectionIds.insert(c.id) }
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(on ? RoamColors.reviewAccent : RoamColors.reviewBorder)
-                                    collectionMemberDots(c, maxDots: 3)
-                                    Text(c.name)
-                                        .font(Font.system(size: 12, weight: .medium))
-                                        .lineLimit(1)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(on ? RoamColors.reviewAccentLight : Color.clear)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(on ? RoamColors.reviewAccent : RoamColors.reviewBorder, lineWidth: on ? 1.5 : 1.5))
-                                .foregroundStyle(on ? RoamColors.text : RoamColors.textMuted)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(collections.filter { !$0.isPersonalDefault }) { c in
+                        let on = selectedSharedCollectionIds.contains(c.id)
                         Button {
-                            showNewCollectionSheet = true
+                            if on { selectedSharedCollectionIds.remove(c.id) }
+                            else { selectedSharedCollectionIds.insert(c.id) }
                         } label: {
-                            Text("+ new")
-                                .font(Font.system(size: 12, weight: .semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(RoamColors.surface)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(RoamColors.reviewAccent, lineWidth: 1.5))
-                                .foregroundStyle(RoamColors.reviewAccent)
+                            HStack(spacing: 5) {
+                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(on ? RoamColors.reviewAccent : RoamColors.reviewBorder)
+                                collectionMemberDots(c, maxDots: 3)
+                                Text(c.name)
+                                    .font(Font.system(size: 12, weight: .medium))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(on ? RoamColors.reviewAccentLight : Color.clear)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(on ? RoamColors.reviewAccent : RoamColors.reviewBorder, lineWidth: on ? 1.5 : 1.5))
+                            .foregroundStyle(on ? RoamColors.text : RoamColors.textMuted)
                         }
                         .buttonStyle(.plain)
+                    }
+
+                    NewSharedCollectionChipButton {
+                        showNewCollectionSheet = true
                     }
                 }
             }
@@ -493,6 +500,50 @@ struct ReelDetailPage: View {
     private func stripPersonalFromSharedSelection() {
         guard let pid = personalDefaultCollectionId else { return }
         selectedSharedCollectionIds.remove(pid)
+    }
+
+    private func formatNotifiedNames(_ names: [String]) -> String {
+        let n = names.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !n.isEmpty else { return "" }
+        if n.count == 1 { return n[0] }
+        if n.count == 2 { return "\(n[0]) & \(n[1])" }
+        return n.dropLast().joined(separator: ", ") + " & " + (n.last ?? "")
+    }
+
+    private func newCollectionBannerSubtitle(invitedFirstNames: [String]) -> String {
+        let formatted = formatNotifiedNames(invitedFirstNames)
+        if formatted.isEmpty {
+            return "Shared with you — add more members anytime."
+        }
+        return "\(formatted) will be notified"
+    }
+
+    @ViewBuilder
+    private func newCollectionSuccessBanner(_ banner: (title: String, subtitle: String)) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(RoamColors.reviewSuccess)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(banner.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(RoamColors.text)
+                if !banner.subtitle.isEmpty {
+                    Text(banner.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(RoamColors.reviewSuccessBg)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(RoamColors.reviewSuccess.opacity(0.35), lineWidth: 1)
+        )
     }
 
     private func multiPlaceCandidateCard(_ d: APIClient.SavedReelDetailDTO, _ c: APIClient.ReelCandidateDetailDTO, rank: Int) -> some View {
@@ -669,9 +720,10 @@ struct ReelDetailPage: View {
                     .padding(16)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Also add to a shared collection?")
+                        Text("Also add to a shared collection with friends?")
                             .font(.system(size: 11))
                             .foregroundStyle(RoamColors.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 ForEach(collections.filter { !$0.isPersonalDefault }) { c in
@@ -694,17 +746,14 @@ struct ReelDetailPage: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
-                                Button {
+                                NewSharedCollectionChipButton(compact: true) {
                                     showNewCollectionSheet = true
-                                } label: {
-                                    Text("+ New collection")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 3)
-                                        .overlay(Capsule().stroke(RoamColors.reviewBorder))
                                 }
-                                .buttonStyle(.plain)
                             }
+                        }
+
+                        if let b = newCollectionBanner {
+                            newCollectionSuccessBanner(b)
                         }
 
                         if let attachSharedError {
@@ -1109,13 +1158,62 @@ struct ReelDetailPage: View {
     }
 }
 
-// MARK: - New shared collection
+// MARK: - New shared collection chip + sheet
+
+private struct PulsingAccentDot: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: false)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let phase = (sin(t * 2 * .pi / 2) + 1) / 2
+            Circle()
+                .fill(RoamColors.reviewAccent)
+                .frame(width: 8, height: 8)
+                .scaleEffect(1 + 0.28 * phase)
+                .opacity(1 - 0.48 * phase)
+        }
+    }
+}
+
+private struct NewSharedCollectionChipButton: View {
+    var compact: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                HStack(spacing: compact ? 2 : 3) {
+                    Text("+")
+                        .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                    Text("New")
+                        .font(.system(size: compact ? 11 : 12, weight: .semibold))
+                }
+                .foregroundStyle(RoamColors.reviewAccent)
+                .padding(.horizontal, compact ? 9 : 10)
+                .padding(.vertical, compact ? 4 : 5)
+                .padding(.trailing, compact ? 5 : 7)
+                .padding(.top, 2)
+                .background(RoamColors.surface)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(RoamColors.reviewAccent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                )
+
+                PulsingAccentDot()
+                    .offset(x: compact ? 3 : 4, y: compact ? -3 : -4)
+                    .allowsHitTesting(false)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 private struct NewSharedCollectionSheet: View {
     let apiClient: APIClient
-    var onCreated: (UUID) -> Void
+    var onCreated: (APIClient.CollectionReadDTO, [String]) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var nameFieldFocused: Bool
     @State private var name = ""
     @State private var friends: [APIClient.FriendshipRowDTO] = []
     @State private var selectedFriendIds: Set<UUID> = []
@@ -1123,126 +1221,424 @@ private struct NewSharedCollectionSheet: View {
     @State private var searchFriendMatches: [RoamUser] = []
     @State private var isSearchingPeople = false
     @State private var searchPeopleTask: Task<Void, Never>?
-    @State private var isLoading = true
+    @State private var isLoadingFriends = true
     @State private var isSaving = false
     @State private var error: String?
 
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canCreate: Bool { !trimmedName.isEmpty }
+
+    private var previewTitle: String {
+        trimmedName.isEmpty ? "Untitled collection" : trimmedName
+    }
+
+    private var previewMemberLine: String {
+        let labels = ["You"] + selectedFriendIds.sorted(by: { lhs, rhs in
+            labelForFriend(lhs).localizedCaseInsensitiveCompare(labelForFriend(rhs)) == .orderedAscending
+        }).map(labelForFriend)
+        return labels.joined(separator: ", ")
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("name") {
-                    TextField("collection name", text: $name)
-                        .font(RoamFont.mono(12))
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(RoamColors.textMuted)
+                    .frame(width: 64, alignment: .leading)
+
+                Text("New Collection")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(RoamColors.text)
+                    .frame(maxWidth: .infinity)
+
+                Button {
+                    Task { await save() }
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .scaleEffect(0.9)
+                    } else {
+                        Text("Create")
+                            .font(.system(size: 14, weight: .bold))
+                    }
                 }
-                Section("people") {
-                    TextField("search friends", text: $peopleSearchQuery)
-                        .font(RoamFont.mono(11))
-                        .onChange(of: peopleSearchQuery) { _, newVal in
-                            searchPeopleTask?.cancel()
-                            let q = newVal.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !q.isEmpty else {
-                                searchFriendMatches = []
-                                return
+                .frame(width: 64, alignment: .trailing)
+                .disabled(!canCreate || isSaving)
+                .opacity(canCreate ? 1 : 0.35)
+                .foregroundStyle(RoamColors.reviewAccent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+            Divider()
+                .opacity(0.35)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Name")
+                            .font(RoamFont.mono(11, weight: .semibold))
+                            .foregroundStyle(RoamColors.textMuted)
+                            .textCase(.uppercase)
+                            .tracking(0.8)
+
+                        TextField("e.g. Date nights, NYC bars…", text: $name)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(RoamColors.text)
+                            .padding(14)
+                            .background(RoamColors.background)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(nameFieldFocused ? RoamColors.reviewAccent : RoamColors.reviewBorder, lineWidth: 1.5)
+                            )
+                            .focused($nameFieldFocused)
+
+                        Text("Friends you add will see this collection on their map.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("People")
+                            .font(RoamFont.mono(11, weight: .semibold))
+                            .foregroundStyle(RoamColors.textMuted)
+                            .textCase(.uppercase)
+                            .tracking(0.8)
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 96), spacing: 6, alignment: .leading)],
+                            alignment: .leading,
+                            spacing: 6
+                        ) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 22, height: 22)
+                                    .background(RoamColors.reviewSuccess)
+                                    .clipShape(Circle())
+                                Text("You")
+                                    .font(.system(size: 12, weight: .medium))
                             }
-                            searchPeopleTask = Task {
-                                try? await Task.sleep(nanoseconds: 350_000_000)
-                                guard !Task.isCancelled else { return }
-                                await runPeopleSearch(q)
+                            .padding(.leading, 4)
+                            .padding(.trailing, 10)
+                            .padding(.vertical, 4)
+                            .background(RoamColors.reviewAccentLight)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(RoamColors.reviewAccent.opacity(0.35), lineWidth: 1))
+
+                            ForEach(Array(selectedFriendIds).sorted(by: { labelForFriend($0) < labelForFriend($1) }), id: \.self) { uid in
+                                HStack(spacing: 5) {
+                                    Text(initials(from: labelForFriend(uid)))
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 22, height: 22)
+                                        .background(avatarColor(for: uid))
+                                        .clipShape(Circle())
+                                    Text(labelForFriend(uid))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(1)
+                                    Button {
+                                        selectedFriendIds.remove(uid)
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(RoamColors.textMuted)
+                                            .padding(.leading, 2)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.leading, 4)
+                                .padding(.trailing, 8)
+                                .padding(.vertical, 4)
+                                .background(RoamColors.reviewAccentLight)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(RoamColors.reviewAccent.opacity(0.35), lineWidth: 1))
                             }
                         }
-                    if isLoading {
-                        ProgressView()
-                    } else {
-                        let trimmedSearch = peopleSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmedSearch.isEmpty {
-                            if isSearchingPeople {
-                                ProgressView()
-                            } else if searchFriendMatches.isEmpty {
-                                Text("No matching friends.")
-                                    .font(RoamFont.mono(10))
-                                    .foregroundStyle(RoamColors.textMuted)
-                            } else {
-                                ForEach(searchFriendMatches, id: \.id) { u in
-                                    if let uid = UUID(uuidString: u.id) {
-                                        Button {
-                                            if selectedFriendIds.contains(uid) {
-                                                selectedFriendIds.remove(uid)
-                                            } else {
-                                                selectedFriendIds.insert(uid)
+
+                        HStack(spacing: 0) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 14))
+                                .foregroundStyle(RoamColors.textMuted)
+                                .frame(width: 38)
+                            TextField("Search friends to add…", text: $peopleSearchQuery)
+                                .font(.system(size: 14))
+                                .textFieldStyle(.plain)
+                                .onChange(of: peopleSearchQuery) { _, newVal in
+                                    searchPeopleTask?.cancel()
+                                    let q = newVal.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    guard !q.isEmpty else {
+                                        searchFriendMatches = []
+                                        return
+                                    }
+                                    searchPeopleTask = Task {
+                                        try? await Task.sleep(nanoseconds: 350_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        await runPeopleSearch(q)
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 10)
+                        .background(RoamColors.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(RoamColors.reviewBorder, lineWidth: 1.5)
+                        )
+
+                        if isLoadingFriends {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        } else {
+                            let q = peopleSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Group {
+                                if !q.isEmpty {
+                                    if isSearchingPeople {
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 8)
+                                    } else if searchFriendMatches.isEmpty {
+                                        Text("No matching friends.")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(RoamColors.textMuted)
+                                    } else {
+                                        ForEach(searchFriendMatches, id: \.id) { u in
+                                            if let uid = UUID(uuidString: u.id) {
+                                                personRow(
+                                                    userId: uid,
+                                                    title: u.displayName,
+                                                    subtitle: u.username.map { "@\($0)" },
+                                                    selected: selectedFriendIds.contains(uid)
+                                                ) {
+                                                    if selectedFriendIds.contains(uid) {
+                                                        selectedFriendIds.remove(uid)
+                                                    } else {
+                                                        selectedFriendIds.insert(uid)
+                                                    }
+                                                }
                                             }
-                                        } label: {
-                                            HStack {
-                                                Text(u.displayName)
-                                                    .font(RoamFont.mono(11))
-                                                Spacer()
-                                                if selectedFriendIds.contains(uid) {
-                                                    Image(systemName: "checkmark.circle.fill")
-                                                        .foregroundStyle(RoamColors.loganDeep)
+                                        }
+                                    }
+                                } else if friends.isEmpty {
+                                    Text("No friends yet — add friends from your profile first.")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(RoamColors.textMuted)
+                                } else {
+                                    ForEach(friends) { f in
+                                        if let fid = f.friendId {
+                                            let full = [f.friendFirstName, f.friendLastName]
+                                                .compactMap { $0 }
+                                                .joined(separator: " ")
+                                            personRow(
+                                                userId: fid,
+                                                title: full.isEmpty ? "Friend" : full,
+                                                subtitle: nil,
+                                                selected: selectedFriendIds.contains(fid)
+                                            ) {
+                                                if selectedFriendIds.contains(fid) {
+                                                    selectedFriendIds.remove(fid)
+                                                } else {
+                                                    selectedFriendIds.insert(fid)
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        } else if friends.isEmpty {
-                            Text("No friends yet — add friends first.")
-                                .font(RoamFont.mono(10))
-                                .foregroundStyle(RoamColors.textMuted)
-                        } else {
-                            ForEach(friends) { f in
-                                if let fid = f.friendId {
-                                    Button {
-                                        if selectedFriendIds.contains(fid) {
-                                            selectedFriendIds.remove(fid)
-                                        } else {
-                                            selectedFriendIds.insert(fid)
-                                        }
-                                    } label: {
-                                        HStack {
-                                            Text(
-                                                [f.friendFirstName, f.friendLastName]
-                                                    .compactMap { $0 }
-                                                    .joined(separator: " ")
-                                            )
-                                            .font(RoamFont.mono(11))
-                                            Spacer()
-                                            if selectedFriendIds.contains(fid) {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundStyle(RoamColors.loganDeep)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
-                }
-                if let error {
-                    Section {
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preview")
+                            .font(RoamFont.mono(10, weight: .semibold))
+                            .foregroundStyle(RoamColors.textMuted)
+                            .textCase(.uppercase)
+                            .tracking(0.8)
+
+                        HStack(alignment: .center, spacing: 12) {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(RoamColors.reviewAccentLight)
+                                .frame(width: 40, height: 40)
+                                .overlay {
+                                    Image(systemName: "square.stack.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(RoamColors.reviewAccent.opacity(0.85))
+                                }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(previewTitle)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(RoamColors.text)
+                                Text(previewMemberLine)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(RoamColors.textMuted)
+                                    .lineLimit(2)
+
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(RoamColors.reviewSuccess)
+                                        .frame(width: 8, height: 8)
+                                    ForEach(Array(selectedFriendIds).sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { uid in
+                                        Circle()
+                                            .fill(avatarColor(for: uid))
+                                            .frame(width: 8, height: 8)
+                                    }
+                                }
+                                .padding(.top, 2)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(14)
+                        .background(RoamColors.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+                        )
+                    }
+
+                    if let error {
                         Text(error)
                             .font(RoamFont.mono(10))
                             .foregroundStyle(RoamColors.error)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 28)
             }
-            .navigationTitle("new collection")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("create") { Task { await save() } }
-                        .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .task { await loadFriends() }
+            .background(RoamColors.surface)
         }
+        .background(RoamColors.surface)
+        .task { await loadFriends() }
+    }
+
+    @ViewBuilder
+    private func personRow(
+        userId _: UUID,
+        title: String,
+        subtitle: String?,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Text(initials(from: title))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(avatarColor(fromStableKey: title))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(RoamColors.text)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    }
+                }
+                Spacer(minLength: 0)
+                ZStack {
+                    Circle()
+                        .stroke(selected ? RoamColors.reviewAccent : RoamColors.reviewBorder, lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                    if selected {
+                        Circle()
+                            .fill(RoamColors.reviewAccent)
+                            .frame(width: 24, height: 24)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(RoamColors.reviewBorder.opacity(0.35))
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func labelForFriend(_ userId: UUID) -> String {
+        if let f = friends.first(where: { $0.friendId == userId }) {
+            let s = [f.friendFirstName, f.friendLastName].compactMap { $0 }.joined(separator: " ")
+            return s.isEmpty ? "Friend" : s
+        }
+        if let u = searchFriendMatches.first(where: { UUID(uuidString: $0.id) == userId }) {
+            return u.displayName
+        }
+        return "Friend"
+    }
+
+    private func notifyLabel(for userId: UUID) -> String {
+        if let f = friends.first(where: { $0.friendId == userId }) {
+            if let fn = f.friendFirstName?.trimmingCharacters(in: .whitespacesAndNewlines), !fn.isEmpty {
+                return fn
+            }
+        }
+        if let u = searchFriendMatches.first(where: { UUID(uuidString: $0.id) == userId }) {
+            let fn = u.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !fn.isEmpty { return fn }
+            if let un = u.username?.trimmingCharacters(in: .whitespacesAndNewlines), !un.isEmpty {
+                return un
+            }
+        }
+        return labelForFriend(userId)
+    }
+
+    private func avatarColor(for userId: UUID) -> Color {
+        paletteColor(at: userId.hashValue)
+    }
+
+    private func avatarColor(fromStableKey key: String) -> Color {
+        var h = 0
+        for u in key.utf8 { h = h &* 31 &+ Int(u) }
+        return paletteColor(at: h)
+    }
+
+    private func paletteColor(at hash: Int) -> Color {
+        let palette: [Color] = [
+            RoamColors.reviewSuccess,
+            RoamColors.reviewPartnerPink,
+            RoamColors.reviewSquadBlue,
+            Color(red: 0.94, green: 0.63, blue: 0.19),
+            Color(red: 0.61, green: 0.35, blue: 0.71),
+            Color(red: 0.20, green: 0.60, blue: 0.86),
+        ]
+        let i = abs(hash) % max(palette.count, 1)
+        return palette[i]
+    }
+
+    private func initials(from name: String) -> String {
+        let parts = name.split(separator: " ").filter { !$0.isEmpty }
+        if parts.count >= 2 {
+            let a = String(parts[0].prefix(1))
+            let b = String(parts[1].prefix(1))
+            return (a + b).uppercased()
+        }
+        if let f = parts.first {
+            return String(f.prefix(2)).uppercased()
+        }
+        if name.count >= 2 {
+            return String(name.prefix(2)).uppercased()
+        }
+        return String(name.prefix(1)).uppercased()
     }
 
     private func loadFriends() async {
-        isLoading = true
-        defer { isLoading = false }
+        isLoadingFriends = true
+        defer { isLoadingFriends = false }
         do {
             friends = try await apiClient.listFriends()
         } catch {
@@ -1262,18 +1658,18 @@ private struct NewSharedCollectionSheet: View {
     }
 
     private func save() async {
-        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !n.isEmpty else { return }
+        guard canCreate else { return }
         isSaving = true
         error = nil
         defer { isSaving = false }
+        let invited = Array(selectedFriendIds).map(notifyLabel).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         do {
             let created = try await apiClient.createSharedCollection(
-                name: n,
+                name: trimmedName,
                 description: nil,
                 memberUserIds: Array(selectedFriendIds)
             )
-            onCreated(created.id)
+            onCreated(created, invited)
             dismiss()
         } catch {
             self.error = error.localizedDescription

@@ -5,6 +5,7 @@ import SwiftUI
 struct RoamApp: App {
     init() {
         FirebaseApp.configure()
+        GoogleMapsBootstrap.configureIfPossible()
     }
 
     var body: some Scene {

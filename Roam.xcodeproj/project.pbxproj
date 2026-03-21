@@ -15,6 +15,7 @@
 		4567DC832F4C0B99001700F7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4567DC822F4C0B98001700F7 /* GoogleService-Info.plist */; };
 		4567DC842F4C0B99001700F7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4567DC822F4C0B98001700F7 /* GoogleService-Info.plist */; };
 		F1E2D3C62F510000001700F7 /* RoamOpenAPI in Frameworks */ = {isa = PBXBuildFile; productRef = F1E2D3C52F510000001700F7 /* RoamOpenAPI */; };
+		F2E2B3A32F600001001700F7 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = F2E2B3A22F600001001700F7 /* GoogleMaps */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +103,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1E2D3C62F510000001700F7 /* RoamOpenAPI in Frameworks */,
+				F2E2B3A32F600001001700F7 /* GoogleMaps in Frameworks */,
 				4567DC7C2F4C09E9001700F7 /* FirebaseCore in Frameworks */,
 				4567DC7A2F4C09E9001700F7 /* FirebaseAuth in Frameworks */,
 				4567DC7F2F4C0A4B001700F7 /* GoogleSignIn in Frameworks */,
@@ -161,6 +163,7 @@
 			name = Roam;
 			packageProductDependencies = (
 				F1E2D3C52F510000001700F7 /* RoamOpenAPI */,
+				F2E2B3A22F600001001700F7 /* GoogleMaps */,
 				4567DC792F4C09E9001700F7 /* FirebaseAuth */,
 				4567DC7B2F4C09E9001700F7 /* FirebaseCore */,
 				4567DC7E2F4C0A4B001700F7 /* GoogleSignIn */,
@@ -223,6 +226,7 @@
 				F1E2D3C42F510000001700F7 /* XCLocalSwiftPackageReference "RoamOpenAPI" */,
 				4567DC782F4C09E9001700F7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				4567DC7D2F4C0A4B001700F7 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				F2E2B3A12F600001001700F7 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4567DC402F4792A0001700F7 /* Products */;
@@ -589,6 +593,14 @@
 				minimumVersion = 9.1.0;
 			};
 		};
+		F2E2B3A12F600001001700F7 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -616,6 +628,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F1E2D3C42F510000001700F7 /* XCLocalSwiftPackageReference "RoamOpenAPI" */;
 			productName = RoamOpenAPI;
+		};
+		F2E2B3A22F600001001700F7 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2E2B3A12F600001001700F7 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
