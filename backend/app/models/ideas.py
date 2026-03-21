@@ -67,7 +67,19 @@ class IdeaCreate(SQLModel):
     notes: str = ""
     sourceUrl: str = ""
     displayName: Optional[str] = None
-    collectionIds: list[UUID] = Field(default_factory=list)
+    collectionIds: list[UUID] = Field(
+        default_factory=list,
+        description="Additional shared collections only. Personal default is always linked; do not send it.",
+    )
+
+
+class IdeaSharedCollectionsAttach(SQLModel):
+    """Add shared collection links for an existing idea (idempotent per collection)."""
+
+    sharedCollectionIds: list[UUID] = Field(
+        default_factory=list,
+        description="Shared collections only. Personal default remains linked; do not send it.",
+    )
 
 
 class IdeaRead(SQLModel):

@@ -157,8 +157,6 @@ CREATE TABLE IF NOT EXISTS "collections" (
   "createdAt"          timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE "collections" DROP COLUMN IF EXISTS "emoji";
-
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_collections_one_personal_per_creator"
   ON "collections" ("creatorId")
   WHERE "isPersonalDefault";

@@ -454,4 +454,5 @@ def promoteReel(
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> PromoteReelResponse:
+    """Promote candidates to ideas. Each idea is always linked to the user's personal default collection."""
     return promoteSavedReel(session, reel_id=reelId, user_id=user.id, body=body)

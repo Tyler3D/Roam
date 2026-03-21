@@ -563,6 +563,7 @@
     "/api/reels/{reelId}/promote": {
       "post": {
         "summary": "Promotereel",
+        "description": "Promote candidates to ideas. Each idea is always linked to the user's personal default collection.",
         "operationId": "promoteReel_api_reels__reelId__promote_post",
         "parameters": [
           {
@@ -770,6 +771,50 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/shared-collections": {
+      "post": {
+        "summary": "Attachideasharedcollections",
+        "description": "Link the idea into extra shared collections. Personal default is always present and is ignored if sent.",
+        "operationId": "attachIdeaSharedCollections_api_ideas__ideaId__shared_collections_post",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaSharedCollectionsAttach"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -2700,7 +2745,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Collectionids"
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",
@@ -2882,7 +2928,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Collectionids"
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",
@@ -3024,6 +3071,22 @@
           "updatedAt"
         ],
         "title": "IdeaRead"
+      },
+      "IdeaSharedCollectionsAttach": {
+        "properties": {
+          "sharedCollectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sharedcollectionids",
+            "description": "Shared collections only. Personal default remains linked; do not send it."
+          }
+        },
+        "type": "object",
+        "title": "IdeaSharedCollectionsAttach",
+        "description": "Add shared collection links for an existing idea (idempotent per collection)."
       },
       "IdeaStatus": {
         "type": "string",
@@ -4057,7 +4120,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Collectionids"
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",

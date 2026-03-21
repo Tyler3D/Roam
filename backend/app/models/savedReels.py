@@ -114,8 +114,10 @@ class ReelPromotionItem(SQLModel):
 
 class PromoteReelRequest(SQLModel):
     promotions: list[ReelPromotionItem] = Field(default_factory=list)
-    # Shared collection UUIDs only; server always links personal default.
-    collectionIds: list[UUID] = Field(default_factory=list)
+    collectionIds: list[UUID] = Field(
+        default_factory=list,
+        description="Additional shared collections only. Personal default is always linked; do not send it.",
+    )
 
 
 class PromoteReelResponse(SQLModel):
@@ -131,4 +133,7 @@ class CreateIdeaOnReelBody(SQLModel):
     title: str
     notes: str = ""
     placeId: Optional[UUID] = None
-    collectionIds: list[UUID] = Field(default_factory=list)
+    collectionIds: list[UUID] = Field(
+        default_factory=list,
+        description="Additional shared collections only. Personal default is always linked; do not send it.",
+    )

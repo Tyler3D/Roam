@@ -263,7 +263,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Promotereel */
+        /**
+         * Promotereel
+         * @description Promote candidates to ideas. Each idea is always linked to the user's personal default collection.
+         */
         post: operations["promoteReel_api_reels__reelId__promote_post"];
         delete?: never;
         options?: never;
@@ -306,6 +309,26 @@ export interface paths {
         head?: never;
         /** Updateidea */
         patch: operations["updateIdea_api_ideas__ideaId__patch"];
+        trace?: never;
+    };
+    "/api/ideas/{ideaId}/shared-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attachideasharedcollections
+         * @description Link the idea into extra shared collections. Personal default is always present and is ignored if sent.
+         */
+        post: operations["attachIdeaSharedCollections_api_ideas__ideaId__shared_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/ideas/{ideaId}/interpret": {
@@ -1014,7 +1037,10 @@ export interface components {
             notes: string;
             /** Placeid */
             placeId?: string | null;
-            /** Collectionids */
+            /**
+             * Collectionids
+             * @description Additional shared collections only. Personal default is always linked; do not send it.
+             */
             collectionIds?: string[];
         };
         /** FriendRequest */
@@ -1090,7 +1116,10 @@ export interface components {
             sourceUrl: string;
             /** Displayname */
             displayName?: string | null;
-            /** Collectionids */
+            /**
+             * Collectionids
+             * @description Additional shared collections only. Personal default is always linked; do not send it.
+             */
             collectionIds?: string[];
         };
         /** IdeaRead */
@@ -1140,6 +1169,17 @@ export interface components {
             placeLatitude?: number | null;
             /** Placelongitude */
             placeLongitude?: number | null;
+        };
+        /**
+         * IdeaSharedCollectionsAttach
+         * @description Add shared collection links for an existing idea (idempotent per collection).
+         */
+        IdeaSharedCollectionsAttach: {
+            /**
+             * Sharedcollectionids
+             * @description Shared collections only. Personal default remains linked; do not send it.
+             */
+            sharedCollectionIds?: string[];
         };
         /**
          * IdeaStatus
@@ -1472,7 +1512,10 @@ export interface components {
         PromoteReelRequest: {
             /** Promotions */
             promotions?: components["schemas"]["ReelPromotionItem"][];
-            /** Collectionids */
+            /**
+             * Collectionids
+             * @description Additional shared collections only. Personal default is always linked; do not send it.
+             */
             collectionIds?: string[];
         };
         /** PromoteReelResponse */
@@ -2446,6 +2489,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["IdeaRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attachIdeaSharedCollections_api_ideas__ideaId__shared_collections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ideaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdeaSharedCollectionsAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

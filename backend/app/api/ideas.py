@@ -9,7 +9,15 @@ from sqlmodel import Session, select, col
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
-from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate, IdeaStatus, IdeaWithPlanCountView
+from app.models.ideas import (
+    IdeaCreate,
+    IdeaModel,
+    IdeaRead,
+    IdeaSharedCollectionsAttach,
+    IdeaUpdate,
+    IdeaStatus,
+    IdeaWithPlanCountView,
+)
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
@@ -135,6 +143,30 @@ def getIdea(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
     return _ideaReadWithExtras(session, viewRow if viewRow else idea)
+
+
+@ideasRouter.post("/ideas/{ideaId}/shared-collections", status_code=204)
+def attachIdeaSharedCollections(
+    ideaId: UUID,
+    body: IdeaSharedCollectionsAttach,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> None:
+    """Link the idea into extra shared collections. Personal default is always present and is ignored if sent."""
+    idea = session.get(IdeaModel, ideaId)
+    if not idea:
+        raise NotFound("Idea not found")
+    if idea.userId != user.id:
+        raise Forbidden("Not your idea")
+    if not body.sharedCollectionIds:
+        return
+    linkIdeaToPersonalAndShared(
+        session,
+        ideaId=idea.id,
+        ownerUserId=user.id,
+        sharedCollectionIds=body.sharedCollectionIds,
+    )
+    session.commit()
 
 
 @ideasRouter.patch("/ideas/{ideaId}", response_model=IdeaRead)

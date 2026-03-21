@@ -64,20 +64,24 @@ def linkIdeaToPersonalAndShared(
     ownerUserId: UUID,
     sharedCollectionIds: list[UUID] | None,
 ) -> None:
-    """Always link personal default; then each distinct shared collection the user is allowed to use."""
+    """Link the idea to the owner's personal default collection, then optional shared collections.
+
+    Invariant (reels and manual idea creation): every new idea is always in the owner's
+    personal default collection. ``sharedCollectionIds`` must name *additional* shared
+    collections only; the owner's personal default UUID is ignored if the client sends it.
+    """
     personal = ensurePersonalDefaultCollection(session, ownerUserId)
     _ensureCollectionIdeaRow(session, personal.id, ideaId)
 
-    if not sharedCollectionIds:
+    raw = [x for x in (sharedCollectionIds or []) if x != personal.id]
+    if not raw:
         return
 
     seen: set[UUID] = set()
-    for sharedCollectionId in sharedCollectionIds:
+    for sharedCollectionId in raw:
         if sharedCollectionId in seen:
             continue
         seen.add(sharedCollectionId)
-        if sharedCollectionId == personal.id:
-            continue
         coll = session.get(CollectionModel, sharedCollectionId)
         if coll is None:
             raise BadRequest("Unknown collection in collectionIds")
