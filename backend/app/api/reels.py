@@ -12,6 +12,7 @@ from app.api.ingest import MAX_FRAMES, MAX_UPLOAD_BYTES, _initialSavedReelTitle
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
+from app.common.idea_categories import normalize_category
 from app.models.ideas import IdeaModel, IdeaRead, IdeaStatus, IdeaWithPlanCountView
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
@@ -243,11 +244,12 @@ def getReel(
                 if isinstance(candPayload, dict)
                 else ""
             ) or ""
-            category = (
+            raw_cat = (
                 (candPayload.get("category") or "")
                 if isinstance(candPayload, dict)
                 else ""
             ) or ""
+            category = normalize_category(raw_cat) if raw_cat.strip() else ""
             place_addr = (
                 candPayload.get("placeAddress") if isinstance(candPayload, dict) else None
             )

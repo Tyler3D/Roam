@@ -11,10 +11,13 @@ interface MapViewProps {
 }
 
 const typeColors: Record<string, string> = {
-  restaurant: '#E11D48', // primary
-  outdoor: '#F97316', // accent/orange
-  home: '#8B5CF6', // purple
-  event: '#3B82F6', // blue
+  restaurant: '#E11D48',
+  cafe: '#CA8A04',
+  bar: '#7C3AED',
+  nightlife: '#DB2777',
+  outdoor: '#F97316',
+  home: '#8B5CF6',
+  event: '#3B82F6',
 };
 
 const mapContainerStyle = {
@@ -156,7 +159,7 @@ export function MapView({ pins, onPinClick }: MapViewProps) {
               position={{ lat: pin.location.lat, lng: pin.location.lng }}
               onClick={() => handleMarkerClick(pin)}
               icon={{
-                url: createMarkerIcon(typeColors[pin.type] || typeColors.restaurant),
+                url: createMarkerIcon(typeColors[pin.type] ?? typeColors.event),
                 scaledSize: new google.maps.Size(32, 40),
                 anchor: new google.maps.Point(16, 40),
               }}
@@ -194,24 +197,24 @@ export function MapView({ pins, onPinClick }: MapViewProps) {
       )}
 
       {/* Map Legend */}
-      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 shadow-lg">
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.restaurant }} />
-            <span className="text-xs text-muted-foreground">Restaurant</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.outdoor }} />
-            <span className="text-xs text-muted-foreground">Outdoor</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.home }} />
-            <span className="text-xs text-muted-foreground">Home</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: typeColors.event }} />
-            <span className="text-xs text-muted-foreground">Event</span>
-          </div>
+      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 shadow-lg max-w-[min(100%-2rem,320px)]">
+        <div className="flex flex-wrap gap-x-3 gap-y-2">
+          {(
+            [
+              ['restaurant', 'Restaurant'],
+              ['cafe', 'Café'],
+              ['bar', 'Bar'],
+              ['nightlife', 'Nightlife'],
+              ['outdoor', 'Outdoor'],
+              ['home', 'Home'],
+              ['event', 'Event'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: typeColors[key] }} />
+              <span className="text-xs text-muted-foreground">{label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

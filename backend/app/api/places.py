@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from app.auth.auth import getCurrentUser
 from app.common.db import getSession
+from app.common.idea_categories import normalize_category
 from app.models.places import PlaceModel, PlaceRead
 from app.models.users import UserModel
 from app.services.places import estimate_duration, search_google_places, search_google_places_many
@@ -25,6 +26,12 @@ def _get_or_create_place_read(session: Session, place_data: dict, fallback_name:
             )
             return read
 
+    raw_cat = place_data.get("category")
+    place_cat = (
+        normalize_category(raw_cat)
+        if raw_cat is not None and str(raw_cat).strip()
+        else None
+    )
     place = PlaceModel(
         googlePlaceId=google_place_id,
         name=place_data.get("name", fallback_name),
@@ -32,7 +39,7 @@ def _get_or_create_place_read(session: Session, place_data: dict, fallback_name:
         city=place_data.get("city"),
         latitude=place_data.get("latitude"),
         longitude=place_data.get("longitude"),
-        category=place_data.get("category"),
+        category=place_cat,
         placeTypes=place_data.get("placeTypes", []),
         openingHours=place_data.get("openingHours", []),
     )

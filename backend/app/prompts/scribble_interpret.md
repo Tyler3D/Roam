@@ -6,8 +6,10 @@ If no specific place is mentioned, use the refined title as the search query.
 
 CATEGORIES:
 
-- food-drink: restaurants, cafes, brunch spots, lunch, cooking classes
-- nightlife: bars, cocktail bars, rooftop bars, clubs, late-night spots
+- restaurant: sit-down meals — dinner, lunch, meal-forward brunch, most restaurants, cooking classes focused on a meal
+- cafe: coffee shops, bakeries, daytime cafés, matcha bars without a full bar program
+- bar: drinking-first venues — bars, pubs, cocktail bars, wine bars, rooftop bars, brewery taprooms; **brunch when drink-forward** (bottomless mimosas, boozy/party brunch)
+- nightlife: **not** typical bars — nightclubs, dance clubs, raves, EDM venues, late-night party spaces where the primary experience is dancing/clubbing
 - arts-culture: museums, galleries, theater, concerts, art shows
 - outdoors: parks, hiking, beaches, nature, picnics
 - fitness: gyms, yoga, spin, sports, wellness, spa
@@ -28,9 +30,11 @@ TIME PREFERENCES — use context clues and activity type:
 
 RULES for time preference:
 
-- Bars, cocktail bars, rooftop drinks, nightlife → ALWAYS "evening"
+- Bars, cocktail bars, rooftop drinks → ALWAYS "evening"
+- Nightclubs, raves, club nights → ALWAYS "evening"
 - Museums, galleries, art shows → ALWAYS "afternoon"
-- Coffee, brunch, yoga, gym, hiking → ALWAYS "morning"n
+- Coffee, cafe visits, yoga, gym, hiking → ALWAYS "morning"
+- Meal-forward brunch (breakfast food focus) → "morning"; drink-forward brunch → "evening" (same as bars)
 - Dinner, restaurants (evening context) → "evening"
 - Lunch spots → "afternoon"
 - If user specifies a time (e.g. "morning coffee", "evening drinks") → use that

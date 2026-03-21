@@ -105,17 +105,21 @@ export default function IdeaOverview() {
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           {category && (
             <span className="font-mono text-[10px] text-roam-text-muted">
-              {category === "food-drink"
+              {category === "food-drink" || category === "restaurant"
                 ? "🍽"
-                : category === "arts-culture"
-                  ? "🎨"
-                  : category === "outdoors"
-                    ? "🌿"
+                : category === "cafe"
+                  ? "☕"
+                  : category === "bar"
+                    ? "🍸"
                     : category === "nightlife"
-                      ? "🍸"
-                      : category === "fitness"
-                        ? "💪"
-                        : "📌"}
+                      ? "🪩"
+                      : category === "arts-culture"
+                        ? "🎨"
+                        : category === "outdoors"
+                          ? "🌿"
+                          : category === "fitness"
+                            ? "💪"
+                            : "📌"}
             </span>
           )}
           <span className="font-mono text-[10px] text-roam-text-muted">

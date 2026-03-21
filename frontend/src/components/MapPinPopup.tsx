@@ -10,8 +10,11 @@ interface MapPinPopupProps {
   onViewDetails: () => void;
 }
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   restaurant: 'Restaurant',
+  cafe: 'Café',
+  bar: 'Bar',
+  nightlife: 'Nightlife',
   outdoor: 'Outdoor',
   home: 'At Home',
   event: 'Event',
@@ -34,7 +37,7 @@ export function MapPinPopup({ pin, onClose, onViewDetails }: MapPinPopupProps) {
           </h3>
           <div className="flex items-center gap-1.5 mt-0.5">
             <Badge variant="outline" className="text-xs px-1.5 py-0">
-              {typeLabels[pin.type]}
+              {typeLabels[pin.type] ?? pin.type}
             </Badge>
             <span className={cn("text-xs px-1.5 py-0 rounded-full", statusColors[pin.status])}>
               {pin.status}

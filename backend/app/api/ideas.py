@@ -8,6 +8,7 @@ from sqlmodel import Session, select, col
 
 from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
+from app.common.idea_categories import normalize_category
 from app.common.db import commitAndRefresh, getSession
 from app.models.ideas import (
     IdeaCreate,
@@ -263,7 +264,7 @@ def interpretIdea(
         jobId=None,
         source="scribble",
         refinedTitle=resultDict.get("refinedTitle"),
-        category=resultDict.get("category"),
+        category=normalize_category(resultDict.get("category")),
         estimatedMinutes=resultDict.get("estimatedMinutes"),
         modelName=resultDict.get("modelName"),
         rawOutput=resultDict,
@@ -492,6 +493,12 @@ def _upsertPlace(session: Session, idea: IdeaModel, placeData: dict) -> None:
             idea.placeId = existing.id
             return
 
+    raw_cat = placeData.get("category")
+    place_category = (
+        normalize_category(raw_cat)
+        if raw_cat is not None and str(raw_cat).strip()
+        else None
+    )
     place = PlaceModel(
         googlePlaceId=googlePlaceId,
         name=placeData.get("name", ""),
@@ -499,7 +506,7 @@ def _upsertPlace(session: Session, idea: IdeaModel, placeData: dict) -> None:
         city=placeData.get("city"),
         latitude=placeData.get("latitude"),
         longitude=placeData.get("longitude"),
-        category=placeData.get("category"),
+        category=place_category,
     )
     session.add(place)
     session.flush()

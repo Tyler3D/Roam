@@ -1,4 +1,11 @@
-export type DatePinType = 'restaurant' | 'outdoor' | 'home' | 'event';
+export type DatePinType =
+  | 'restaurant'
+  | 'cafe'
+  | 'bar'
+  | 'nightlife'
+  | 'outdoor'
+  | 'home'
+  | 'event';
 export type DatePinStatus = 'saved' | 'planned' | 'done';
 
 export interface DatePin {

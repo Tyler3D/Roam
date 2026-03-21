@@ -18,19 +18,38 @@ enum RoamMapChrome {
 enum MapPlaceCategoryFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case restaurant = "Restaurant"
-    case bar = "Bar"
     case cafe = "Café"
-    /// Catch-all for parks/nature **and** anything that isn’t restaurant / bar / café.
+    case bar = "Bar"
+    case nightlife = "Nightlife"
+    /// Parks, arts, shopping, legacy buckets, anything outside restaurant / cafe / bar / nightlife.
     case other = "Other"
 
     var id: String { rawValue }
 
-    /// Buckets API `category` strings into filter keys (best-effort).
+    /// Buckets API `category` strings into filter keys (exact slug first, then heuristics).
     static func bucket(for pin: APIClient.CollectionMapPinDTO) -> String {
-        let c = (pin.category ?? "").lowercased()
-        if c.contains("restaurant") || c.contains("food") || c.contains("dining") { return "restaurant" }
-        if c.contains("bar") || c.contains("pub") || c.contains("cocktail") || c.contains("wine") { return "bar" }
-        if c.contains("cafe") || c.contains("café") || c.contains("coffee") || c.contains("bakery") { return "cafe" }
+        let raw = (pin.category ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if raw.isEmpty { return "other" }
+
+        if raw == "food-drink" || raw == "food_drink" { return "restaurant" }
+        if raw == "restaurant" { return "restaurant" }
+        if raw == "cafe" || raw == "café" { return "cafe" }
+        if raw == "bar" { return "bar" }
+        if raw == "nightlife" { return "nightlife" }
+
+        let c = raw
+        if c.contains("nightclub") || c.contains("night_club") || c.contains("rave") || c.contains("edm") {
+            return "nightlife"
+        }
+        if c.contains("bar") || c.contains("pub") || c.contains("cocktail") || c.contains("wine") || c.contains("taproom") || c.contains("brewery") {
+            return "bar"
+        }
+        if c.contains("cafe") || c.contains("café") || c.contains("coffee") || c.contains("bakery") {
+            return "cafe"
+        }
+        if c.contains("restaurant") || c.contains("food") || c.contains("dining") || c.contains("food-drink") {
+            return "restaurant"
+        }
         if c.contains("park") || c.contains("outdoor") || c.contains("trail") || c.contains("beach") || c.contains("garden") {
             return "outdoor"
         }
@@ -43,8 +62,9 @@ enum MapPlaceCategoryFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return true
         case .restaurant: return b == "restaurant"
-        case .bar: return b == "bar"
         case .cafe: return b == "cafe"
+        case .bar: return b == "bar"
+        case .nightlife: return b == "nightlife"
         case .other: return b == "outdoor" || b == "other"
         }
     }

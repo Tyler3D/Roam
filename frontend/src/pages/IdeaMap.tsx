@@ -9,10 +9,19 @@ import type { DatePin, DatePinType } from "@/types/datePin";
 
 const categoryToType: Record<string, DatePinType> = {
   "food-drink": "restaurant",
+  restaurant: "restaurant",
+  cafe: "cafe",
+  bar: "bar",
+  nightlife: "nightlife",
   outdoors: "outdoor",
   "arts-culture": "event",
-  nightlife: "event",
   fitness: "outdoor",
+  shopping: "event",
+  entertainment: "event",
+  learning: "event",
+  travel: "event",
+  social: "event",
+  other: "event",
 };
 
 function ideaToDatePin(idea: Idea): DatePin | null {

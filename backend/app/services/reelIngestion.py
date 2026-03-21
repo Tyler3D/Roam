@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlmodel import Session, select
 
 from app.common.config import getGeminiApiKey, getGoogleMapsApiKey
+from app.common.idea_categories import normalize_category
 from app.common.db import getSession
 from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
@@ -65,9 +66,10 @@ class ProviderRateLimitError(Exception):
 
 
 _LEGACY_CATEGORY_MAP: dict[str, str] = {
-    "restaurant": "food-drink",
-    "bar": "nightlife",
-    "cafe": "food-drink",
+    "restaurant": "restaurant",
+    "bar": "bar",
+    "cafe": "cafe",
+    "bakery": "cafe",
     "hike": "outdoors",
     "beach": "outdoors",
     "park": "outdoors",
@@ -75,16 +77,23 @@ _LEGACY_CATEGORY_MAP: dict[str, str] = {
     "hotel": "travel",
     "shop": "shopping",
     "nightclub": "nightlife",
+    "night_club": "nightlife",
     "activity": "other",
     "other": "other",
+    "food-drink": "restaurant",
 }
 
 
 def _mapLegacyCategory(raw: str | None) -> str:
     if not raw:
-        return "other"
+        return normalize_category(None)
     key = raw.lower().strip()
-    return _LEGACY_CATEGORY_MAP.get(key, "other")
+    mapped = _LEGACY_CATEGORY_MAP.get(key, key)
+    return normalize_category(mapped)
+
+
+def _candidate_with_normalized_category(c: ReelCandidate) -> ReelCandidate:
+    return c.model_copy(update={"category": normalize_category(c.category)})
 
 
 def _stripJsonFences(raw: str) -> str:
@@ -315,6 +324,7 @@ def createIdeaPipelineFromCandidate(
     saved_reel_id: UUID | None = None,
 ) -> UUID:
     """Create idea + pipeline_result + optional place suggestion; return new idea id."""
+    candidate = _candidate_with_normalized_category(candidate)
     estimated_minutes = 90
     prompt_version = getReelPromptVersion()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -460,7 +470,7 @@ def processIngestionJob(
         idea_ids: list[UUID] = []
 
         if len(filtered_ordered) == 1:
-            c = filtered_ordered[0]
+            c = _candidate_with_normalized_category(filtered_ordered[0])
             raw_output = {
                 "candidate": c.model_dump(),
                 "fullStructured": parsed.model_dump(),
@@ -501,6 +511,7 @@ def processIngestionJob(
                 )
             else:
                 for idx, c in enumerate(filtered_ordered):
+                    c = _candidate_with_normalized_category(c)
                     rp = _resolvedPlaceForCandidate(session, c)
                     llm_raw = {
                         "candidate": c.model_dump(),

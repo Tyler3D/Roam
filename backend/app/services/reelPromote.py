@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlmodel import Session
 
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
+from app.common.idea_categories import normalize_category
 from app.models.savedReels import (
     PromoteReelRequest,
     PromoteReelResponse,
@@ -68,7 +69,7 @@ def promoteSavedReel(
                 title=title,
                 mapsQuery=item.mapsQuery,
                 placeAddress=item.placeAddress,
-                category=(item.category or "other")[:200],
+                category=normalize_category(item.category or "other")[:200],
                 tags=[],
                 confidence=0.5,
                 evidence="",
@@ -87,7 +88,7 @@ def promoteSavedReel(
             if item.placeAddress is not None:
                 rc = rc.model_copy(update={"placeAddress": item.placeAddress})
             if item.category is not None:
-                rc = rc.model_copy(update={"category": item.category})
+                rc = rc.model_copy(update={"category": normalize_category(item.category)})
             raw_out = {
                 "candidate": rc.model_dump(),
                 "fullStructured": raw.get("fullStructured"),

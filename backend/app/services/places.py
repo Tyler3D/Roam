@@ -5,6 +5,7 @@ from typing import Any, Optional
 import httpx
 
 from app.common.config import getGoogleMapsApiKey
+from app.common.idea_categories import normalize_category
 
 logger = logging.getLogger("roam.places")
 
@@ -109,17 +110,27 @@ def _extract_city(address: str) -> str | None:
 
 def _classify_place_types(types: list[str]) -> str:
     type_map = {
-        "restaurant": "food-drink", "cafe": "food-drink", "bakery": "food-drink",
-        "bar": "nightlife", "night_club": "nightlife",
-        "museum": "arts-culture", "art_gallery": "arts-culture",
-        "park": "outdoors", "campground": "outdoors",
-        "gym": "fitness", "stadium": "fitness",
-        "shopping_mall": "shopping", "store": "shopping",
-        "movie_theater": "entertainment", "amusement_park": "entertainment",
-        "library": "learning", "university": "learning",
+        "restaurant": "restaurant",
+        "cafe": "cafe",
+        "bakery": "cafe",
+        "bar": "bar",
+        "liquor_store": "bar",
+        "night_club": "nightlife",
+        "museum": "arts-culture",
+        "art_gallery": "arts-culture",
+        "park": "outdoors",
+        "campground": "outdoors",
+        "gym": "fitness",
+        "stadium": "fitness",
+        "shopping_mall": "shopping",
+        "store": "shopping",
+        "movie_theater": "entertainment",
+        "amusement_park": "entertainment",
+        "library": "learning",
+        "university": "learning",
         "tourist_attraction": "travel",
     }
     for t in types:
         if t in type_map:
-            return type_map[t]
+            return normalize_category(type_map[t])
     return "other"

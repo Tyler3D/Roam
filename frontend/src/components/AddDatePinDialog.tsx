@@ -11,7 +11,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { UtensilsCrossed, Trees, Home, CalendarDays, Link, Tag } from 'lucide-react';
+import {
+  UtensilsCrossed,
+  Trees,
+  Home,
+  CalendarDays,
+  Link,
+  Tag,
+  Coffee,
+  Beer,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 
@@ -23,6 +33,9 @@ interface AddDatePinDialogProps {
 
 const typeOptions: { value: DatePinType; label: string; icon: typeof UtensilsCrossed }[] = [
   { value: 'restaurant', label: 'Restaurant', icon: UtensilsCrossed },
+  { value: 'cafe', label: 'Café', icon: Coffee },
+  { value: 'bar', label: 'Bar', icon: Beer },
+  { value: 'nightlife', label: 'Nightlife', icon: Sparkles },
   { value: 'outdoor', label: 'Outdoor', icon: Trees },
   { value: 'home', label: 'At Home', icon: Home },
   { value: 'event', label: 'Event', icon: CalendarDays },

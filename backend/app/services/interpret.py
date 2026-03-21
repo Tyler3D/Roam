@@ -11,14 +11,11 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.common.config import getGeminiApiKey
+from app.common.idea_categories import CANONICAL_CATEGORIES, normalize_category
 
 logger = logging.getLogger("roam.interpret")
 
-CATEGORIES = [
-    "food-drink", "arts-culture", "outdoors", "fitness",
-    "shopping", "entertainment", "nightlife", "learning",
-    "travel", "social", "other",
-]
+CATEGORIES = list(CANONICAL_CATEGORIES)
 
 PREFERENCES = ["morning", "afternoon", "evening", "weekend", "any"]
 
@@ -65,6 +62,7 @@ def interpret_idea(raw_input: str, current_time: str | None = None) -> dict[str,
 
         parsed = ScribbleInterpretOutput.model_validate_json(response.text)
         result = parsed.model_dump()
+        result["category"] = normalize_category(result.get("category"))
         result["aiEnriched"] = True
         result["modelName"] = model
         return result
@@ -96,7 +94,7 @@ def interpret_fallback(raw_input: str) -> dict[str, Any]:
     return {
         "refinedTitle": _title_case(stripped),
         "searchQuery": stripped,
-        "category": category,
+        "category": normalize_category(category),
         "preference": preference,
         "estimatedMinutes": estimated,
         "invitees": invitees,
@@ -206,10 +204,24 @@ def _title_case(raw: str) -> str:
 def _infer_category(text: str) -> str:
     if re.search(r"\b(museum|gallery|met|concert|jazz|show)\b", text, re.IGNORECASE):
         return "arts-culture"
-    if re.search(r"\b(drink|cocktail|bar|wine|night)\b", text, re.IGNORECASE):
+    if re.search(
+        r"\b(nightclub|night club|rave|edm|afterhours|dance club)\b", text, re.IGNORECASE
+    ):
         return "nightlife"
-    if re.search(r"\b(dinner|lunch|brunch|restaurant|food|coffee)\b", text, re.IGNORECASE):
-        return "food-drink"
+    if re.search(
+        r"\b(bar|pub|cocktail|wine bar|rooftop bar|taproom|brewery|speakeasy)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return "bar"
+    if re.search(
+        r"\b(bottomless|mimosas?|boozy brunch|drunk brunch)\b", text, re.IGNORECASE
+    ):
+        return "bar"
+    if re.search(r"\b(coffee|café|cafe|bakery|espresso)\b", text, re.IGNORECASE):
+        return "cafe"
+    if re.search(r"\b(dinner|lunch|brunch|restaurant|food|eat|dining)\b", text, re.IGNORECASE):
+        return "restaurant"
     if re.search(r"\b(park|hike|garden|beach)\b", text, re.IGNORECASE):
         return "outdoors"
     if re.search(r"\b(class|workshop|learn|lecture)\b", text, re.IGNORECASE):
@@ -240,10 +252,14 @@ def _infer_preference(text: str, specific_datetime: str | None) -> str:
 def _infer_duration(text: str, category: str) -> int:
     if re.search(r"\bmet|museum|concert|jazz|show\b", text, re.IGNORECASE):
         return 120
-    if re.search(r"\bdrinks|cocktail|bar\b", text, re.IGNORECASE):
+    if re.search(r"\bdrinks|cocktail|bar|nightclub|rave\b", text, re.IGNORECASE):
         return 120
     if re.search(r"\bdinner|restaurant|brunch\b", text, re.IGNORECASE):
         return 90
+    if category == "cafe":
+        return 60
+    if category in ("bar", "nightlife"):
+        return 120
     if category == "outdoors":
         return 180
     return 90

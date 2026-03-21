@@ -29,7 +29,21 @@ export default function IdeaCard({ idea, onDelete, onPlanThis, enriching }: Prop
           <div className="w-14 shrink-0 flex flex-col items-center justify-center py-4">
             {category ? (
               <span className="text-[22px]">
-                {category === "food-drink" ? "🍽" : category === "arts-culture" ? "🎨" : category === "outdoors" ? "🌿" : category === "nightlife" ? "🍸" : category === "fitness" ? "💪" : "📌"}
+                {category === "food-drink" || category === "restaurant"
+                  ? "🍽"
+                  : category === "cafe"
+                    ? "☕"
+                    : category === "bar"
+                      ? "🍸"
+                      : category === "nightlife"
+                        ? "🪩"
+                        : category === "arts-culture"
+                          ? "🎨"
+                          : category === "outdoors"
+                            ? "🌿"
+                            : category === "fitness"
+                              ? "💪"
+                              : "📌"}
               </span>
             ) : (
               <span className="font-mono text-xl text-roam-lav-deep leading-none">—</span>

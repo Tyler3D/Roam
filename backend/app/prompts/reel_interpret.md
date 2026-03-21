@@ -47,8 +47,10 @@ Parallel to text-only “search query” rules in Roam:
 
 Use **exactly one** of these strings per candidate (same taxonomy as scribble / text ideas):
 
-- **food-drink** — restaurants, cafes, brunch, lunch, cooking classes
-- **nightlife** — bars, cocktail bars, rooftop bars, clubs, late-night spots
+- **restaurant** — sit-down meals, lunch, dinner, meal-forward brunch, cooking classes focused on a meal
+- **cafe** — coffee shops, bakeries, daytime cafés
+- **bar** — drinking-first venues: bars, pubs, cocktail/wine bars, rooftop bars, taprooms; **drink-forward brunch** (bottomless, mimosas, party brunch)
+- **nightlife** — **not** typical bars: nightclubs, dance clubs, raves, EDM venues, late-night clubbing (not a cocktail lounge)
 - **arts-culture** — museums, galleries, theater, concerts, art shows
 - **outdoors** — parks, hiking, beaches, nature, picnics
 - **fitness** — gyms, yoga, spin, sports, wellness, spa
@@ -108,7 +110,7 @@ Use these to calibrate tone and specificity. **Always follow the actual response
 | Scenario | `reelKind` | `primaryActivity` (example) | `reelSummary` (example) |
 |----------|------------|-----------------------------|-------------------------|
 | Montage of 4 named restaurants with on-screen text “NYC pizza tour” | `place_forward` | NYC pizza crawl | Creator visits several pizzerias and ranks slices. |
-| Single venue; neon sign matches caption “drinks @ The Rusty Anchor” | `place_forward` | Drinks at The Rusty Anchor | A night out focused on one cocktail bar. |
+| Single venue; neon sign matches caption “drinks @ The Rusty Anchor” | `place_forward` | Drinks at The Rusty Anchor | A night out focused on one **bar** (use category `bar`, not `nightlife`). |
 | Leg-day montage in an unbranded gym, no business name | `experience` | Leg day workout | Gym lower-body routine without a specific venue to visit. |
 | Aesthetic clips: linen, farmers market flowers, soft jazz—no named place | `inspiration` | Soft European summer vibe | Mood-led montage with no clear map destination. |
 | GRWM then cut to named cafe with menu board visible | `mixed` | Morning routine + cafe stop | Getting ready, then visiting a specific coffee shop. |
@@ -122,14 +124,33 @@ Use these to calibrate tone and specificity. **Always follow the actual response
   - `title`: `Republique`  
   - `mapsQuery`: `Republique restaurant Los Angeles`  
   - `placeAddress`: `Los Angeles, CA` (or null if you only know “LA”)  
-  - `category`: `food-drink`  
+  - `category`: `restaurant`  
 
 **Location (signage, no caption name)**  
 - Frame shows `JOE’S PIZZA` awning; caption says “West Village”.  
   - `kind`: `location`  
   - `title`: `Joe's Pizza`  
   - `mapsQuery`: `Joe's Pizza West Village New York`  
+  - `category`: `restaurant`  
   - `confidence`: likely **0.85–0.95** if signage is clear  
+
+**Location (nightclub / rave)**  
+- Caption “afters in Bushwick” + warehouse interior, DJ, crowd dancing (not a sit-down bar).  
+  - `category`: `nightlife`  
+
+**Location (bar — brunch edge case)**  
+- Caption “bottomless mimosas on the rooftop 🥂” / “drunk brunch crew” + frames show a **bar or rooftop lounge** with drink towers, DJ, or signage for a bar program (not a meal-first restaurant).  
+  - `kind`: `location`  
+  - `title`: (venue name if visible, else e.g. `Rooftop bar brunch Lower East Side`)  
+  - `mapsQuery`: specific bar name + neighborhood/city when inferable  
+  - `category`: **`bar`** (drink-forward brunch — not `restaurant`)  
+
+**Location (cafe — matcha)**  
+- Caption “matcha stop in Little Tokyo” + frames show a **matcha latte, ceremonial prep, or shop** named or signed (e.g. “Matchaful”, “Nekohama”).  
+  - `kind`: `location`  
+  - `title`: (shop name from caption/signage)  
+  - `mapsQuery`: e.g. `Matcha cafe Little Tokyo Los Angeles`  
+  - `category`: **`cafe`** (matcha shops are cafés, not `restaurant` or `bar`)  
 
 **Experience (no single venue)**  
 - Generic “try this ab circuit” on a yoga mat at home.  
@@ -179,7 +200,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
       "title": "Lucali",
       "mapsQuery": "Lucali pizza Carroll Gardens Brooklyn",
       "placeAddress": "Brooklyn, NY",
-      "category": "food-drink",
+      "category": "restaurant",
       "tags": ["pizza", "date night", "BYOB"],
       "confidence": 0.92,
       "evidence": "Exterior signage and menu board match the caption naming Lucali.",
@@ -191,7 +212,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
       "title": "Unidentified slice shop (red awning)",
       "mapsQuery": "pizza slice shop Williamsburg Brooklyn",
       "placeAddress": "Williamsburg, Brooklyn",
-      "category": "food-drink",
+      "category": "restaurant",
       "tags": ["pizza", "casual"],
       "confidence": 0.58,
       "evidence": "Second stop shows a red awning and counter slices but no readable name.",
