@@ -11,7 +11,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authManager.isLoading {
-                ProgressView("Loading...")
+                SplashScreen(status: "Loading…")
             } else if authManager.isSignedIn {
                 AuthGateView { featureContent }
             } else {

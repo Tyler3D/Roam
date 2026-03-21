@@ -68,7 +68,7 @@ struct MainTabShell: View {
                 shell(stores: stores)
                     .environment(\.roamStores, stores)
             } else {
-                ProgressView("Loading…")
+                SplashScreen(status: "Loading…")
                     .task {
                         await stores.refreshAll()
                         bootstrapped = true

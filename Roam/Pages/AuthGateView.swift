@@ -17,7 +17,7 @@ struct AuthGateView<MainContent: View>: View {
     var body: some View {
         Group {
             if !syncCompleted {
-                ProgressView("Syncing…")
+                SplashScreen(status: "Syncing…")
             } else if let error = syncError {
                 VStack(spacing: 16) {
                     Text("Sync failed")
