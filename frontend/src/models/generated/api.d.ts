@@ -211,7 +211,11 @@ export interface paths {
         get: operations["getReel_api_reels__reelId__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Deletesavedreel
+         * @description Remove this reel from history only: ideas stay; `ideas.savedReelId` is cleared.
+         */
+        delete: operations["deleteSavedReel_api_reels__reelId__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2256,6 +2260,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SavedReelDetailRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteSavedReel_api_reels__reelId__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -458,3 +458,31 @@ def promoteReel(
 ) -> PromoteReelResponse:
     """Promote candidates to ideas. Each idea is always linked to the user's personal default collection."""
     return promoteSavedReel(session, reel_id=reelId, user_id=user.id, body=body)
+
+
+@reelsRouter.delete("/reels/{reelId}", status_code=status.HTTP_204_NO_CONTENT)
+def deleteSavedReel(
+    reelId: UUID,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> None:
+    """Remove this reel from history only: ideas stay; `ideas.savedReelId` is cleared."""
+    r = session.get(SavedReelModel, reelId)
+    if not r:
+        raise NotFound("Reel not found")
+    if r.userId != user.id:
+        raise Forbidden("Not your reel")
+
+    for idea in session.exec(select(IdeaModel).where(IdeaModel.savedReelId == reelId)).all():
+        if idea.userId != user.id:
+            continue
+        idea.savedReelId = None
+        session.add(idea)
+
+    for c in session.exec(
+        select(ReelIngestCandidateModel).where(ReelIngestCandidateModel.savedReelId == reelId)
+    ).all():
+        session.delete(c)
+
+    session.delete(r)
+    session.commit()

@@ -456,6 +456,38 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "Deletesavedreel",
+        "description": "Remove this reel from history only: ideas stay; `ideas.savedReelId` is cleared.",
+        "operationId": "deleteSavedReel_api_reels__reelId__delete",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/reels/{reelId}/retry-ingest": {
