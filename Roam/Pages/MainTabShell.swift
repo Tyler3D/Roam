@@ -8,13 +8,14 @@ private enum MainTab: Int, CaseIterable {
     case map = 3
     case reels = 4
 
-    var symbol: String {
+    /// SF Symbols matching product tab bar (outline / line style).
+    var sfSymbol: String {
         switch self {
-        case .ideas: return "◌"
-        case .drafts: return "⊟"
-        case .plans: return "⊕"
-        case .map: return "◎"
-        case .reels: return "▦"
+        case .ideas: return "sun.max"
+        case .drafts: return "square.grid.2x2"
+        case .plans: return "clock"
+        case .map: return "mappin.circle"
+        case .reels: return "film.stack"
         }
     }
 
@@ -32,6 +33,7 @@ private enum MainTab: Int, CaseIterable {
 struct MainTabShell: View {
     let apiClient: APIClient
     @Binding var showDebugMenu: Bool
+    @Environment(AppConfig.self) private var appConfig
     @EnvironmentObject private var shareIngress: ShareIngressCoordinator
     @Environment(\.scenePhase) private var scenePhase
     @State private var stores: RoamStores
@@ -40,11 +42,24 @@ struct MainTabShell: View {
     @State private var showInbox = false
     @State private var showProfile = false
     @State private var navigationPathIdeas = NavigationPath()
+    @State private var navigationPathConsumerIdeas = NavigationPath()
 
     init(apiClient: APIClient, showDebugMenu: Binding<Bool>) {
         self.apiClient = apiClient
         _showDebugMenu = showDebugMenu
         _stores = State(initialValue: RoamStores(api: apiClient))
+    }
+
+    /// Drafts + Plans tabs only in alpha; regular `mainRoam` shows Ideas, Map, Reels.
+    private var showsDraftsAndPlansTabs: Bool {
+        appConfig.appMode == .alphaHeavyDevelopmentUnsafe
+    }
+
+    private var visibleTabs: [MainTab] {
+        if showsDraftsAndPlansTabs {
+            return Array(MainTab.allCases)
+        }
+        return [.ideas, .map, .reels]
     }
 
     var body: some View {
@@ -102,12 +117,23 @@ struct MainTabShell: View {
                 Group {
                     switch tab {
                     case .ideas:
-                        NavigationStack(path: $navigationPathIdeas) {
-                            IdeasPage {
-                                tab = .reels
+                        if showsDraftsAndPlansTabs {
+                            NavigationStack(path: $navigationPathIdeas) {
+                                IdeasPage {
+                                    tab = .reels
+                                }
+                                .navigationDestination(for: String.self) { id in
+                                    IdeaDetailPage(ideaId: id)
+                                }
                             }
-                            .navigationDestination(for: String.self) { id in
-                                IdeaDetailPage(ideaId: id)
+                        } else {
+                            NavigationStack(path: $navigationPathConsumerIdeas) {
+                                ConsumerIdeasHomePage {
+                                    tab = .reels
+                                }
+                                .navigationDestination(for: ConsumerIdeaDetailRoute.self) { route in
+                                    ConsumerIdeaDetailPage(route: route)
+                                }
                             }
                         }
                     case .drafts:
@@ -129,7 +155,7 @@ struct MainTabShell: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            glassTabBar(stores: stores)
+            mainTabBar(stores: stores)
         }
         .preferredColorScheme(.light)
         .onAppear {
@@ -156,6 +182,7 @@ struct MainTabShell: View {
         .onChange(of: tab) { oldTab, newTab in
             if oldTab == .ideas && newTab != .ideas {
                 navigationPathIdeas = NavigationPath()
+                navigationPathConsumerIdeas = NavigationPath()
             }
         }
         .onChange(of: bootstrapped) { _, ok in
@@ -182,6 +209,13 @@ struct MainTabShell: View {
                 shareIngress.clearPendingSwitchToReels()
             }
         }
+        .onChange(of: appConfig.appMode) { _, newMode in
+            navigationPathIdeas = NavigationPath()
+            navigationPathConsumerIdeas = NavigationPath()
+            if newMode != .alphaHeavyDevelopmentUnsafe, tab == .drafts || tab == .plans {
+                tab = .ideas
+            }
+        }
     }
 
     /// DEBUG-only: opens bundled `AppConfig` / API environment sheet (centered in `RoamTopBar`).
@@ -193,66 +227,73 @@ struct MainTabShell: View {
         #endif
     }
 
-    private func glassTabBar(stores: RoamStores) -> some View {
-        HStack(spacing: 0) {
-            ForEach(MainTab.allCases, id: \.rawValue) { item in
-                Button {
-                    tab = item
-                } label: {
-                    VStack(spacing: 3) {
-                        if tab == item {
-                            Circle()
-                                .fill(RoamColors.loganDark)
-                                .frame(width: 4, height: 4)
-                        } else {
-                            Spacer().frame(height: 4)
+    private func mainTabBar(stores: RoamStores) -> some View {
+        let accent = RoamColors.reviewAccent
+        let inactive = Color(red: 118 / 255, green: 124 / 255, blue: 140 / 255)
+
+        return VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.black.opacity(0.06))
+                .frame(height: 1 / max(UIScreen.main.scale, 1))
+
+            HStack(spacing: 0) {
+                ForEach(visibleTabs, id: \.rawValue) { item in
+                    let selected = tab == item
+                    Button {
+                        tab = item
+                    } label: {
+                        VStack(spacing: 5) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: item.sfSymbol)
+                                    .font(.system(size: 23, weight: .regular))
+                                    .symbolRenderingMode(.monochrome)
+                                    .foregroundStyle(selected ? accent : inactive)
+                                    .frame(width: 28, height: 24)
+
+                                if item == .drafts, stores.plans.drafts.count > 0 {
+                                    tabBadge(
+                                        count: stores.plans.drafts.count,
+                                        accent: accent
+                                    )
+                                    .offset(x: 10, y: -8)
+                                }
+                                if item == .reels, stores.reels.needsReviewCount > 0 {
+                                    tabBadge(
+                                        count: stores.reels.needsReviewCount,
+                                        accent: accent
+                                    )
+                                    .offset(x: 10, y: -8)
+                                }
+                            }
+
+                            Text(item.label)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(selected ? accent : inactive)
+                                .textCase(.uppercase)
+                                .tracking(0.6)
                         }
-                        Text(item.symbol)
-                            .font(.system(size: 22))
-                            .foregroundStyle(tab == item ? RoamColors.loganDark : RoamColors.logan)
-                        Text(item.label)
-                            .font(RoamFont.mono(11, weight: .medium))
-                            .foregroundStyle(tab == item ? RoamColors.loganDark : RoamColors.lavDeep)
-                            .textCase(.uppercase)
-                            .tracking(1)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 10)
+                        .padding(.bottom, 8)
+                        .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 6)
-                    .padding(.bottom, 4)
-                    .overlay(alignment: .topTrailing) {
-                        if item == .drafts, stores.plans.drafts.count > 0 {
-                            Text(stores.plans.drafts.count > 99 ? "99+" : "\(stores.plans.drafts.count)")
-                                .font(RoamFont.mono(9, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, stores.plans.drafts.count > 9 ? 4 : 0)
-                                .frame(minWidth: 14, minHeight: 14)
-                                .background(RoamColors.loganDark)
-                                .clipShape(Capsule())
-                                .offset(x: -8, y: 4)
-                        }
-                        if item == .reels, stores.reels.needsReviewCount > 0 {
-                            Text(stores.reels.needsReviewCount > 99 ? "99+" : "\(stores.reels.needsReviewCount)")
-                                .font(RoamFont.mono(9, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, stores.reels.needsReviewCount > 9 ? 4 : 0)
-                                .frame(minWidth: 14, minHeight: 14)
-                                .background(RoamColors.loganDeep)
-                                .clipShape(Capsule())
-                                .offset(x: -8, y: 4)
-                        }
-                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .frame(height: 56)
         .background {
-            GlassBarBackground()
+            Color.white
+                .ignoresSafeArea(edges: .bottom)
         }
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(RoamColors.logan.opacity(0.15))
-                .frame(height: 1 / UIScreen.main.scale)
-        }
+    }
+
+    private func tabBadge(count: Int, accent: Color) -> some View {
+        let text = count > 99 ? "99+" : "\(count)"
+        return Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, count > 9 ? 5 : 0)
+            .frame(minWidth: 18, minHeight: 18)
+            .background(Capsule().fill(accent))
     }
 }

@@ -3,6 +3,8 @@ import UIKit
 
 /// Compact header aligned with [frontend/src/components/TopBar.tsx](frontend/src/components/TopBar.tsx).
 struct RoamTopBar: View {
+    @Environment(AppConfig.self) private var appConfig
+
     let user: RoamUser?
     let unreadNotifications: Int
     var onNotifications: () -> Void
@@ -35,22 +37,24 @@ struct RoamTopBar: View {
 
                 Spacer(minLength: 8)
 
-                Button(action: onNotifications) {
-                    ZStack(alignment: .topTrailing) {
-                        Text("◎")
-                            .font(.system(size: 22))
-                            .foregroundStyle(RoamColors.loganDeep)
-                        if unreadNotifications > 0 {
-                            Circle()
-                                .fill(RoamColors.notifDot)
-                                .frame(width: 8, height: 8)
-                                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                                .offset(x: 4, y: -2)
+                if appConfig.appMode == .alphaHeavyDevelopmentUnsafe {
+                    Button(action: onNotifications) {
+                        ZStack(alignment: .topTrailing) {
+                            Text("◎")
+                                .font(.system(size: 22))
+                                .foregroundStyle(RoamColors.loganDeep)
+                            if unreadNotifications > 0 {
+                                Circle()
+                                    .fill(RoamColors.notifDot)
+                                    .frame(width: 8, height: 8)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                                    .offset(x: 4, y: -2)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Notifications")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Notifications")
             }
 
             if let onAppConfig {

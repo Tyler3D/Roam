@@ -22,7 +22,7 @@ struct DebugMenuView: View {
                 } header: {
                     Text("App mode")
                 } footer: {
-                    Text("Main Roam: full tab app. Reel queue only: shared extension inbox. Time estimates: placeholder.")
+                    Text("Main Roam: Ideas, Map, Reels only. Alpha: adds Drafts & Plans tabs. Reel queue only: shared extension inbox.")
                 }
 
                 Section {

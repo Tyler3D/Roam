@@ -3080,6 +3080,17 @@
               }
             ],
             "title": "Placelongitude"
+          },
+          "googlePlaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Googleplaceid"
           }
         },
         "type": "object",

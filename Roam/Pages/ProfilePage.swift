@@ -2,9 +2,14 @@ import SwiftUI
 
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppConfig.self) private var appConfig
     @Environment(\.apiClient) private var api
     @Environment(\.roamStores) private var stores
     var onDismiss: (() -> Void)?
+
+    private var showAlphaProfileSettings: Bool {
+        appConfig.appMode == .alphaHeavyDevelopmentUnsafe
+    }
 
     @State private var path = NavigationPath()
     @State private var friends: [APIClient.FriendshipReadDTO] = []
@@ -348,41 +353,43 @@ struct ProfilePage: View {
 
     private var settingsGroups: some View {
         VStack(spacing: 16) {
-            VStack(spacing: 0) {
-                NavigationLink(value: ProfileNav.accountSettings) {
-                    menuRow(
-                        icon: "gearshape",
-                        title: "Account settings",
-                        subtitle: "Email, password, notifications",
-                        trailing: .chevron
-                    )
-                }
-                .buttonStyle(.plain)
+            if showAlphaProfileSettings {
+                VStack(spacing: 0) {
+                    NavigationLink(value: ProfileNav.accountSettings) {
+                        menuRow(
+                            icon: "gearshape",
+                            title: "Account settings",
+                            subtitle: "Email, password, notifications",
+                            trailing: .chevron
+                        )
+                    }
+                    .buttonStyle(.plain)
 
-                Rectangle()
-                    .fill(RoamColors.lavDeep.opacity(0.35))
-                    .frame(height: 1)
-                    .padding(.leading, 60)
+                    Rectangle()
+                        .fill(RoamColors.lavDeep.opacity(0.35))
+                        .frame(height: 1)
+                        .padding(.leading, 60)
 
-                Button {
-                    showCalendarStub = true
-                } label: {
-                    menuRow(
-                        icon: "calendar",
-                        title: "Google Calendar",
-                        subtitle: "Not connected",
-                        trailing: .text("Connect")
-                    )
+                    Button {
+                        showCalendarStub = true
+                    } label: {
+                        menuRow(
+                            icon: "calendar",
+                            title: "Google Calendar",
+                            subtitle: "Not connected",
+                            trailing: .text("Connect")
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(RoamColors.reviewBorder, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
             }
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(RoamColors.reviewBorder, lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
 
             VStack(spacing: 0) {
                 Button {

@@ -2852,6 +2852,11 @@
             "type": "number",
             "nullable": true,
             "title": "Placelongitude"
+          },
+          "googlePlaceId": {
+            "type": "string",
+            "nullable": true,
+            "title": "Googleplaceid"
           }
         },
         "type": "object",

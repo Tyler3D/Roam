@@ -1189,6 +1189,8 @@ export interface components {
             placeLatitude?: number | null;
             /** Placelongitude */
             placeLongitude?: number | null;
+            /** Googleplaceid */
+            googlePlaceId?: string | null;
         };
         /**
          * IdeaSharedCollectionsAttach

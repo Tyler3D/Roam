@@ -99,6 +99,7 @@ class IdeaRead(SQLModel):
     placeName: Optional[str] = None
     placeLatitude: Optional[float] = None
     placeLongitude: Optional[float] = None
+    googlePlaceId: Optional[str] = None
 
 
 class IdeaUpdate(SQLModel):

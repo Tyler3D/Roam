@@ -47,10 +47,8 @@ struct ContentView: View {
                     }
                     #endif
             }
-        case .timeEstimatesMVP:
-            NavigationStack {
-                TimeEstimatesPlaceholderView(showDebugMenu: showDebugMenuBinding)
-            }
+        case .alphaHeavyDevelopmentUnsafe:
+            MainTabShell(apiClient: apiClient, showDebugMenu: showDebugMenuBinding)
         }
     }
 

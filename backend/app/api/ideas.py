@@ -80,6 +80,7 @@ def _ideaReadWithExtras(
             read.placeName = place.name
             read.placeLatitude = place.latitude
             read.placeLongitude = place.longitude
+            read.googlePlaceId = place.googlePlaceId
     return read
 
 

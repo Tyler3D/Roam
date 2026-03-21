@@ -8,11 +8,12 @@ private let stagingURLKey = "roam_staging_base_url"
 // MARK: - App Mode (feature selection)
 
 enum AppMode: String, CaseIterable, Identifiable {
-    /// Full Roam tab shell (ideas, drafts, plans, map, reels).
+    /// Full Roam tab shell: Ideas, Map, Reels. Drafts & Plans tabs appear only in alpha mode.
     case mainRoam = "mainRoam"
     /// QA: reels grid + inbox only (UserDefaults key name kept for compatibility).
     case reelIngestionMVP = "reelIngestionMVP"
-    case timeEstimatesMVP = "timeEstimatesMVP"
+    /// Full app shell; intended for internal alpha — expect rough edges and risky paths.
+    case alphaHeavyDevelopmentUnsafe = "alphaHeavyDevelopmentUnsafe"
 
     var id: String { rawValue }
 
@@ -20,7 +21,7 @@ enum AppMode: String, CaseIterable, Identifiable {
         switch self {
         case .mainRoam: return "Main Roam"
         case .reelIngestionMVP: return "Reel queue only"
-        case .timeEstimatesMVP: return "Time estimates MVP"
+        case .alphaHeavyDevelopmentUnsafe: return "Alpha Heavy Development UNSAFE"
         }
     }
 }
