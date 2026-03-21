@@ -131,7 +131,7 @@ Implementations: web `frontend/src/lib/api.ts`, iOS `Roam/Services/APIClient.swi
 
 ## Collections and shared ideas (API contract)
 
-**Personal library:** Each user has exactly one **`isPersonalDefault`** collection (**“My saves”**), created lazily on the first successful **`GET /api/collections`**. It is not deletable and its membership is not mutable (owner only).
+**Personal library:** Each user has exactly one **`isPersonalDefault`** collection (**“My saves”**). It is **created in the same transaction** as the user row when **`POST /api/users`** succeeds (and for guest users created via the share RSVP flow). **`ensurePersonalDefaultCollection`** also runs on **`GET /api/collections`**, map “everything,” and idea/reel linking as an **idempotent** safety net. It is not deletable and its membership is not mutable (owner only).
 
 **Idea visibility:** **`GET /api/ideas`** remains **owner-scoped** (the current user’s own idea rows). Ideas that appear in **shared** collections (another member’s `ideas.userId`) are **not** listed there; clients load pins and shared context via **`GET /api/collections/{id}/ideas`** and **`GET /api/collections/everything/ideas`** when the caller is a **`collection_members`** row for that collection.
 

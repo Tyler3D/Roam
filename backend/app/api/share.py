@@ -20,6 +20,7 @@ from app.models.plans import (
     RsvpStatus,
 )
 from app.models.users import UserModel
+from app.services.collectionLinks import ensurePersonalDefaultCollection
 from app.services.invite import build_gcal_link, get_schedule_url, send_single_invite
 
 logger = logging.getLogger("roam.share")
@@ -173,30 +174,30 @@ def rsvpToSharedPlan(
 
 
 def _find_or_create_external_user(session: Session, body: RsvpRequest) -> UserModel:
+    user: UserModel | None = None
     if body.email:
-        existing = session.exec(
+        user = session.exec(
             select(UserModel).where(UserModel.email == body.email)
         ).first()
-        if existing:
-            return existing
 
-    if body.phone:
-        existing = session.exec(
+    if user is None and body.phone:
+        user = session.exec(
             select(UserModel).where(UserModel.phone == body.phone)
         ).first()
-        if existing:
-            return existing
 
-    user = UserModel(
-        firstName=body.firstName.strip(),
-        lastName=body.lastName.strip(),
-        email=body.email,
-        phone=body.phone,
-        isGuestUser=True,
-        isActive=True,
-    )
-    session.add(user)
-    session.flush()
+    if user is None:
+        user = UserModel(
+            firstName=body.firstName.strip(),
+            lastName=body.lastName.strip(),
+            email=body.email,
+            phone=body.phone,
+            isGuestUser=True,
+            isActive=True,
+        )
+        session.add(user)
+        session.flush()
+
+    ensurePersonalDefaultCollection(session, user.id)
     return user
 
 

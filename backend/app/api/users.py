@@ -10,6 +10,7 @@ from app.auth.firebase import ensureFirebaseUser
 from app.common.backendErrors import BadRequest, InternalServerError, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
+from app.services.collectionLinks import ensurePersonalDefaultCollection
 from app.services.oauth_tokens import upsert_token
 
 logger = logging.getLogger("roam.users")
@@ -117,6 +118,8 @@ def createUser(
             _setActivationFromToken(existingUser, tokenEmailVerified)
         _applyUserUpdates(existingUser, request, email)
         session.add(existingUser)
+        session.flush()
+        ensurePersonalDefaultCollection(session, existingUser.id)
         commitAndRefresh(session, existingUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
         return UserRead.model_validate(existingUser)
 
@@ -138,6 +141,8 @@ def createUser(
         emailVerified=tokenEmailVerified,
     )
     session.add(newUser)
+    session.flush()
+    ensurePersonalDefaultCollection(session, newUser.id)
     commitAndRefresh(session, newUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
     logger.info(
         "user_created",
