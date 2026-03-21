@@ -1195,6 +1195,11 @@ export interface components {
             placeLongitude?: number | null;
             /** Googleplaceid */
             googlePlaceId?: string | null;
+            /**
+             * Collectionids
+             * @description Collections this idea is in that the requesting user belongs to (personal default first).
+             */
+            collectionIds?: string[];
         };
         /**
          * IdeaSharedCollectionsAttach

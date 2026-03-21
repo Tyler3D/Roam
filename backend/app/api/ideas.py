@@ -10,6 +10,7 @@ from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.idea_categories import normalize_category
 from app.common.db import commitAndRefresh, getSession
+from app.models.collections import CollectionIdeaModel, CollectionMemberModel, CollectionModel
 from app.models.ideas import (
     IdeaCreate,
     IdeaModel,
@@ -66,14 +67,33 @@ def _getLatestPipelineResult(session: Session, ideaId: UUID) -> PipelineResultRe
     return read
 
 
+def _collection_ids_for_idea_visible_to_user(
+    session: Session,
+    idea_id: UUID,
+    viewer_user_id: UUID,
+) -> list[UUID]:
+    rows = session.exec(
+        select(CollectionModel.id)
+        .join(CollectionIdeaModel, CollectionIdeaModel.collectionId == CollectionModel.id)
+        .join(CollectionMemberModel, CollectionMemberModel.collectionId == CollectionModel.id)
+        .where(CollectionIdeaModel.ideaId == idea_id)
+        .where(CollectionMemberModel.userId == viewer_user_id)
+        .order_by(col(CollectionModel.isPersonalDefault).desc(), CollectionModel.name)
+    ).all()
+    return list(rows)
+
+
 def _ideaReadWithExtras(
     session: Session,
     idea: IdeaModel | IdeaWithPlanCountView,
     planCount: int | None = None,
+    *,
+    viewer_user_id: UUID,
 ) -> IdeaRead:
     read = IdeaRead.model_validate(idea)
     read.planCount = getattr(idea, "planCount", 0) if planCount is None else planCount
     read.pipelineResult = _getLatestPipelineResult(session, idea.id)
+    read.collectionIds = _collection_ids_for_idea_visible_to_user(session, idea.id, viewer_user_id)
     if idea.placeId:
         place = session.get(PlaceModel, idea.placeId)
         if place:
@@ -97,7 +117,7 @@ def listIdeas(
 
     results: list[IdeaRead] = []
     for row in rows:
-        results.append(_ideaReadWithExtras(session, row))
+        results.append(_ideaReadWithExtras(session, row, viewer_user_id=user.id))
     return results
 
 
@@ -127,7 +147,7 @@ def createIdea(
     )
     session.commit()
     session.refresh(idea)
-    return _ideaReadWithExtras(session, idea, 0)
+    return _ideaReadWithExtras(session, idea, 0, viewer_user_id=user.id)
 
 
 @ideasRouter.get("/ideas/{ideaId}", response_model=IdeaRead)
@@ -144,7 +164,7 @@ def getIdea(
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
 
 
 @ideasRouter.post("/ideas/{ideaId}/shared-collections", status_code=204)
@@ -198,7 +218,7 @@ def updateIdea(
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
 
 
 @ideasRouter.delete("/ideas/{ideaId}", status_code=204)
@@ -303,7 +323,7 @@ def interpretIdea(
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    read = _ideaReadWithExtras(session, viewRow if viewRow else idea)
+    read = _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
 
     invitees = resultDict.get("invitees", [])
     if invitees and read.pipelineResult:
@@ -352,7 +372,7 @@ def selectPlaceSuggestion(
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _ideaReadWithExtras(session, viewRow if viewRow else idea)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
 
 
 @ideasRouter.post("/ideas/{ideaId}/suggest-slots")

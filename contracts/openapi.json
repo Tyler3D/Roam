@@ -3123,6 +3123,15 @@
               }
             ],
             "title": "Googleplaceid"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids",
+            "description": "Collections this idea is in that the requesting user belongs to (personal default first)."
           }
         },
         "type": "object",

@@ -100,6 +100,10 @@ class IdeaRead(SQLModel):
     placeLatitude: Optional[float] = None
     placeLongitude: Optional[float] = None
     googlePlaceId: Optional[str] = None
+    collectionIds: list[UUID] = Field(
+        default_factory=list,
+        description="Collections this idea is in that the requesting user belongs to (personal default first).",
+    )
 
 
 class IdeaUpdate(SQLModel):

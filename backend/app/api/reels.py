@@ -446,7 +446,7 @@ def createIdeaOnReel(
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()
-    return _ideaReadWithExtras(session, viewRow if viewRow else idea, 0)
+    return _ideaReadWithExtras(session, viewRow if viewRow else idea, 0, viewer_user_id=user.id)
 
 
 @reelsRouter.post("/reels/{reelId}/promote", response_model=PromoteReelResponse)
