@@ -6,13 +6,13 @@ from email.mime.text import MIMEText
 from typing import Any
 from urllib.parse import quote
 
-from app.common.config import getOptionalEnv
+import os
 
 logger = logging.getLogger("roam.invite")
 
 
 def get_schedule_url(share_code: str) -> str:
-    base_url = getOptionalEnv("FRONTEND_URL") or "https://roam-alpha.web.app"
+    base_url = os.getenv("FRONTEND_URL") or "https://roam-alpha.web.app"
     return f"{base_url}/share/schedule?uid={share_code}"
 
 
@@ -165,13 +165,13 @@ def _send_email_invite(
     SMTP_FROM_EMAIL env vars. Falls back to Twilio SendGrid if SENDGRID_API_KEY
     is set. Returns True on success.
     """
-    smtp_host = getOptionalEnv("SMTP_HOST")
-    smtp_user = getOptionalEnv("SMTP_USER")
-    smtp_password = getOptionalEnv("SMTP_PASSWORD")
-    from_email = getOptionalEnv("SMTP_FROM_EMAIL") or "noreply@roam.app"
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    from_email = os.getenv("SMTP_FROM_EMAIL") or "noreply@roam.app"
 
     if not all([smtp_host, smtp_user, smtp_password]):
-        sendgrid_key = getOptionalEnv("SENDGRID_API_KEY")
+        sendgrid_key = os.getenv("SENDGRID_API_KEY")
         if sendgrid_key:
             return _send_email_sendgrid(
                 api_key=sendgrid_key,
@@ -201,7 +201,7 @@ def _send_email_invite(
     )
 
     try:
-        smtp_port = int(getOptionalEnv("SMTP_PORT") or "587")
+        smtp_port = int(os.getenv("SMTP_PORT") or "587")
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = from_email
@@ -334,9 +334,9 @@ def _build_sms_message(
 
 def _send_sms(phone: str, message: str) -> bool:
     """Send SMS via Twilio. Returns True on success."""
-    account_sid = getOptionalEnv("TWILIO_ACCOUNT_SID")
-    auth_token = getOptionalEnv("TWILIO_AUTH_TOKEN")
-    from_number = getOptionalEnv("TWILIO_FROM_NUMBER")
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_number = os.getenv("TWILIO_FROM_NUMBER")
 
     if not all([account_sid, auth_token, from_number]):
         logger.warning("Twilio not configured, skipping SMS", extra={"phone": phone})

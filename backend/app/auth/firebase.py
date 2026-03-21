@@ -1,13 +1,10 @@
+import json
+
 import firebase_admin
 from firebase_admin import auth as firebaseAuth
 from firebase_admin import credentials
 
-from app.common.config import (
-    getFirebaseClientEmail,
-    getFirebasePrivateKey,
-    getFirebasePrivateKeyId,
-    getFirebaseProjectId,
-)
+from app.common.config import getFirebaseServiceAccountJson
 
 
 firebaseApp: firebase_admin.App | None = None
@@ -16,35 +13,10 @@ firebaseApp: firebase_admin.App | None = None
 def getFirebaseApp() -> firebase_admin.App:
     global firebaseApp
     if firebaseApp is None:
-        projectId = getFirebaseProjectId()
-        privateKeyId = getFirebasePrivateKeyId()
-        privateKey = getFirebasePrivateKey()
-        clientEmail = getFirebaseClientEmail()
-        missing = [
-            name
-            for name, value in {
-                "FIREBASE_PROJECT_ID": projectId,
-                "FIREBASE_PRIVATE_KEY_ID": privateKeyId,
-                "FIREBASE_PRIVATE_KEY": privateKey,
-                "FIREBASE_CLIENT_EMAIL": clientEmail,
-            }.items()
-            if not value
-        ]
-        if missing:
-            missingList = ", ".join(missing)
-            raise RuntimeError(f"Missing Firebase env vars: {missingList}")
-
-        formattedPrivateKey = privateKey.replace("\\n", "\n")
-        cred = credentials.Certificate(
-            {
-                "type": "service_account",
-                "project_id": projectId,
-                "private_key_id": privateKeyId,
-                "private_key": formattedPrivateKey,
-                "client_email": clientEmail,
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        )
+        info = json.loads(getFirebaseServiceAccountJson())
+        if "private_key" in info:
+            info["private_key"] = info["private_key"].replace("\\n", "\n")
+        cred = credentials.Certificate(info)
         firebaseApp = firebase_admin.initialize_app(cred)
     return firebaseApp
 
@@ -75,4 +47,3 @@ def ensureFirebaseUser(
     if photoUrl:
         createKwargs["photo_url"] = photoUrl
     firebaseAuth.create_user(**createKwargs)
-

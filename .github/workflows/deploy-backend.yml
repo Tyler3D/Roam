@@ -1,6 +1,7 @@
 # Build and deploy Roam API to Cloud Run on push to main
-# Required secrets: GCP_SA_KEY (service account JSON), GCP_PROJECT_ID
-# Create an Artifact Registry repo named "roam" in your project. Set Cloud Run env vars (DATABASE_URL, OPENAI_API_KEY, etc.) in GCP Console or add --set-env-vars / --set-secrets to the deploy step.
+# Required GitHub secrets: GCP_SA_KEY (service account JSON), GCP_PROJECT_ID
+# GCP Secret Manager secrets are referenced below via --update-secrets.
+# Non-secret env vars (ENVIRONMENT, GCS_REEL_BUCKET_NAME) are set via --update-env-vars.
 name: Deploy Backend to Cloud Run
 
 on:
@@ -48,4 +49,13 @@ jobs:
             --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --update-env-vars "ENVIRONMENT=prod,GCS_REEL_BUCKET_NAME=roam-reel-ingestion" \
+            --update-secrets "\
+          FIREBASE_SERVICE_ACCOUNT_JSON=firebase-service-account:latest,\
+          GCS_SERVICE_ACCOUNT_JSON=gcs-storage-service:latest,\
+          DATABASE_URL=database-url:latest,\
+          GEMINI_API_KEY=gemini-api-key:latest,\
+          GOOGLE_MAPS_API_KEY=google-maps-api-key:latest,\
+          GOOGLE_CLIENT_ID=google-client-id:latest,\
+          GOOGLE_CLIENT_SECRET=google-client-secret:latest"

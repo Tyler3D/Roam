@@ -12,28 +12,13 @@ def getEnv(name: str) -> str:
     return value
 
 
-def getOptionalEnv(name: str) -> str | None:
-    return os.getenv(name)
-
-
-def getFirebaseProjectId() -> str | None:
-    return getOptionalEnv("FIREBASE_PROJECT_ID")
-
-
-def getFirebasePrivateKeyId() -> str | None:
-    return getOptionalEnv("FIREBASE_PRIVATE_KEY_ID")
-
-
-def getFirebasePrivateKey() -> str | None:
-    return getOptionalEnv("FIREBASE_PRIVATE_KEY")
-
-
-def getFirebaseClientEmail() -> str | None:
-    return getOptionalEnv("FIREBASE_CLIENT_EMAIL")
+def getFirebaseServiceAccountJson() -> str:
+    """Full Firebase service-account JSON."""
+    return getEnv("FIREBASE_SERVICE_ACCOUNT_JSON")
 
 
 def IS_DEV() -> bool:
-    environment = getOptionalEnv("ENVIRONMENT")
+    environment = getEnv("ENVIRONMENT")
     if environment not in {"dev", "prod"}:
         raise RuntimeError("ENVIRONMENT must be 'dev' or 'prod'.")
     return environment == "dev"
@@ -51,7 +36,7 @@ def getCorsAllowOrigins() -> list[str]:
     return ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
 
 def getTrustedAuthProviders() -> set[str]:
-    rawProviders = getOptionalEnv("TRUSTED_AUTH_PROVIDERS") or "google.com,password"
+    rawProviders = os.getenv("TRUSTED_AUTH_PROVIDERS") or "google.com,password"
     providers = {value.strip() for value in rawProviders.split(",") if value.strip()}
     return providers
 
@@ -77,50 +62,15 @@ def getGoogleClientSecret() -> str:
     """Google OAuth client secret. Required for token refresh with Google APIs."""
     return getEnv("GOOGLE_CLIENT_SECRET")
 
-def getTwilioFromNumber() -> str | None:
-    return getOptionalEnv("TWILIO_FROM_NUMBER")
-
-
-def getSmtpHost() -> str | None:
-    return getOptionalEnv("SMTP_HOST")
-
-
-def getSmtpPort() -> int:
-    return int(getOptionalEnv("SMTP_PORT") or "587")
-
-
-def getSmtpUser() -> str | None:
-    return getOptionalEnv("SMTP_USER")
-
-
-def getSmtpPassword() -> str | None:
-    return getOptionalEnv("SMTP_PASSWORD")
-
-
-def getSmtpFromEmail() -> str:
-    return getOptionalEnv("SMTP_FROM_EMAIL") or "noreply@roam.app"
-
-
-def getSendGridApiKey() -> str | None:
-    return getOptionalEnv("SENDGRID_API_KEY")
-
-
-def getGcsServiceAccountJson() -> str | None:
+def getGcsServiceAccountJson() -> str:
     """JSON string for a GCS-enabled service account. Secret — never log."""
-    return getOptionalEnv("GCS_SERVICE_ACCOUNT_JSON")
+    return getEnv("GCS_SERVICE_ACCOUNT_JSON")
 
 
-def getGcsReelBucketName() -> str | None:
-    return getOptionalEnv("GCS_REEL_BUCKET_NAME")
+def getGcsReelBucketName() -> str:
+    return getEnv("GCS_REEL_BUCKET_NAME")
 
 
 def getOAuthEncryptionKey() -> str:
     """Base64-encoded 32-byte key for Fernet. Required for OAuth token storage."""
-    key = getOptionalEnv("OAUTH_ENCRYPTION_KEY")
-    if not key:
-        raise RuntimeError(
-            "OAUTH_ENCRYPTION_KEY is not set. "
-            "Generate with: python -c \"from cryptography.fernet import Fernet; "
-            "print(Fernet.generate_key().decode())\""
-        )
-    return key
+    return getEnv("OAUTH_ENCRYPTION_KEY")

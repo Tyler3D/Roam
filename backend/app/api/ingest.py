@@ -17,7 +17,7 @@ from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSu
 from app.models.places import PlaceModel
 from app.models.savedReels import SavedReelModel, SavedReelStatus
 from app.models.users import UserModel
-from app.services.gcsReels import gcsReelsConfigured, uploadReelThumbnail
+from app.services.gcsReels import uploadReelThumbnail
 from app.services.reelIngestion import processIngestionJob
 
 logger = logging.getLogger("roam.ingest")
@@ -130,13 +130,12 @@ async def createIngestionJob(
     thumb_len = len(thumbnailData) if thumbnailData else 0
     logger.info(
         "ingest_multipart_received userId=%s reelHost=%s frameCount=%d thumbnailBytes=%d "
-        "totalMultipartBytes=%d gcsConfigured=%s",
+        "totalMultipartBytes=%d",
         user.id,
         reel_host[:200] if reel_host else "?",
         len(framesData),
         thumb_len,
         totalBytes,
-        gcsReelsConfigured(),
     )
 
     job = IngestionJobModel(
@@ -169,18 +168,16 @@ async def createIngestionJob(
         thumbPath = uploadReelThumbnail(user_id=user.id, job_id=job.id, data=thumbnailData)
         if thumbPath is None:
             logger.warning(
-                "ingest_thumbnail_bytes_not_persisted jobId=%s userId=%s thumbnailBytes=%d gcsConfigured=%s",
+                "ingest_thumbnail_bytes_not_persisted jobId=%s userId=%s thumbnailBytes=%d",
                 job.id,
                 user.id,
                 thumb_len,
-                gcsReelsConfigured(),
             )
     else:
         logger.info(
-            "ingest_no_thumbnail_in_request jobId=%s userId=%s gcsConfigured=%s",
+            "ingest_no_thumbnail_in_request jobId=%s userId=%s",
             job.id,
             user.id,
-            gcsReelsConfigured(),
         )
 
     savedReel = SavedReelModel(
