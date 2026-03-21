@@ -44,12 +44,19 @@ struct ConsumerIdeasHomePage: View {
                     .font(RoamFont.mono(11, weight: .medium))
                     .foregroundStyle(RoamColors.reviewAccent)
                 } else if mc.mapPins.isEmpty {
-                    RoamEmptyState(
-                        icon: "◌",
-                        title: "no ideas here",
-                        subtitle: "try another collection or save places from reels"
-                    )
-                    .padding(.top, 24)
+                    if mc.selection == .everything {
+                        ConsumerIdeasReelOnboardingEmptyState()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 4)
+                            .padding(.bottom, 24)
+                    } else {
+                        RoamEmptyState(
+                            icon: "◌",
+                            title: "nothing here yet",
+                            subtitle: "try Everything or save places from reels"
+                        )
+                        .padding(.top, 24)
+                    }
                 }
 
                 LazyVStack(spacing: 10) {
@@ -219,6 +226,171 @@ struct ConsumerIdeasHomePage: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Empty state (Everything, zero places)
+
+/// Matches consumer HTML: reel → Roam → map onboarding when there are no ideas yet.
+private struct ConsumerIdeasReelOnboardingEmptyState: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            reelToMapIllustration
+                .padding(.bottom, 28)
+
+            Text("Save a reel, get places")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(RoamColors.text)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 8)
+
+            Text("Share a reel from Instagram or TikTok and Roam turns it into places you can actually find later.")
+                .font(.system(size: 14))
+                .foregroundStyle(RoamColors.textMuted)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
+
+            VStack(spacing: 12) {
+                onboardingStep(number: "1", text: "Find a reel with a place you like")
+                onboardingStep(number: "2") {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("Tap ")
+                        Text("Share")
+                            .fontWeight(.semibold)
+                        Text(" and choose ")
+                        Text("Roam")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(RoamColors.text)
+                }
+                onboardingStep(number: "3", text: "Places appear here and on your map")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var reelToMapIllustration: some View {
+        ZStack {
+            // Phone + reel preview (center, nudged left)
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(RoamColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(RoamColors.reviewBorder, lineWidth: 2.5)
+                    )
+                VStack(spacing: 0) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.94, green: 0.58, blue: 0.20),
+                                    Color(red: 0.90, green: 0.41, blue: 0.24),
+                                    Color(red: 0.86, green: 0.15, blue: 0.26),
+                                    Color(red: 0.80, green: 0.14, blue: 0.40)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .opacity(0.15)
+                        )
+                        .frame(height: 90)
+                        .overlay {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.6))
+                                    .frame(width: 20, height: 20)
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 7, weight: .bold))
+                                    .foregroundStyle(.black.opacity(0.35))
+                                    .offset(x: 1)
+                            }
+                        }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 8)
+            }
+            .frame(width: 80, height: 140)
+            .offset(x: -18)
+
+            // Arrow (share flow) — right of phone, vertical toward Roam
+            VStack(spacing: 0) {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(RoamColors.reviewAccent.opacity(0.45))
+                    .rotationEffect(.degrees(90))
+                Rectangle()
+                    .fill(RoamColors.reviewAccent.opacity(0.4))
+                    .frame(width: 2, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+            }
+            .offset(x: 38, y: -8)
+
+            // Roam target tile
+            Text("roam")
+                .font(RoamFont.mono(8, weight: .bold))
+                .foregroundStyle(.white)
+                .tracking(-0.3)
+                .frame(width: 36, height: 36)
+                .background(RoamColors.reviewAccent)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: RoamColors.reviewAccent.opacity(0.35), radius: 8, y: 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 4)
+                .padding(.top, 8)
+
+            // Map pin
+            VStack(spacing: 2) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 28))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, RoamColors.reviewSuccess)
+                Text("On your map")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundStyle(RoamColors.textMuted)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.leading, 4)
+            .padding(.bottom, 4)
+        }
+        .frame(width: 200, height: 180)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func onboardingStep(number: String, text: String) -> some View {
+        onboardingStep(number: number) {
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(RoamColors.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func onboardingStep(number: String, @ViewBuilder text: () -> some View) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(number)
+                .font(RoamFont.mono(12, weight: .bold))
+                .foregroundStyle(RoamColors.reviewAccent)
+                .frame(width: 28, height: 28)
+                .background(RoamColors.reviewAccentLight)
+                .clipShape(Circle())
+
+            text()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .padding(.horizontal, 2)
+        .background(RoamColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
 

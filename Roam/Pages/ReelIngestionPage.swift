@@ -37,7 +37,7 @@ struct ReelsPage: View {
                 .padding(.top, 12)
                 .padding(.bottom, 120)
             }
-            .navigationTitle("reels")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { token in
                 if token.hasPrefix("q:") {
@@ -53,6 +53,11 @@ struct ReelsPage: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("reels")
+                        .font(RoamFont.mono(15, weight: .bold))
+                        .foregroundStyle(RoamColors.text)
+                }
                 if !localItems.isEmpty {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Menu {
@@ -236,12 +241,20 @@ struct ReelsPage: View {
 
     @ViewBuilder
     private var reelsGridSection: some View {
+        let queueRows = ShareQueueStore.itemsForGrid()
+        let completelyEmpty = stores.reels.reels.isEmpty && localItems.isEmpty && queueRows.isEmpty
+        let showSavedHeader = !completelyEmpty
+            || stores.reels.isLoading
+            || (stores.reels.lastError != nil && stores.reels.reels.isEmpty)
+
         VStack(alignment: .leading, spacing: 12) {
-            Text("saved")
-                .font(RoamFont.mono(10, weight: .medium))
-                .foregroundStyle(RoamColors.textMuted)
-                .textCase(.uppercase)
-                .tracking(1)
+            if showSavedHeader {
+                Text("saved")
+                    .font(RoamFont.mono(10, weight: .medium))
+                    .foregroundStyle(RoamColors.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(1)
+            }
 
             if stores.reels.isLoading && stores.reels.reels.isEmpty {
                 ProgressView("loading…")
@@ -252,13 +265,10 @@ struct ReelsPage: View {
                 Text(err)
                     .font(RoamFont.mono(10))
                     .foregroundStyle(RoamColors.error)
-            } else if stores.reels.reels.isEmpty && localItems.isEmpty && ShareQueueStore.itemsForGrid().isEmpty {
-                RoamEmptyState(
-                    icon: "▦",
-                    title: "no reels yet",
-                    subtitle: "Share from Instagram — it saves here on your phone first, then uploads when you open Roam."
-                )
-                .padding(.top, 24)
+            } else if completelyEmpty {
+                ReelsOnboardingEmptyState()
+                    .padding(.horizontal, 4)
+                    .padding(.top, 4)
             } else if stores.reels.reels.isEmpty {
                 RoamEmptyState(
                     icon: "▦",
@@ -462,6 +472,240 @@ private enum ReelCellAttention {
         case .scanning, .processing, .needsReview, .failed: return false
         case .none: return true
         }
+    }
+}
+
+// MARK: - Empty state (no reels)
+
+/// Consumer-style onboarding when there are no saved reels, queue items, or inbox links.
+private struct ReelsOnboardingEmptyState: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            appsToRoamIllustration
+                .padding(.bottom, 28)
+
+            Text("No reels yet")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(RoamColors.text)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 8)
+
+            Text("When you find a reel with a place you want to try, share it to Roam. We'll extract the places and save them for you.")
+                .font(.system(size: 14))
+                .foregroundStyle(RoamColors.textMuted)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .padding(.bottom, 28)
+
+            VStack(spacing: 10) {
+                howStep(number: "1") {
+                    (
+                        Text("Open a reel in ")
+                            + Text("Instagram").fontWeight(.semibold)
+                            + Text(" or ")
+                            + Text("TikTok").fontWeight(.semibold)
+                    )
+                    .font(.system(size: 13))
+                    .foregroundStyle(RoamColors.text)
+                }
+
+                howStep(number: "2", hint: "Roam appears in your share sheet like Messages or Mail") {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("Tap the ")
+                        Text("Share")
+                            .fontWeight(.semibold)
+                        Text(" button, then choose ")
+                        Text("Roam")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(RoamColors.text)
+                }
+
+                howStep(number: "3") {
+                    Text("Your reel shows up here — review and save the places")
+                        .font(.system(size: 13))
+                        .foregroundStyle(RoamColors.text)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                sourcePill(dot: .instagramGradient, label: "Instagram Reels")
+                sourcePill(dot: .tiktokBlack, label: "TikTok")
+            }
+            .padding(.top, 20)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var appsToRoamIllustration: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(spacing: 10) {
+                instagramAppIcon
+                tiktokAppIcon
+            }
+
+            VStack(spacing: 6) {
+                ZStack(alignment: .trailing) {
+                    Rectangle()
+                        .fill(RoamColors.reviewBorder)
+                        .frame(width: 40, height: 2)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(RoamColors.reviewAccent)
+                        .offset(x: 3)
+                }
+                Text("share")
+                    .font(RoamFont.mono(8, weight: .medium))
+                    .foregroundStyle(RoamColors.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+            }
+            .frame(width: 44)
+
+            Text("roam")
+                .font(RoamFont.mono(10, weight: .bold))
+                .foregroundStyle(.white)
+                .tracking(-0.3)
+                .frame(width: 56, height: 56)
+                .background(RoamColors.reviewAccent)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: RoamColors.reviewAccent.opacity(0.35), radius: 8, y: 2)
+        }
+        .frame(height: 160)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var instagramAppIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.94, green: 0.58, blue: 0.20),
+                            Color(red: 0.90, green: 0.41, blue: 0.24),
+                            Color(red: 0.86, green: 0.15, blue: 0.26),
+                            Color(red: 0.80, green: 0.14, blue: 0.40),
+                            Color(red: 0.74, green: 0.09, blue: 0.53)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.white, lineWidth: 2.5)
+                .frame(width: 26, height: 26)
+                .overlay {
+                    ZStack {
+                        Circle()
+                            .strokeBorder(Color.white, lineWidth: 2)
+                            .frame(width: 6, height: 6)
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 3, height: 3)
+                            .offset(x: 5, y: -5)
+                    }
+                }
+        }
+        .frame(width: 56, height: 56)
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+    }
+
+    private var tiktokAppIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(red: 1 / 255, green: 1 / 255, blue: 1 / 255))
+            ZStack {
+                Text("♪")
+                    .foregroundStyle(Color(red: 0.145, green: 0.956, blue: 0.933))
+                    .offset(x: -3, y: -2)
+                Text("♪")
+                    .foregroundStyle(Color(red: 0.996, green: 0.173, blue: 0.333))
+                    .offset(x: 1, y: 1)
+                Text("♪")
+                    .foregroundStyle(.white)
+                    .offset(x: -1, y: -0.5)
+            }
+            .font(.system(size: 20, weight: .black))
+        }
+        .frame(width: 56, height: 56)
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+    }
+
+    private func howStep(number: String, hint: String? = nil, @ViewBuilder content: () -> some View) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(RoamFont.mono(11, weight: .bold))
+                .foregroundStyle(RoamColors.reviewAccent)
+                .frame(width: 26, height: 26)
+                .background(RoamColors.reviewAccentLight)
+                .clipShape(Circle())
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                content()
+                    .fixedSize(horizontal: false, vertical: true)
+                if let hint {
+                    Text(hint)
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.textMuted)
+                }
+            }
+        }
+        .padding(12)
+        .padding(.horizontal, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoamColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+    }
+
+    private enum SourceDot {
+        case instagramGradient
+        case tiktokBlack
+    }
+
+    private func sourcePill(dot: SourceDot, label: String) -> some View {
+        HStack(spacing: 5) {
+            Group {
+                switch dot {
+                case .instagramGradient:
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.94, green: 0.58, blue: 0.20),
+                                    Color(red: 0.74, green: 0.09, blue: 0.53)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                case .tiktokBlack:
+                    Circle()
+                        .fill(Color(red: 1 / 255, green: 1 / 255, blue: 1 / 255))
+                }
+            }
+            .frame(width: 8, height: 8)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(RoamColors.textMuted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(RoamColors.surface)
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
 
