@@ -1654,6 +1654,29 @@
         }
       }
     },
+    "/api/friends/sent": {
+      "get": {
+        "summary": "Listsentfriendrequests",
+        "description": "Outgoing friend requests still pending acceptance.",
+        "operationId": "listSentFriendRequests_api_friends_sent_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FriendshipRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listsentfriendrequests Api Friends Sent Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/friends/request": {
       "post": {
         "summary": "Sendfriendrequest",

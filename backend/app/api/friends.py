@@ -78,6 +78,32 @@ def listFriendRequests(
     return results
 
 
+@friendsRouter.get("/friends/sent", response_model=list[FriendshipRead])
+def listSentFriendRequests(
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> list[FriendshipRead]:
+    """Outgoing friend requests still pending acceptance."""
+    pending = session.exec(
+        select(FriendshipModel).where(
+            FriendshipModel.requesterId == user.id,
+            FriendshipModel.status == FriendshipStatus.pending,
+        )
+    ).all()
+
+    results: list[FriendshipRead] = []
+    for f in pending:
+        read = FriendshipRead.model_validate(f)
+        read.friendId = f.addresseeId
+        addressee = session.get(UserModel, f.addresseeId)
+        if addressee:
+            read.friendFirstName = addressee.firstName
+            read.friendLastName = addressee.lastName
+            read.friendPhotoUrl = addressee.photoUrl
+        results.append(read)
+    return results
+
+
 @friendsRouter.post("/friends/request", response_model=FriendshipRead, status_code=201)
 def sendFriendRequest(
     body: FriendRequest,
@@ -184,6 +210,7 @@ def searchFriends(
                 or_(
                     col(UserModel.firstName).ilike(f"%{q_lower}%"),
                     col(UserModel.lastName).ilike(f"%{q_lower}%"),
+                    col(UserModel.username).ilike(f"%{q_lower}%"),
                 ),
             ).limit(10)
         ).all()
@@ -196,6 +223,7 @@ def searchFriends(
             or_(
                 col(UserModel.firstName).ilike(f"%{q_lower}%"),
                 col(UserModel.lastName).ilike(f"%{q_lower}%"),
+                col(UserModel.username).ilike(f"%{q_lower}%"),
             ),
         ).limit(10)
     ).all()

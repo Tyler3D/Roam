@@ -592,6 +592,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/friends/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listsentfriendrequests
+         * @description Outgoing friend requests still pending acceptance.
+         */
+        get: operations["listSentFriendRequests_api_friends_sent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/friends/request": {
         parameters: {
             query?: never;
@@ -3081,6 +3101,26 @@ export interface operations {
         };
     };
     listFriendRequests_api_friends_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FriendshipRead"][];
+                };
+            };
+        };
+    };
+    listSentFriendRequests_api_friends_sent_get: {
         parameters: {
             query?: never;
             header?: never;
