@@ -99,10 +99,10 @@ struct SplashScreen: View {
                     offset = -pairWidth
                 }
             }
-            .blur(radius: 8)
-            .saturation(0.35)
-            .brightness(0.05)
-            .opacity(0.3)
+            .blur(radius: 2)
+            .saturation(0.5)
+            .brightness(0.02)
+            .opacity(0.45)
         }
     }
 }
