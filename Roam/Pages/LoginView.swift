@@ -3,37 +3,31 @@ import GoogleSignInSwift
 
 struct LoginView: View {
     @Environment(AuthManager.self) private var authManager
-    @State private var email = ""
-    @State private var password = ""
     @State private var isLoading = false
-    @State private var showSignup = false
-    @State private var showResetPassword = false
     #if DEBUG
     @State private var showDebugMenu = false
     #endif
 
+    private let outerBackground = Color(red: 232 / 255, green: 230 / 255, blue: 238 / 255)
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 28) {
-                    headerSection
-                    loginCard
+                VStack(spacing: 0) {
+                    logoBlock
+                    googleSection
+                    dividerSection
+                    featuresSection
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 32)
                 .padding(.top, 40)
-                .padding(.bottom, 32)
+                .padding(.bottom, 40)
             }
-            .background(ThemeColors.background)
+            .background(outerBackground)
             .alert("Error", isPresented: .constant(authManager.errorMessage != nil)) {
                 Button("OK") { authManager.errorMessage = nil }
             } message: {
                 Text(authManager.errorMessage ?? "")
-            }
-            .sheet(isPresented: $showSignup) {
-                SignupView()
-            }
-            .sheet(isPresented: $showResetPassword) {
-                ResetPasswordView()
             }
             #if DEBUG
             .sheet(isPresented: $showDebugMenu) {
@@ -53,114 +47,112 @@ struct LoginView: View {
         }
     }
 
-    private var headerSection: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "map.fill")
-                .font(.system(size: 52))
-                .foregroundStyle(ThemeColors.primary)
-            Text("Roam")
-                .font(.largeTitle.bold())
-            Text("Save and discover places from your reels")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var logoBlock: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(RoamColors.surface)
+                    .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 4)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(RoamColors.reviewBorder, lineWidth: 1.5)
+                RoamNeedleLogoView(size: 56)
+            }
+            .frame(width: 88, height: 88)
+            .padding(.bottom, 20)
+
+            Text("roam")
+                .font(RoamFont.mono(32, weight: .bold))
+                .foregroundStyle(RoamColors.text)
+                .padding(.bottom, 8)
+
+            Text("Save places from reels.\nShare them with people you love.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(RoamColors.textMid)
                 .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.bottom, 48)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private var loginCard: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome back")
-                    .font(.title2.bold())
-                Text("Sign in to keep saving date ideas.")
-                    .font(.subheadline)
-                    .foregroundStyle(ThemeColors.mutedForeground)
-            }
-
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Email")
-                    .font(.subheadline.weight(.medium))
-                TextField("you@example.com", text: $email)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
-                    .autocapitalization(.none)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("Password")
-                    .font(.subheadline.weight(.medium))
-                SecureField("••••••••", text: $password)
-                    .textContentType(.password)
-                    .textFieldStyle(.roundedBorder)
-            }
-
+    private var googleSection: some View {
+        VStack(spacing: 16) {
             if let msg = authManager.errorMessage {
                 Text(msg)
                     .font(.subheadline)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(RoamColors.error)
+                    .multilineTextAlignment(.center)
             }
 
-            Button {
-                Task { await signIn() }
-            } label: {
-                Group {
-                    if isLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Sign In")
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(ThemeColors.primary)
-            .disabled(email.isEmpty || password.isEmpty || isLoading)
-
-            GoogleSignInButton(scheme: .light, style: .standard, state: .normal) {
+            GoogleSignInButton(scheme: .light, style: .wide, state: isLoading ? .disabled : .normal) {
                 Task { await signInWithGoogle() }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(RoamColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(RoamColors.reviewBorder, lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 4)
             .disabled(isLoading)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Button("Forgot password?") {
-                    showResetPassword = true
-                }
-                .font(.subheadline)
-                .foregroundStyle(ThemeColors.primary)
-
-                HStack(spacing: 4) {
-                    Text("New here?")
-                        .font(.subheadline)
-                        .foregroundStyle(ThemeColors.mutedForeground)
-                    Button("Create an account") {
-                        showSignup = true
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(ThemeColors.primary)
-                }
-            }
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ThemeColors.card)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .strokeBorder(ThemeColors.border, lineWidth: 1)
-        )
-        .shadow(color: ThemeColors.shadow, radius: 8, x: 0, y: 2)
     }
 
-    private func signIn() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            try await authManager.signIn(email: email, password: password)
-        } catch {
-            logError("Sign in failed", error)
-            authManager.errorMessage = errorMessage(for: error)
+    private var dividerSection: some View {
+        HStack(spacing: 14) {
+            Rectangle()
+                .fill(RoamColors.reviewBorder)
+                .frame(height: 1)
+            Text("how it works")
+                .font(RoamFont.mono(11, weight: .medium))
+                .foregroundStyle(RoamColors.textMuted)
+                .textCase(.uppercase)
+            Rectangle()
+                .fill(RoamColors.reviewBorder)
+                .frame(height: 1)
+        }
+        .padding(.top, 24)
+        .padding(.bottom, 8)
+    }
+
+    private var featuresSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            featureRow(
+                icon: "film.stack",
+                title: "Share a reel",
+                detail: "from Instagram or TikTok"
+            )
+            featureRow(
+                icon: "mappin.and.ellipse",
+                title: "Places appear",
+                detail: "on your personal map"
+            )
+            featureRow(
+                icon: "person.2.fill",
+                title: "Share collections",
+                detail: "with friends and partners"
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func featureRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(RoamColors.reviewAccentLight)
+                    .frame(width: 40, height: 40)
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(RoamColors.reviewAccent)
+            }
+            (Text(title).fontWeight(.semibold).foregroundStyle(RoamColors.text)
+                + Text(" ")
+                + Text(detail).foregroundStyle(RoamColors.textMid))
+                .font(.system(size: 13))
+                .multilineTextAlignment(.leading)
         }
     }
 
@@ -174,7 +166,6 @@ struct LoginView: View {
             authManager.errorMessage = errorMessage(for: error)
         }
     }
-
 }
 
 // MARK: - Error logging (visible in Xcode Debug Console)
