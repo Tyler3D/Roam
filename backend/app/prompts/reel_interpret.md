@@ -73,6 +73,12 @@ One concise sentence: what in the **frames** (signage, logo, architecture, dish,
 
 ---
 
+## Display description (`displayDescription`)
+
+**1–2 short sentences**, playful and user-facing, for cards in the Roam app (why this place is exciting, date-night energy, “hidden gem” vibe). Marketing tone is fine; **do not** claim legal proof or verbatim quotes from the reel. This is **not** a substitute for safety review; keep factual support in `evidence`. Use an empty string only if you truly have nothing to say beyond `evidence`.
+
+---
+
 ## Confidence (`confidence` and optional `confidenceReason`)
 
 `confidence` is a **per-candidate** float from **0.0 to 1.0**. It measures how confident you are that this candidate is **actually** reflected in the reel (not whether the user should visit).
@@ -177,6 +183,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
       "tags": ["pizza", "date night", "BYOB"],
       "confidence": 0.92,
       "evidence": "Exterior signage and menu board match the caption naming Lucali.",
+      "displayDescription": "Iconic Brooklyn pizza—worth the line if you love a thin, charred crust.",
       "confidenceReason": "Signage and caption agree on the business name."
     },
     {
@@ -188,6 +195,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
       "tags": ["pizza", "casual"],
       "confidence": 0.58,
       "evidence": "Second stop shows a red awning and counter slices but no readable name.",
+      "displayDescription": "Classic counter-slice energy in Williamsburg—great for a casual stop between spots.",
       "confidenceReason": "Neighborhood from caption; name not visible."
     },
     {
@@ -199,6 +207,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
       "tags": ["neighborhood walk"],
       "confidence": 0.72,
       "evidence": "B-roll of walking city streets between venues; activity is the journey, not one pin.",
+      "displayDescription": "Neighborhood wandering between pizza stops—more about the stroll than one pin.",
       "confidenceReason": "Clear activity, no single map POI."
     }
   ]

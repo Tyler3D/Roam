@@ -42,7 +42,8 @@ BEGIN
       'task_assigned',
       'plan_reminder',
       'rate_prompt',
-      'friend_request'
+      'friend_request',
+      'added_to_collection'
     );
   END IF;
 
@@ -142,6 +143,48 @@ CREATE INDEX IF NOT EXISTS "idx_ideas_status"
 
 CREATE INDEX IF NOT EXISTS "idx_ideas_savedReelId"
   ON "ideas" ("savedReelId", "createdAt" DESC);
+
+-- ============================================================
+-- Collections (shared lists + per-user "My saves")
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "collections" (
+  "id"                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "creatorId"          uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name"               text NOT NULL DEFAULT '',
+  "description"        text,
+  "isPersonalDefault"  boolean NOT NULL DEFAULT false,
+  "createdAt"          timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "collections" DROP COLUMN IF EXISTS "emoji";
+
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_collections_one_personal_per_creator"
+  ON "collections" ("creatorId")
+  WHERE "isPersonalDefault";
+
+CREATE INDEX IF NOT EXISTS "idx_collections_creatorId"
+  ON "collections" ("creatorId");
+
+CREATE TABLE IF NOT EXISTS "collection_members" (
+  "collectionId"  uuid NOT NULL REFERENCES "collections"("id") ON DELETE CASCADE,
+  "userId"        uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "joinedAt"      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("collectionId", "userId")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_collection_members_userId"
+  ON "collection_members" ("userId");
+
+CREATE TABLE IF NOT EXISTS "collection_ideas" (
+  "collectionId"  uuid NOT NULL REFERENCES "collections"("id") ON DELETE CASCADE,
+  "ideaId"        uuid NOT NULL REFERENCES "ideas"("id") ON DELETE CASCADE,
+  "addedAt"       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("collectionId", "ideaId")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_collection_ideas_ideaId"
+  ON "collection_ideas" ("ideaId");
 
 -- ============================================================
 -- Plans
@@ -254,15 +297,18 @@ CREATE INDEX IF NOT EXISTS "idx_user_oauth_tokens_userId"
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS "notifications" (
-  "id"        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "userId"    uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "type"      "notificationType" NOT NULL,
-  "planId"    uuid REFERENCES "plans"("id") ON DELETE CASCADE,
-  "title"     text NOT NULL,
-  "body"      text,
-  "isRead"    boolean NOT NULL DEFAULT false,
-  "createdAt" timestamptz NOT NULL DEFAULT now()
+  "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"        uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "type"          "notificationType" NOT NULL,
+  "planId"        uuid REFERENCES "plans"("id") ON DELETE CASCADE,
+  "collectionId"  uuid REFERENCES "collections"("id") ON DELETE SET NULL,
+  "title"         text NOT NULL,
+  "body"          text,
+  "isRead"        boolean NOT NULL DEFAULT false,
+  "createdAt"     timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "collectionId" uuid REFERENCES "collections"("id") ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS "idx_notifications_userId"
   ON "notifications" ("userId", "isRead", "createdAt" DESC);
@@ -387,3 +433,16 @@ SELECT
 FROM "ideas" i
 LEFT JOIN "plans" p ON p."ideaId" = i.id
 GROUP BY i.id;
+
+-- Add notification enum value on existing databases (no-op if already present)
+DO $enum_mig$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'notificationType' AND e.enumlabel = 'added_to_collection'
+  ) THEN
+    ALTER TYPE "notificationType" ADD VALUE 'added_to_collection';
+  END IF;
+END
+$enum_mig$;

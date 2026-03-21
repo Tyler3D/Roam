@@ -18,6 +18,7 @@ from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
+from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.models.savedReels import ReelIngestCandidateModel, SavedReelModel, SavedReelStatus
 
 logger = logging.getLogger("roam.reel_ingestion")
@@ -48,6 +49,7 @@ class ReelCandidate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: str = ""
+    displayDescription: str = ""
     confidenceReason: str | None = None
 
 
@@ -317,7 +319,8 @@ def createIdeaPipelineFromCandidate(
     prompt_version = getReelPromptVersion()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     idea_title = (candidate.title or "Suggestion")[:500]
-    notes = (candidate.evidence or candidate.confidenceReason or "").strip()
+    desc = (candidate.displayDescription or "").strip()
+    notes = desc or (candidate.evidence or candidate.confidenceReason or "").strip()
 
     idea = IdeaModel(
         userId=user_id,
@@ -471,6 +474,12 @@ def processIngestionJob(
                 candidate=c,
                 raw_output=raw_output,
                 saved_reel_id=saved.id,
+            )
+            linkIdeaToPersonalAndShared(
+                session,
+                ideaId=iid,
+                ownerUserId=job.userId,
+                sharedCollectionIds=[],
             )
             idea_ids.append(iid)
             saved.status = SavedReelStatus.promoted

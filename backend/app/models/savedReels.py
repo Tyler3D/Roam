@@ -80,6 +80,11 @@ class ReelIngestCandidateRead(SQLModel):
     promotedIdeaId: Optional[UUID] = None
     createdAt: datetime
     resolvedPlaceName: Optional[str] = None
+    previewDescription: str = ""
+    category: str = ""
+    placeAddress: Optional[str] = None
+    mapsQuery: Optional[str] = None
+    confidence: Optional[float] = None
 
 
 class SavedReelDetailRead(SQLModel):
@@ -109,6 +114,8 @@ class ReelPromotionItem(SQLModel):
 
 class PromoteReelRequest(SQLModel):
     promotions: list[ReelPromotionItem] = Field(default_factory=list)
+    # Shared collection UUIDs only; server always links personal default.
+    collectionIds: list[UUID] = Field(default_factory=list)
 
 
 class PromoteReelResponse(SQLModel):
@@ -124,3 +131,4 @@ class CreateIdeaOnReelBody(SQLModel):
     title: str
     notes: str = ""
     placeId: Optional[UUID] = None
+    collectionIds: list[UUID] = Field(default_factory=list)

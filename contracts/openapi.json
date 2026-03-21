@@ -1921,6 +1921,297 @@
           }
         }
       }
+    },
+    "/api/collections/everything/ideas": {
+      "get": {
+        "summary": "Listeverythingmapideas",
+        "operationId": "listEverythingMapIdeas_api_collections_everything_ideas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionMapIdeaRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listeverythingmapideas Api Collections Everything Ideas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections": {
+      "get": {
+        "summary": "Listcollections",
+        "operationId": "listCollections_api_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listcollections Api Collections Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Createsharedcollection",
+        "operationId": "createSharedCollection_api_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}": {
+      "patch": {
+        "summary": "Patchcollection",
+        "operationId": "patchCollection_api_collections__collectionId__patch",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deletecollection",
+        "operationId": "deleteCollection_api_collections__collectionId__delete",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/members": {
+      "post": {
+        "summary": "Addcollectionmember",
+        "operationId": "addCollectionMember_api_collections__collectionId__members_post",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionMemberAddBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/members/{memberUserId}": {
+      "delete": {
+        "summary": "Removecollectionmember",
+        "operationId": "removeCollectionMember_api_collections__collectionId__members__memberUserId__delete",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          },
+          {
+            "name": "memberUserId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Memberuserid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/ideas": {
+      "get": {
+        "summary": "Listcollectionmapideas",
+        "operationId": "listCollectionMapIdeas_api_collections__collectionId__ideas_get",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionMapIdeaRead"
+                  },
+                  "title": "Response Listcollectionmapideas Api Collections  Collectionid  Ideas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2088,6 +2379,298 @@
         "type": "object",
         "title": "Body_retryReelIngest_api_reels__reelId__retry_ingest_post"
       },
+      "CollectionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "memberUserIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Memberuserids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CollectionCreate"
+      },
+      "CollectionMapIdeaRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "displayName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displayname"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
+          },
+          "placeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placename"
+          },
+          "placeAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeaddress"
+          },
+          "placeLatitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placelatitude"
+          },
+          "placeLongitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placelongitude"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "addedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Addedbyuserid"
+          },
+          "addedByFirstName": {
+            "type": "string",
+            "title": "Addedbyfirstname",
+            "default": ""
+          },
+          "addedByLastName": {
+            "type": "string",
+            "title": "Addedbylastname",
+            "default": ""
+          },
+          "addedByColorIndex": {
+            "type": "integer",
+            "title": "Addedbycolorindex",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "createdAt",
+          "addedByUserId"
+        ],
+        "title": "CollectionMapIdeaRead"
+      },
+      "CollectionMemberAddBody": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "CollectionMemberAddBody"
+      },
+      "CollectionMemberPreview": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "firstName": {
+            "type": "string",
+            "title": "Firstname",
+            "default": ""
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Lastname",
+            "default": ""
+          },
+          "photoUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photourl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "CollectionMemberPreview"
+      },
+      "CollectionPatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "CollectionPatch"
+      },
+      "CollectionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "creatorId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Creatorid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "isPersonalDefault": {
+            "type": "boolean",
+            "title": "Ispersonaldefault"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "memberPreview": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMemberPreview"
+            },
+            "type": "array",
+            "title": "Memberpreview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "creatorId",
+          "name",
+          "isPersonalDefault",
+          "createdAt"
+        ],
+        "title": "CollectionRead"
+      },
       "CreateIdeaOnReelBody": {
         "properties": {
           "title": {
@@ -2110,6 +2693,14 @@
               }
             ],
             "title": "Placeid"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids"
           }
         },
         "type": "object",
@@ -2284,6 +2875,14 @@
               }
             ],
             "title": "Displayname"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids"
           }
         },
         "type": "object",
@@ -2666,6 +3265,18 @@
             ],
             "title": "Planid"
           },
+          "collectionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collectionid"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -2711,7 +3322,8 @@
           "task_assigned",
           "plan_reminder",
           "rate_prompt",
-          "friend_request"
+          "friend_request",
+          "added_to_collection"
         ],
         "title": "NotificationType"
       },
@@ -3438,6 +4050,14 @@
             },
             "type": "array",
             "title": "Promotions"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids"
           }
         },
         "type": "object",
@@ -3528,6 +4148,49 @@
               }
             ],
             "title": "Resolvedplacename"
+          },
+          "previewDescription": {
+            "type": "string",
+            "title": "Previewdescription",
+            "default": ""
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": ""
+          },
+          "placeAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeaddress"
+          },
+          "mapsQuery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapsquery"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
           }
         },
         "type": "object",

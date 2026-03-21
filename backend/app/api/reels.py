@@ -31,6 +31,7 @@ from app.models.savedReels import (
 )
 from app.models.users import UserModel
 from app.services.gcsReels import signedUrlForObject, uploadReelThumbnail
+from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.services.reelIngestion import processIngestionJob
 from app.services.reelPromote import promoteSavedReel
 
@@ -39,6 +40,16 @@ logger = logging.getLogger("roam.reels")
 MAX_INGEST_RETRIES_PER_REEL = 5
 
 reelsRouter = APIRouter()
+
+
+def _candidate_payload_confidence(cand_payload: object) -> float | None:
+    if not isinstance(cand_payload, dict):
+        return None
+    v = cand_payload.get("confidence")
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _thumbUrl(path: str | None, *, reelId: str | None = None) -> str | None:
@@ -219,9 +230,29 @@ def getReel(
         isSynthetic = bool(raw.get("synthetic"))
         if isSynthetic:
             previewTitle = r.title or ""
+            preview_desc = ""
+            category = ""
+            place_addr = None
+            maps_q = None
+            conf = None
         else:
             candPayload = raw.get("candidate")
             previewTitle = (candPayload.get("title") if isinstance(candPayload, dict) else None) or ""
+            preview_desc = (
+                (candPayload.get("displayDescription") or candPayload.get("display_description") or "")
+                if isinstance(candPayload, dict)
+                else ""
+            ) or ""
+            category = (
+                (candPayload.get("category") or "")
+                if isinstance(candPayload, dict)
+                else ""
+            ) or ""
+            place_addr = (
+                candPayload.get("placeAddress") if isinstance(candPayload, dict) else None
+            )
+            maps_q = candPayload.get("mapsQuery") if isinstance(candPayload, dict) else None
+            conf = _candidate_payload_confidence(candPayload)
         candReads.append(
             ReelIngestCandidateRead(
                 id=c.id,
@@ -233,6 +264,11 @@ def getReel(
                 promotedIdeaId=c.promotedIdeaId,
                 createdAt=c.createdAt,
                 resolvedPlaceName=resolvedName,
+                previewDescription=preview_desc[:2000] if preview_desc else "",
+                category=(category or "")[:200],
+                placeAddress=place_addr,
+                mapsQuery=maps_q,
+                confidence=conf,
             )
         )
 
@@ -397,6 +433,14 @@ def createIdeaOnReel(
     )
     session.add(idea)
     commitAndRefresh(session, idea)
+    linkIdeaToPersonalAndShared(
+        session,
+        ideaId=idea.id,
+        ownerUserId=user.id,
+        sharedCollectionIds=body.collectionIds,
+    )
+    session.commit()
+    session.refresh(idea)
     viewRow = session.exec(
         select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
     ).first()

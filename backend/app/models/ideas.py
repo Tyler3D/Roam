@@ -67,6 +67,7 @@ class IdeaCreate(SQLModel):
     notes: str = ""
     sourceUrl: str = ""
     displayName: Optional[str] = None
+    collectionIds: list[UUID] = Field(default_factory=list)
 
 
 class IdeaRead(SQLModel):

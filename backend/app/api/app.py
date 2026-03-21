@@ -14,6 +14,7 @@ from app.api.places import placesRouter
 from app.api.friends import friendsRouter
 from app.api.share import shareRouter
 from app.api.notifications import notificationsRouter
+from app.api.collections import collectionsRouter
 from app.api.tasks import tasksRouter
 from app.common.config import getCorsAllowOrigins
 from app.middleware.utils import (
@@ -107,3 +108,4 @@ app.include_router(placesRouter, prefix="/api")
 app.include_router(friendsRouter, prefix="/api")
 app.include_router(shareRouter, prefix="/api")
 app.include_router(notificationsRouter, prefix="/api")
+app.include_router(collectionsRouter, prefix="/api")

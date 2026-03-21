@@ -14,6 +14,7 @@ from app.models.savedReels import (
     SavedReelModel,
     SavedReelStatus,
 )
+from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.services.reelIngestion import (
     ReelCandidate,
     ReelInterpretOutput,
@@ -106,6 +107,12 @@ def promoteSavedReel(
         cand.promotedIdeaId = iid
         session.add(cand)
         idea_ids.append(iid)
+        linkIdeaToPersonalAndShared(
+            session,
+            ideaId=iid,
+            ownerUserId=user_id,
+            sharedCollectionIds=body.collectionIds,
+        )
 
     if not idea_ids:
         raise BadRequest("No candidates could be promoted")

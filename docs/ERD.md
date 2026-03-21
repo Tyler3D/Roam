@@ -149,10 +149,32 @@ erDiagram
         uuid userId FK
         notificationType type
         uuid planId FK "nullable"
+        uuid collectionId FK "nullable"
         text title
         text body "nullable"
         boolean isRead
         timestamptz createdAt
+    }
+
+    collections {
+        uuid id PK
+        uuid creatorId FK
+        text name
+        text description "nullable"
+        boolean isPersonalDefault
+        timestamptz createdAt
+    }
+
+    collection_members {
+        uuid collectionId FK "composite PK"
+        uuid userId FK "composite PK"
+        timestamptz joinedAt
+    }
+
+    collection_ideas {
+        uuid collectionId FK "composite PK"
+        uuid ideaId FK "composite PK"
+        timestamptz addedAt
     }
 
     reel_ingestion_jobs {
@@ -201,6 +223,12 @@ erDiagram
     users ||--o{ reel_ingestion_jobs : "submits"
     users ||--o{ saved_reels : "saves"
     users ||--o{ user_oauth_tokens : "stores"
+    users ||--o{ collections : "creates"
+
+    collections ||--o{ collection_members : "has"
+    collections ||--o{ collection_ideas : "groups"
+    ideas ||--o{ collection_ideas : "listed in"
+    collections ||--o{ notifications : "optional ref"
 
     reel_ingestion_jobs ||--|| saved_reels : "has"
     saved_reels ||--o{ reel_ingest_candidates : "stages"
@@ -235,7 +263,7 @@ erDiagram
 | `rsvpStatus` | `pending`, `accepted`, `declined` | `plan_members.rsvpStatus` |
 | `memberRole` | `organizer`, `member` | `plan_members.role` |
 | `friendshipStatus` | `pending`, `accepted` | `friendships.status` |
-| `notificationType` | `invite_received`, `rsvp_accepted`, `rsvp_declined`, `task_assigned`, `plan_reminder`, `rate_prompt`, `friend_request` | `notifications.type` |
+| `notificationType` | `invite_received`, `rsvp_accepted`, `rsvp_declined`, `task_assigned`, `plan_reminder`, `rate_prompt`, `friend_request`, `added_to_collection` | `notifications.type` |
 
 ## Relationships
 
@@ -261,6 +289,12 @@ erDiagram
 | `friendships.addresseeId` | `users.id` | many-to-one | CASCADE |
 | `notifications.userId` | `users.id` | many-to-one | CASCADE |
 | `notifications.planId` | `plans.id` | many-to-one (nullable) | CASCADE |
+| `notifications.collectionId` | `collections.id` | many-to-one (nullable) | SET NULL |
+| `collections.creatorId` | `users.id` | many-to-one | CASCADE |
+| `collection_members.collectionId` | `collections.id` | many-to-one | CASCADE |
+| `collection_members.userId` | `users.id` | many-to-one | CASCADE |
+| `collection_ideas.collectionId` | `collections.id` | many-to-one | CASCADE |
+| `collection_ideas.ideaId` | `ideas.id` | many-to-one | CASCADE |
 | `reel_ingestion_jobs.userId` | `users.id` | many-to-one | CASCADE |
 | `saved_reels.userId` | `users.id` | many-to-one | CASCADE |
 | `saved_reels.jobId` | `reel_ingestion_jobs.id` | one-to-one | CASCADE |
@@ -284,6 +318,9 @@ erDiagram
 | `user_oauth_tokens` | `UNIQUE ("userId", "provider")` |
 | `friendships` | `UNIQUE` on `(LEAST(requesterId, addresseeId), GREATEST(requesterId, addresseeId))` (one row per unordered pair) |
 | `reel_ingestion_jobs` | `UNIQUE ("userId", "reelUrl")` |
+| `collections` | **Partial unique:** at most one row per `creatorId` where `isPersonalDefault` (see `sql/schema.sql`) |
+| `collection_members` | `PRIMARY KEY ("collectionId", "userId")` |
+| `collection_ideas` | `PRIMARY KEY ("collectionId", "ideaId")` |
 
 ### Check constraints
 

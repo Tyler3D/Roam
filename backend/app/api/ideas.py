@@ -10,6 +10,7 @@ from app.auth.auth import getCurrentUser
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.ideas import IdeaCreate, IdeaModel, IdeaRead, IdeaUpdate, IdeaStatus, IdeaWithPlanCountView
+from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.models.pipeline import PipelineResultModel, PipelineResultRead, PlaceSuggestionModel, PlaceSuggestionRead
 from app.models.places import PlaceModel
 from app.models.plans import (
@@ -108,6 +109,14 @@ def createIdea(
     )
     session.add(idea)
     commitAndRefresh(session, idea)
+    linkIdeaToPersonalAndShared(
+        session,
+        ideaId=idea.id,
+        ownerUserId=user.id,
+        sharedCollectionIds=body.collectionIds,
+    )
+    session.commit()
+    session.refresh(idea)
     return _ideaReadWithExtras(session, idea, 0)
 
 

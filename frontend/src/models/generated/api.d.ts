@@ -725,6 +725,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/collections/everything/ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listeverythingmapideas */
+        get: operations["listEverythingMapIdeas_api_collections_everything_ideas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listcollections */
+        get: operations["listCollections_api_collections_get"];
+        put?: never;
+        /** Createsharedcollection */
+        post: operations["createSharedCollection_api_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletecollection */
+        delete: operations["deleteCollection_api_collections__collectionId__delete"];
+        options?: never;
+        head?: never;
+        /** Patchcollection */
+        patch: operations["patchCollection_api_collections__collectionId__patch"];
+        trace?: never;
+    };
+    "/api/collections/{collectionId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Addcollectionmember */
+        post: operations["addCollectionMember_api_collections__collectionId__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collectionId}/members/{memberUserId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removecollectionmember */
+        delete: operations["removeCollectionMember_api_collections__collectionId__members__memberUserId__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collectionId}/ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listcollectionmapideas */
+        get: operations["listCollectionMapIdeas_api_collections__collectionId__ideas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -775,6 +879,130 @@ export interface components {
              */
             frames: string[];
         };
+        /** CollectionCreate */
+        CollectionCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Memberuserids */
+            memberUserIds?: string[];
+        };
+        /** CollectionMapIdeaRead */
+        CollectionMapIdeaRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Placeid */
+            placeId?: string | null;
+            /** Placename */
+            placeName?: string | null;
+            /** Placeaddress */
+            placeAddress?: string | null;
+            /** Placelatitude */
+            placeLatitude?: number | null;
+            /** Placelongitude */
+            placeLongitude?: number | null;
+            /** Category */
+            category?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Addedbyuserid
+             * Format: uuid
+             */
+            addedByUserId: string;
+            /**
+             * Addedbyfirstname
+             * @default
+             */
+            addedByFirstName: string;
+            /**
+             * Addedbylastname
+             * @default
+             */
+            addedByLastName: string;
+            /**
+             * Addedbycolorindex
+             * @default 0
+             */
+            addedByColorIndex: number;
+        };
+        /** CollectionMemberAddBody */
+        CollectionMemberAddBody: {
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+        };
+        /** CollectionMemberPreview */
+        CollectionMemberPreview: {
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /**
+             * Firstname
+             * @default
+             */
+            firstName: string;
+            /**
+             * Lastname
+             * @default
+             */
+            lastName: string;
+            /** Photourl */
+            photoUrl?: string | null;
+        };
+        /** CollectionPatch */
+        CollectionPatch: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** CollectionRead */
+        CollectionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Creatorid
+             * Format: uuid
+             */
+            creatorId: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Ispersonaldefault */
+            isPersonalDefault: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Memberpreview */
+            memberPreview?: components["schemas"]["CollectionMemberPreview"][];
+        };
         /** CreateIdeaOnReelBody */
         CreateIdeaOnReelBody: {
             /** Title */
@@ -786,6 +1014,8 @@ export interface components {
             notes: string;
             /** Placeid */
             placeId?: string | null;
+            /** Collectionids */
+            collectionIds?: string[];
         };
         /** FriendRequest */
         FriendRequest: {
@@ -860,6 +1090,8 @@ export interface components {
             sourceUrl: string;
             /** Displayname */
             displayName?: string | null;
+            /** Collectionids */
+            collectionIds?: string[];
         };
         /** IdeaRead */
         IdeaRead: {
@@ -995,6 +1227,8 @@ export interface components {
             type: components["schemas"]["NotificationType"];
             /** Planid */
             planId?: string | null;
+            /** Collectionid */
+            collectionId?: string | null;
             /** Title */
             title: string;
             /** Body */
@@ -1238,6 +1472,8 @@ export interface components {
         PromoteReelRequest: {
             /** Promotions */
             promotions?: components["schemas"]["ReelPromotionItem"][];
+            /** Collectionids */
+            collectionIds?: string[];
         };
         /** PromoteReelResponse */
         PromoteReelResponse: {
@@ -1280,6 +1516,22 @@ export interface components {
             createdAt: string;
             /** Resolvedplacename */
             resolvedPlaceName?: string | null;
+            /**
+             * Previewdescription
+             * @default
+             */
+            previewDescription: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /** Placeaddress */
+            placeAddress?: string | null;
+            /** Mapsquery */
+            mapsQuery?: string | null;
+            /** Confidence */
+            confidence?: number | null;
         };
         /** ReelPromotionItem */
         ReelPromotionItem: {
@@ -3031,6 +3283,237 @@ export interface operations {
             };
         };
     };
+    listEverythingMapIdeas_api_collections_everything_ideas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionMapIdeaRead"][];
+                };
+            };
+        };
+    };
+    listCollections_api_collections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"][];
+                };
+            };
+        };
+    };
+    createSharedCollection_api_collections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteCollection_api_collections__collectionId__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patchCollection_api_collections__collectionId__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    addCollectionMember_api_collections__collectionId__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMemberAddBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    removeCollectionMember_api_collections__collectionId__members__memberUserId__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: string;
+                memberUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listCollectionMapIdeas_api_collections__collectionId__ideas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionMapIdeaRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
 }
 export enum FriendshipStatus {
     pending = "pending",
@@ -3058,7 +3541,8 @@ export enum NotificationType {
     task_assigned = "task_assigned",
     plan_reminder = "plan_reminder",
     rate_prompt = "rate_prompt",
-    friend_request = "friend_request"
+    friend_request = "friend_request",
+    added_to_collection = "added_to_collection"
 }
 export enum PlanStatus {
     draft = "draft",

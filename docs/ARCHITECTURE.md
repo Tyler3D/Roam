@@ -129,6 +129,18 @@ Implementations: web `frontend/src/lib/api.ts`, iOS `Roam/Services/APIClient.swi
 
 ---
 
+## Collections and shared ideas (API contract)
+
+**Personal library:** Each user has exactly one **`isPersonalDefault`** collection (**“My saves”**), created lazily on the first successful **`GET /api/collections`**. It is not deletable and its membership is not mutable (owner only).
+
+**Idea visibility:** **`GET /api/ideas`** remains **owner-scoped** (the current user’s own idea rows). Ideas that appear in **shared** collections (another member’s `ideas.userId`) are **not** listed there; clients load pins and shared context via **`GET /api/collections/{id}/ideas`** and **`GET /api/collections/everything/ideas`** when the caller is a **`collection_members`** row for that collection.
+
+**Linking:** On every idea create (reel promote, manual idea, idea-on-reel, auto single-candidate ingest), the server **always** inserts **`collection_ideas`** for the creator’s personal default, then for any **shared** collection ids in the request. **`POST /api/reels/{id}/promote`** accepts **`collectionIds`** for **shared** collections only; the client does **not** send the personal default UUID—the server adds it.
+
+**Map / review UI:** Chips and “save to” flows use **`GET /api/collections`** (with **`isPersonalDefault`** on the personal row). See **[ERD.md](ERD.md)** for `collections`, `collection_members`, and `collection_ideas`.
+
+---
+
 ## Related docs
 
 | Doc                                      | Purpose                                                                        |

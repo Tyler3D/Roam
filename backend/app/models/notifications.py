@@ -15,6 +15,7 @@ class NotificationType(str, Enum):
     plan_reminder = "plan_reminder"
     rate_prompt = "rate_prompt"
     friend_request = "friend_request"
+    added_to_collection = "added_to_collection"
 
 
 class NotificationModel(SQLModel, table=True):
@@ -29,6 +30,7 @@ class NotificationModel(SQLModel, table=True):
         )
     )
     planId: Optional[UUID] = Field(default=None, foreign_key="plans.id")
+    collectionId: Optional[UUID] = Field(default=None, foreign_key="collections.id")
     title: str = Field(nullable=False)
     body: Optional[str] = None
     isRead: bool = Field(default=False)
@@ -40,6 +42,7 @@ class NotificationRead(SQLModel):
     userId: UUID
     type: NotificationType
     planId: Optional[UUID] = None
+    collectionId: Optional[UUID] = None
     title: str
     body: Optional[str] = None
     isRead: bool
