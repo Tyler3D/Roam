@@ -6,47 +6,62 @@ struct RoamTopBar: View {
     let user: RoamUser?
     let unreadNotifications: Int
     var onNotifications: () -> Void
+    /// Left cluster (avatar + branding). Reserved for a future profile experience; may still open profile today.
     var onProfile: () -> Void
+    /// Centered control (e.g. DEBUG app config). Omit in release builds.
+    var onAppConfig: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button(action: onProfile) {
-                HStack(spacing: 10) {
-                    RoamAvatar(initials: initials(for: user), photoUrl: user?.photoUrl, size: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("roam")
-                            .font(RoamFont.display(22, italic: true))
-                            .foregroundStyle(RoamColors.text)
-                        if let line = subtitleLine(for: user) {
-                            Text(line)
-                                .font(RoamFont.mono(9, weight: .regular))
-                                .foregroundStyle(RoamColors.textMuted)
-                                .textCase(.uppercase)
-                                .tracking(1)
+        ZStack {
+            HStack(alignment: .center, spacing: 12) {
+                Button(action: onProfile) {
+                    HStack(spacing: 10) {
+                        RoamAvatar(initials: initials(for: user), photoUrl: user?.photoUrl, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("roam")
+                                .font(RoamFont.display(22, italic: true))
+                                .foregroundStyle(RoamColors.text)
+                            if let line = subtitleLine(for: user) {
+                                Text(line)
+                                    .font(RoamFont.mono(9, weight: .regular))
+                                    .foregroundStyle(RoamColors.textMuted)
+                                    .textCase(.uppercase)
+                                    .tracking(1)
+                            }
                         }
                     }
                 }
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            Button(action: onNotifications) {
-                ZStack(alignment: .topTrailing) {
-                    Text("◎")
-                        .font(.system(size: 22))
-                        .foregroundStyle(RoamColors.loganDeep)
-                    if unreadNotifications > 0 {
-                        Circle()
-                            .fill(RoamColors.notifDot)
-                            .frame(width: 8, height: 8)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                            .offset(x: 4, y: -2)
+                Button(action: onNotifications) {
+                    ZStack(alignment: .topTrailing) {
+                        Text("◎")
+                            .font(.system(size: 22))
+                            .foregroundStyle(RoamColors.loganDeep)
+                        if unreadNotifications > 0 {
+                            Circle()
+                                .fill(RoamColors.notifDot)
+                                .frame(width: 8, height: 8)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                                .offset(x: 4, y: -2)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Notifications")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Notifications")
+
+            if let onAppConfig {
+                Button(action: onAppConfig) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(RoamColors.loganDeep)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("App configuration")
+            }
         }
         .padding(.horizontal, 16)
         .frame(height: 56)

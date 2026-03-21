@@ -69,7 +69,8 @@ struct MainTabShell: View {
                 user: stores.user.me,
                 unreadNotifications: stores.notifications.unreadCount,
                 onNotifications: { showInbox = true },
-                onProfile: { showProfile = true }
+                onProfile: { showProfile = true },
+                onAppConfig: debugAppConfigAction
             )
 
             ZStack {
@@ -149,10 +150,8 @@ struct MainTabShell: View {
             }
         }
         .sheet(isPresented: $showProfile) {
-            NavigationStack {
-                ProfilePage(onDismiss: { showProfile = false })
-                    .environment(\.roamStores, stores)
-            }
+            ProfilePage(onDismiss: { showProfile = false })
+                .environment(\.roamStores, stores)
         }
         .onChange(of: tab) { oldTab, newTab in
             if oldTab == .ideas && newTab != .ideas {
@@ -183,19 +182,14 @@ struct MainTabShell: View {
                 shareIngress.clearPendingSwitchToReels()
             }
         }
+    }
+
+    /// DEBUG-only: opens bundled `AppConfig` / API environment sheet (centered in `RoamTopBar`).
+    private var debugAppConfigAction: (() -> Void)? {
         #if DEBUG
-        .overlay(alignment: .topLeading) {
-            Button {
-                showDebugMenu = true
-            } label: {
-                Image(systemName: "wrench.and.screwdriver")
-                    .font(.system(size: 14))
-                    .foregroundStyle(RoamColors.loganDeep)
-                    .padding(10)
-            }
-            .padding(.leading, 6)
-            .padding(.top, 4)
-        }
+        { showDebugMenu = true }
+        #else
+        nil
         #endif
     }
 

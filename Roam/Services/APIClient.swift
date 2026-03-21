@@ -652,20 +652,37 @@ final class APIClient {
         var colorIndex: Int { addedByColorIndex ?? 0 }
     }
 
-    struct FriendshipRowDTO: Decodable, Identifiable {
+    /// Matches backend `FriendshipRead` (accepted rows and pending request rows).
+    struct FriendshipReadDTO: Decodable, Identifiable {
         let id: UUID
+        let requesterId: UUID?
+        let addresseeId: UUID?
+        let status: String?
+        let createdAt: Date?
         let friendId: UUID?
         let friendFirstName: String?
         let friendLastName: String?
+        let friendPhotoUrl: String?
     }
+
+    /// Legacy alias — same JSON shape as `FriendshipReadDTO`.
+    typealias FriendshipRowDTO = FriendshipReadDTO
 
     struct FriendSearchResultDTO: Decodable {
         let friends: [RoamUser]
         let others: [RoamUser]
     }
 
-    func listFriends() async throws -> [FriendshipRowDTO] {
+    func listFriends() async throws -> [FriendshipReadDTO] {
         try await apiFetch(path: "/api/friends")
+    }
+
+    func listFriendRequests() async throws -> [FriendshipReadDTO] {
+        try await apiFetch(path: "/api/friends/requests")
+    }
+
+    func listSentFriendRequests() async throws -> [FriendshipReadDTO] {
+        try await apiFetch(path: "/api/friends/sent")
     }
 
     func searchFriends(query: String) async throws -> FriendSearchResultDTO {
@@ -673,6 +690,29 @@ final class APIClient {
         allowed.remove(charactersIn: "&+=")
         let enc = query.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
         return try await apiFetch(path: "/api/friends/search?q=\(enc)")
+    }
+
+    private struct FriendRequestBody: Encodable {
+        let targetUserId: UUID
+    }
+
+    func sendFriendRequest(targetUserId: UUID) async throws -> FriendshipReadDTO {
+        let body = try JSONEncoder.roam.encode(FriendRequestBody(targetUserId: targetUserId))
+        return try await apiFetch(path: "/api/friends/request", method: "POST", body: body)
+    }
+
+    func acceptFriendRequest(friendshipId: UUID) async throws -> FriendshipReadDTO {
+        try await apiFetch(
+            path: "/api/friends/\(friendshipId.uuidString.lowercased())/accept",
+            method: "POST"
+        )
+    }
+
+    func removeFriendship(friendshipId: UUID) async throws {
+        try await apiPerform(
+            path: "/api/friends/\(friendshipId.uuidString.lowercased())",
+            method: "DELETE"
+        )
     }
 
     func listCollections() async throws -> [CollectionReadDTO] {
@@ -718,6 +758,20 @@ final class APIClient {
             path: "/api/collections/\(collectionId.uuidString.lowercased())/members",
             method: "POST",
             body: body
+        )
+    }
+
+    func removeCollectionMember(collectionId: UUID, memberUserId: UUID) async throws {
+        try await apiPerform(
+            path: "/api/collections/\(collectionId.uuidString.lowercased())/members/\(memberUserId.uuidString.lowercased())",
+            method: "DELETE"
+        )
+    }
+
+    func deleteCollection(collectionId: UUID) async throws {
+        try await apiPerform(
+            path: "/api/collections/\(collectionId.uuidString.lowercased())",
+            method: "DELETE"
         )
     }
 }

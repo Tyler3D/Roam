@@ -1651,7 +1651,12 @@ private struct NewSharedCollectionSheet: View {
         defer { isSearchingPeople = false }
         do {
             let r = try await apiClient.searchFriends(query: q)
-            searchFriendMatches = r.friends
+            var seen = Set<String>()
+            var merged: [RoamUser] = []
+            for u in r.friends + r.others where seen.insert(u.id).inserted {
+                merged.append(u)
+            }
+            searchFriendMatches = merged
         } catch {
             searchFriendMatches = []
         }
