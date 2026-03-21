@@ -34,6 +34,13 @@ extension Components.Schemas.NotificationRead {
 }
 
 extension Components.Schemas.IdeaRead: Identifiable {}
+
+extension Components.Schemas.IdeaRead {
+    /// Collection UUIDs from the API (personal default first when present).
+    var linkedCollectionUUIDs: [UUID] {
+        (collectionIds ?? []).compactMap { UUID(uuidString: $0.lowercased()) }
+    }
+}
 extension Components.Schemas.PlanRead: Identifiable {}
 extension Components.Schemas.NotificationRead: Identifiable {}
 extension Components.Schemas.PlanMemberRead: Identifiable {}

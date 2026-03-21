@@ -323,7 +323,7 @@ struct ProfileCollectionDetailPage: View {
             } else {
                 ForEach(preview) { pin in
                     NavigationLink {
-                        IdeaDetailPage(ideaId: pin.id.uuidString)
+                        ProfileCollectionIdeaDetailDestination(pin: pin)
                     } label: {
                         recentIdeaRow(pin: pin)
                     }
@@ -608,7 +608,7 @@ struct CollectionAllIdeasPage: View {
                     VStack(spacing: 0) {
                         ForEach(sortedPins) { pin in
                             NavigationLink {
-                                IdeaDetailPage(ideaId: pin.id.uuidString)
+                                ProfileCollectionIdeaDetailDestination(pin: pin)
                             } label: {
                                 CollectionAllIdeasRow(pin: pin)
                             }
@@ -913,6 +913,23 @@ struct ProfileCollectionRow: View {
         }
         if parts.isEmpty { return "Shared" }
         return parts.prefix(4).joined(separator: ", ")
+    }
+}
+
+// MARK: - Idea detail (alpha vs main)
+
+private struct ProfileCollectionIdeaDetailDestination: View {
+    @Environment(AppConfig.self) private var appConfig
+    let pin: APIClient.CollectionMapPinDTO
+
+    var body: some View {
+        Group {
+            if appConfig.appMode == .alphaHeavyDevelopmentUnsafe {
+                IdeaDetailPage(ideaId: pin.id.uuidString)
+            } else {
+                ConsumerIdeaDetailPage(route: ConsumerIdeaDetailRoute.from(pin: pin))
+            }
+        }
     }
 }
 

@@ -537,6 +537,10 @@ final class APIClient {
         try await apiFetch(path: "/api/reels/\(id.lowercased())")
     }
 
+    func deleteReel(id: String) async throws {
+        try await apiPerform(path: "/api/reels/\(id.lowercased())", method: "DELETE")
+    }
+
     struct ReelPromoteItem: Encodable {
         let candidateId: UUID
         let title: String?

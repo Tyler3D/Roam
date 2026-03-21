@@ -1,6 +1,32 @@
 import SwiftUI
 import UIKit
 
+/// Shared collection IDs used for the first promote on this reel (this device); hybrid saves reuse them read-only.
+private enum ReelDetailPromotionSharedIdsStore {
+    private static func key(_ reelId: String) -> String {
+        "roam.reelPromoteSharedIds.\(reelId.lowercased())"
+    }
+
+    /// `nil` if we have not recorded a promote for this reel yet on this device.
+    static func load(reelId: String) -> [UUID]? {
+        let k = key(reelId)
+        guard UserDefaults.standard.object(forKey: k) != nil else { return nil }
+        let raw = UserDefaults.standard.array(forKey: k) as? [String] ?? []
+        return raw.compactMap { UUID(uuidString: $0) }
+    }
+
+    static func save(reelId: String, sharedCollectionIds: [UUID]) {
+        UserDefaults.standard.set(
+            sharedCollectionIds.map { $0.uuidString.lowercased() },
+            forKey: key(reelId)
+        )
+    }
+
+    static func clear(reelId: String) {
+        UserDefaults.standard.removeObject(forKey: key(reelId))
+    }
+}
+
 struct ReelDetailPage: View {
     let reelId: String
 
@@ -8,6 +34,7 @@ struct ReelDetailPage: View {
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.roamStores) private var stores
+    @Environment(AppConfig.self) private var appConfig
     @EnvironmentObject private var shareIngress: ShareIngressCoordinator
     @State private var detail: APIClient.SavedReelDetailDTO?
     @State private var loadError: String?
@@ -25,7 +52,9 @@ struct ReelDetailPage: View {
     @State private var newCollectionBanner: (title: String, subtitle: String)?
     @State private var isRetryingIngest = false
     @State private var retryIngestError: String?
-    @State private var loadedAutoSavedIdea: Idea?
+    @State private var showDeleteReelConfirm = false
+    @State private var isDeletingReel = false
+    @State private var deleteReelError: String?
     @State private var isAttachingShared = false
     @State private var attachSharedError: String?
 
@@ -47,21 +76,44 @@ struct ReelDetailPage: View {
         .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if let d = detail, isAutoSavedSingle(d), let first = d.ideasNonEmpty.first {
-                    NavigationLink {
-                        IdeaDetailPage(ideaId: first.id.uuidString)
-                    } label: {
-                        Text("edit")
-                            .font(RoamFont.mono(10, weight: .semibold))
-                            .foregroundStyle(RoamColors.reviewAccent)
-                    }
-                } else {
-                    Button("add idea") { showAddIdea = true }
-                        .font(RoamFont.mono(10, weight: .medium))
-                        .disabled(detail == nil || detail?.status == "processing")
+            if let d = detail, isReadOnlyPromotedReel(d) {
+                ToolbarItem(placement: .principal) {
+                    Text("reel")
+                        .font(RoamFont.mono(15, weight: .bold))
+                        .foregroundStyle(RoamColors.text)
                 }
             }
+            if let d = detail {
+                if !isReadOnlyPromotedReel(d) {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("add idea") { showAddIdea = true }
+                            .font(RoamFont.mono(10, weight: .medium))
+                            .disabled(d.status == "processing")
+                    }
+                }
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("add idea") { showAddIdea = true }
+                        .font(RoamFont.mono(10, weight: .medium))
+                        .disabled(true)
+                }
+            }
+        }
+        .alert("Remove reel from history?", isPresented: $showDeleteReelConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                Task { await deleteSavedReelFromHistory() }
+            }
+        } message: {
+            Text("Your saved places stay in Ideas; this only removes the reel from Reels.")
+        }
+        .alert("Couldn't remove reel", isPresented: Binding(
+            get: { deleteReelError != nil },
+            set: { if !$0 { deleteReelError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteReelError = nil }
+        } message: {
+            Text(deleteReelError ?? "")
         }
         .sheet(isPresented: $showAddIdea) {
             if detail != nil {
@@ -97,7 +149,8 @@ struct ReelDetailPage: View {
 
     private var navigationTitleText: String {
         guard let d = detail else { return "review reel" }
-        return isAutoSavedSingle(d) ? "saved" : "review reel"
+        if isReadOnlyPromotedReel(d) { return "" }
+        return "review reel"
     }
 
     private var isIngestScanningThisReel: Bool {
@@ -122,19 +175,21 @@ struct ReelDetailPage: View {
                             .padding(.top, 8)
                     }
 
-                    if isAutoSavedSingle(d) {
-                        autoSavedReviewContent(d)
+                    if isHybridSavedPlusPending(d) {
+                        hybridPartialSavedReelContent(d)
+                    } else if isReadOnlyPromotedReel(d) {
+                        readOnlySavedReelContent(d)
                     } else if usesMultiStyleReview(d) {
                         multiPlaceReviewScroll(d)
                     } else {
                         legacyReelDetailContent(d)
                     }
                 }
-                .padding(.bottom, usesMultiStyleReview(d) ? 130 : 8)
+                .padding(.bottom, showsPromoteDock(d) ? 130 : 8)
             }
             .background(RoamColors.background)
 
-            if usesMultiStyleReview(d) {
+            if showsPromoteDock(d) {
                 VStack(spacing: 6) {
                     if let promoteError {
                         Text(promoteError)
@@ -206,16 +261,29 @@ struct ReelDetailPage: View {
 
     // MARK: - Review layout modes
 
-    private func isAutoSavedSingle(_ d: APIClient.SavedReelDetailDTO) -> Bool {
+    /// Fully saved / read-only reel: promoted, nothing left to review, not failed.
+    private func isReadOnlyPromotedReel(_ d: APIClient.SavedReelDetailDTO) -> Bool {
         d.status == "promoted"
-            && d.ideasNonEmpty.count == 1
             && pendingCandidates(d).isEmpty
             && d.jobStatus != "failed"
             && d.status != "failed"
     }
 
+    /// At least one idea saved from this reel, and more candidates can still be promoted (read-only saved rows + review rows).
+    private func isHybridSavedPlusPending(_ d: APIClient.SavedReelDetailDTO) -> Bool {
+        guard d.jobStatus != "failed", d.status != "failed" else { return false }
+        guard canPromotePending(d) else { return false }
+        guard !pendingCandidates(d).isEmpty else { return false }
+        return !d.ideasNonEmpty.isEmpty
+    }
+
     private func usesMultiStyleReview(_ d: APIClient.SavedReelDetailDTO) -> Bool {
         canPromotePending(d) && !pendingCandidates(d).isEmpty
+    }
+
+    /// Save button dock: any promotable pending (initial multi-review or hybrid continuation).
+    private func showsPromoteDock(_ d: APIClient.SavedReelDetailDTO) -> Bool {
+        usesMultiStyleReview(d)
     }
 
     private func promotedCandidateForIdea(_ d: APIClient.SavedReelDetailDTO, ideaId: UUID) -> APIClient.ReelCandidateDetailDTO? {
@@ -634,217 +702,465 @@ struct ReelDetailPage: View {
     private func primarySaveButtonTitle(_ d: APIClient.SavedReelDetailDTO) -> String {
         let n = selectedPending(d).count
         if n == 0 { return "Select places to save" }
-        let personalName = collections.first { $0.isPersonalDefault }?.name ?? "My Saves"
-        let shared = collections.filter { selectedSharedCollectionIds.contains($0.id) }
-        if shared.isEmpty {
-            return "Save \(n) place\(n == 1 ? "" : "s") to \(personalName)"
+        return "Save \(n) place\(n == 1 ? "" : "s")"
+    }
+
+    private func ideasSortedByReelOrder(_ d: APIClient.SavedReelDetailDTO) -> [APIClient.SavedReelIdeaSummaryDTO] {
+        let promotedPairs = d.candidates.filter { $0.promotedIdeaId != nil }.sorted { $0.sortIndex < $1.sortIndex }
+        var out: [APIClient.SavedReelIdeaSummaryDTO] = []
+        var seen = Set<UUID>()
+        for c in promotedPairs {
+            guard let pid = c.promotedIdeaId,
+                  let idea = d.ideasNonEmpty.first(where: { $0.id == pid }),
+                  !seen.contains(idea.id) else { continue }
+            out.append(idea)
+            seen.insert(idea.id)
         }
-        let first = shared[0].name
-        let extra = shared.count > 1 ? " +\(shared.count - 1)" : ""
-        return "Save \(n) place\(n == 1 ? "" : "s") to \(first)\(extra)"
+        for idea in d.ideasNonEmpty where !seen.contains(idea.id) {
+            out.append(idea)
+        }
+        return out
+    }
+
+    private func skippedCandidatesReadOnly(_ d: APIClient.SavedReelDetailDTO) -> [APIClient.ReelCandidateDetailDTO] {
+        d.candidates.filter { $0.promotedIdeaId == nil }.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    private func skipReasonLabel(_ c: APIClient.ReelCandidateDetailDTO) -> String {
+        if c.isSynthetic { return "experience" }
+        let hasPin = c.resolvedPlaceId != nil
+        let hasMaps = !(c.mapsQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasAddr = !(c.placeAddress ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasPin, !hasMaps, !hasAddr { return "no map pin" }
+        let cat = (c.category ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return cat.isEmpty ? "not saved" : String(cat.prefix(24))
+    }
+
+    private func reelCaptionReadOnly(_ d: APIClient.SavedReelDetailDTO) -> String {
+        let sorted = d.candidates.sorted { $0.sortIndex < $1.sortIndex }
+        for c in sorted {
+            let t = c.cardDescription
+            if !t.isEmpty { return t }
+        }
+        return ""
+    }
+
+    private func categoryTagLabel(_ c: APIClient.ReelCandidateDetailDTO?) -> String {
+        let raw = c?.cardCategory ?? "other"
+        if raw == "other" { return "place" }
+        return raw.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func hybridLockedCollectionsBar() -> some View {
+        let personalName = collections.first { $0.isPersonalDefault }?.name ?? "My saves"
+        let lockedShared = collections.filter { !$0.isPersonalDefault && selectedSharedCollectionIds.contains($0.id) }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Collections for this reel")
+                    .font(Font.system(size: 12, weight: .medium))
+                    .foregroundStyle(RoamColors.textMuted)
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(RoamColors.textMuted)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if lockedShared.isEmpty {
+                        Text("No shared collections")
+                            .font(Font.system(size: 12))
+                            .foregroundStyle(RoamColors.textMuted)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(RoamColors.reviewSurfaceAlt)
+                            .clipShape(Capsule())
+                    } else {
+                        ForEach(lockedShared) { c in
+                            HStack(spacing: 5) {
+                                collectionMemberDots(c, maxDots: 3)
+                                Text(c.name)
+                                    .font(Font.system(size: 12, weight: .medium))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(RoamColors.reviewAccentLight)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(RoamColors.reviewAccent.opacity(0.45), lineWidth: 1.2))
+                            .foregroundStyle(RoamColors.text)
+                        }
+                    }
+                }
+            }
+            Text("Locked after your first save — same collections apply to the rest of this reel.")
+                .font(Font.system(size: 11))
+                .foregroundStyle(RoamColors.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Every place is also saved to \(personalName).")
+                .font(Font.system(size: 11))
+                .foregroundStyle(RoamColors.textMuted)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoamColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
-    private func autoSavedReviewContent(_ d: APIClient.SavedReelDetailDTO) -> some View {
-        if let idea = d.ideasNonEmpty.first {
-            let cand = promotedCandidateForIdea(d, ideaId: idea.id)
-            let blurb = (loadedAutoSavedIdea?.notes ?? cand?.cardDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    private func hybridPartialSavedReelContent(_ d: APIClient.SavedReelDetailDTO) -> some View {
+        let ideasOrdered = ideasSortedByReelOrder(d)
+        let pendingOrdered = pendingCandidates(d).sorted { $0.sortIndex < $1.sortIndex }
+        let savedCount = ideasOrdered.count
+        let totalCand = d.candidates.count
+        let savedDate = d.updatedAt.formatted(date: .abbreviated, time: .omitted)
+
+        VStack(alignment: .leading, spacing: 0) {
+            readOnlyReelPreviewCard(
+                d,
+                caption: reelCaptionReadOnly(d),
+                savedLabel: savedDate,
+                placeCount: savedCount,
+                totalCandidateCount: totalCand
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+            readOnlySavedBanner(
+                placeCount: savedCount,
+                dateLabel: savedDate,
+                moreToSaveCount: pendingOrdered.count
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+
+            readOnlySavedPlacesSectionHeader(single: savedCount == 1, count: savedCount)
+                .padding(.top, 12)
+
+            ForEach(Array(ideasOrdered.enumerated()), id: \.element.id) { idx, idea in
+                let cand = promotedCandidateForIdea(d, ideaId: idea.id)
+                readOnlyPlaceCard(
+                    idea: idea,
+                    candidate: cand,
+                    rank: idx + 1,
+                    showRank: savedCount >= 2,
+                    showFromReelTag: savedCount == 1,
+                    personalCollectionName: collections.first { $0.isPersonalDefault }?.name ?? "My saves",
+                    showCollectionsFooter: false
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+            }
+
+            hybridLockedCollectionsBar()
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+
             VStack(alignment: .leading, spacing: 0) {
-                reelPreviewCard(d, showCaption: false)
+                Text("Save more from this reel")
+                    .font(RoamFont.mono(12, weight: .semibold))
+                    .foregroundStyle(RoamColors.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(0.8)
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.top, 18)
+                    .padding(.bottom, 6)
+                Text("Select places below, then tap Save.")
+                    .font(Font.system(size: 11))
+                    .foregroundStyle(RoamColors.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
 
-                HStack(alignment: .top, spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(RoamColors.reviewSuccess)
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Auto-saved to My Saves")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("1 place extracted from this reel")
-                            .font(.system(size: 12))
-                            .foregroundStyle(RoamColors.textMuted)
-                    }
+                ForEach(Array(pendingOrdered.enumerated()), id: \.element.id) { idx, c in
+                    multiPlaceCandidateCard(d, c, rank: savedCount + idx + 1)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoamColors.reviewSuccessBg)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(RoamColors.reviewSuccess, lineWidth: 1.5)
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+            }
 
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(idea.title)
-                            .font(.system(size: 18, weight: .bold))
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .font(.system(size: 10))
-                                .foregroundStyle(RoamColors.textMuted)
-                            Text(loadedAutoSavedIdea?.placeName ?? idea.placeName ?? "—")
-                                .font(.system(size: 12))
-                                .foregroundStyle(RoamColors.textMuted)
-                        }
-                        HStack(spacing: 6) {
-                            Text((cand?.cardCategory ?? "place").uppercased())
-                                .font(RoamFont.mono(9, weight: .medium))
-                                .foregroundStyle(RoamColors.textMuted)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(RoamColors.reviewSurfaceAlt)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                            Text("FROM REEL")
-                                .font(RoamFont.mono(9, weight: .medium))
-                                .foregroundStyle(RoamColors.reviewAccent)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(RoamColors.reviewAccentLight)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                        }
-                        if !blurb.isEmpty {
-                            Text(blurb)
-                                .font(.system(size: 12))
-                                .foregroundStyle(RoamColors.textMuted)
-                                .lineSpacing(3)
-                        }
-                    }
-                    .padding(16)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Also add to a shared collection with friends?")
-                            .font(.system(size: 11))
-                            .foregroundStyle(RoamColors.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(collections.filter { !$0.isPersonalDefault }) { c in
-                                    let on = selectedSharedCollectionIds.contains(c.id)
-                                    Button {
-                                        if on { selectedSharedCollectionIds.remove(c.id) }
-                                        else { selectedSharedCollectionIds.insert(c.id) }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            collectionMemberDots(c, maxDots: 3)
-                                            Text(c.name)
-                                                .font(.system(size: 11, weight: on ? .semibold : .medium))
-                                        }
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 3)
-                                        .background(on ? RoamColors.reviewAccentLight : Color.clear)
-                                        .clipShape(Capsule())
-                                        .overlay(Capsule().stroke(on ? RoamColors.reviewAccent : RoamColors.reviewBorder))
-                                        .foregroundStyle(on ? RoamColors.reviewAccent : RoamColors.textMuted)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                NewSharedCollectionChipButton(compact: true) {
-                                    showNewCollectionSheet = true
-                                }
-                            }
-                        }
-
-                        if let b = newCollectionBanner {
-                            newCollectionSuccessBanner(b)
-                        }
-
-                        if let attachSharedError {
-                            Text(attachSharedError)
-                                .font(RoamFont.mono(10))
-                                .foregroundStyle(RoamColors.error)
-                        }
-
-                        if !selectedSharedCollectionIds.isEmpty {
-                            Button {
-                                Task { await attachSharedForAutoSaved(ideaId: idea.id) }
-                            } label: {
-                                if isAttachingShared {
-                                    ProgressView()
-                                } else {
-                                    Text("Add to selected collections")
-                                        .font(RoamFont.mono(11, weight: .medium))
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(RoamColors.reviewAccent)
-                            .disabled(isAttachingShared)
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoamColors.background)
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(RoamColors.reviewBorder)
-                            .frame(height: 1)
-                    }
-                }
-                .background(RoamColors.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(RoamColors.reviewBorder, lineWidth: 1)
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-
-                HStack(spacing: 8) {
-                    Button {
-                        openMapsForAutoSaved(idea: idea)
-                    } label: {
-                        Text("Open in Maps")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(RoamColors.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(RoamColors.reviewBorder, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink {
-                        IdeaDetailPage(ideaId: idea.id.uuidString)
-                    } label: {
-                        Text("Plan this →")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(RoamColors.reviewAccent)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+            readOnlyDeleteReelRow()
+                .padding(.top, 20)
                 .padding(.bottom, 24)
-            }
         }
     }
 
-    private func openMapsForAutoSaved(idea: APIClient.SavedReelIdeaSummaryDTO) {
-        if let lat = loadedAutoSavedIdea?.placeLatitude, let lng = loadedAutoSavedIdea?.placeLongitude {
-            let q = idea.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            if let url = URL(string: "http://maps.apple.com/?ll=\(lat),\(lng)&q=\(q)") {
-                UIApplication.shared.open(url)
+    @ViewBuilder
+    private func readOnlySavedReelContent(_ d: APIClient.SavedReelDetailDTO) -> some View {
+        let ideasOrdered = ideasSortedByReelOrder(d)
+        let skipped = skippedCandidatesReadOnly(d)
+        let n = ideasOrdered.count
+        let savedDate = d.updatedAt.formatted(date: .abbreviated, time: .omitted)
+        let personalName = collections.first { $0.isPersonalDefault }?.name ?? "My saves"
+
+        VStack(alignment: .leading, spacing: 0) {
+            readOnlyReelPreviewCard(
+                d,
+                caption: reelCaptionReadOnly(d),
+                savedLabel: savedDate,
+                placeCount: n,
+                totalCandidateCount: nil
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+            readOnlySavedBanner(placeCount: n, dateLabel: savedDate, moreToSaveCount: 0)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+
+            readOnlySavedPlacesSectionHeader(single: n == 1, count: n)
+                .padding(.top, 12)
+
+            ForEach(Array(ideasOrdered.enumerated()), id: \.element.id) { idx, idea in
+                let cand = promotedCandidateForIdea(d, ideaId: idea.id)
+                readOnlyPlaceCard(
+                    idea: idea,
+                    candidate: cand,
+                    rank: idx + 1,
+                    showRank: n >= 2,
+                    showFromReelTag: n == 1,
+                    personalCollectionName: personalName,
+                    showCollectionsFooter: true
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             }
-        } else if let name = idea.placeName?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let url = URL(string: "http://maps.apple.com/?q=\(name)") {
-            UIApplication.shared.open(url)
+
+            if n == 1, let only = ideasOrdered.first {
+                singleReadOnlySharedCollectionsBlock(d: d, ideaId: only.id)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+            }
+
+            if !skipped.isEmpty {
+                readOnlySkippedSection(candidates: skipped)
+                    .padding(.top, 16)
+            }
+
+            readOnlyDeleteReelRow()
+                .padding(.top, 20)
+                .padding(.bottom, 24)
         }
     }
 
-    private func attachSharedForAutoSaved(ideaId: UUID) async {
+    @ViewBuilder
+    private func readOnlyReelPreviewCard(
+        _ d: APIClient.SavedReelDetailDTO,
+        caption: String,
+        savedLabel: String,
+        placeCount: Int,
+        totalCandidateCount: Int? = nil
+    ) -> some View {
+        let thumbHeight: CGFloat = 180
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack {
+                if let rid = UUID(uuidString: reelId) {
+                    ReelThumbnailImageView(reelId: rid, signedUrl: d.thumbnailSignedUrl, contentMode: .fill)
+                        .frame(height: thumbHeight)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.18, green: 0.12, blue: 0.28), Color(red: 0.1, green: 0.08, blue: 0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(height: thumbHeight)
+                }
+
+                LinearGradient(
+                    colors: [.black.opacity(0.45), .clear, .black.opacity(0.55)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: thumbHeight)
+
+                Button {
+                    if let url = URL(string: d.reelUrl) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Circle()
+                        .fill(Color.white.opacity(0.22))
+                        .frame(width: 48, height: 48)
+                        .overlay {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white)
+                                .offset(x: 2)
+                        }
+                }
+                .buttonStyle(.plain)
+
+                VStack {
+                    Spacer()
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.94, green: 0.58, blue: 0.2),
+                                        Color(red: 0.86, green: 0.2, blue: 0.45),
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 16, height: 16)
+                        Text(d.title.isEmpty ? d.reelUrl : d.title)
+                            .font(Font.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+                }
+            }
+            .frame(height: thumbHeight)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 8) {
+                if !caption.isEmpty {
+                    Text(caption)
+                        .font(Font.system(size: 12))
+                        .foregroundStyle(RoamColors.textMuted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 6) {
+                    Text("Saved \(savedLabel)")
+                        .font(Font.system(size: 11))
+                        .foregroundStyle(RoamColors.textMuted)
+                    Circle()
+                        .fill(RoamColors.reviewBorder)
+                        .frame(width: 4, height: 4)
+                    if let total = totalCandidateCount, total != placeCount {
+                        Text("\(placeCount) of \(total) places extracted")
+                            .font(Font.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    } else {
+                        Text("\(placeCount) place\(placeCount == 1 ? "" : "s") extracted")
+                            .font(Font.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    }
+                }
+            }
+            .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(RoamColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
+    }
+
+    private func readOnlySavedBanner(placeCount: Int, dateLabel: String, moreToSaveCount: Int) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(RoamColors.reviewSuccess)
+                    .frame(width: 20, height: 20)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(placeCount) place\(placeCount == 1 ? "" : "s") saved")
+                        .font(Font.system(size: 12, weight: .semibold))
+                        .foregroundStyle(RoamColors.text)
+                    Text("· \(dateLabel)")
+                        .font(Font.system(size: 12, weight: .regular))
+                        .foregroundStyle(RoamColors.textMuted)
+                }
+                if moreToSaveCount > 0 {
+                    Text("\(moreToSaveCount) more from this reel — select below to save.")
+                        .font(Font.system(size: 11))
+                        .foregroundStyle(RoamColors.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
+        .background(RoamColors.reviewSuccessBg)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(RoamColors.reviewSuccess.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private func readOnlySavedPlacesSectionHeader(single: Bool, count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(single ? "Saved Place" : "Saved Places")
+                .font(RoamFont.mono(12, weight: .semibold))
+                .foregroundStyle(RoamColors.textMuted)
+                .textCase(.uppercase)
+                .tracking(0.8)
+            Spacer()
+            if !single {
+                Text("\(count)")
+                    .font(RoamFont.mono(11, weight: .medium))
+                    .foregroundStyle(RoamColors.textMuted)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func singleReadOnlySharedCollectionsBlock(d: APIClient.SavedReelDetailDTO, ideaId: UUID) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            reviewSaveToBar(d)
+
+            if let b = newCollectionBanner {
+                newCollectionSuccessBanner(b)
+            }
+
+            if let attachSharedError {
+                Text(attachSharedError)
+                    .font(RoamFont.mono(10))
+                    .foregroundStyle(RoamColors.error)
+            }
+
+            if !selectedSharedCollectionIds.isEmpty {
+                Button {
+                    Task { await attachSharedForReadOnlyIdea(ideaId: ideaId) }
+                } label: {
+                    if isAttachingShared {
+                        ProgressView()
+                    } else {
+                        Text("Add to selected collections")
+                            .font(RoamFont.mono(11, weight: .medium))
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(RoamColors.reviewAccent)
+                .disabled(isAttachingShared)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoamColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(RoamColors.reviewBorder, lineWidth: 1)
+        )
+    }
+
+    private func attachSharedForReadOnlyIdea(ideaId: UUID) async {
         attachSharedError = nil
         isAttachingShared = true
         defer { isAttachingShared = false }
@@ -862,6 +1178,212 @@ struct ReelDetailPage: View {
             await stores.mapCollections.refreshPins()
         } catch {
             attachSharedError = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private func readOnlyPlaceCard(
+        idea: APIClient.SavedReelIdeaSummaryDTO,
+        candidate: APIClient.ReelCandidateDetailDTO?,
+        rank: Int,
+        showRank: Bool,
+        showFromReelTag: Bool,
+        personalCollectionName: String,
+        showCollectionsFooter: Bool = true
+    ) -> some View {
+        let addr = candidate?.cardAddressLine ?? idea.placeName
+        let blurb = (candidate?.cardDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let catLabel = categoryTagLabel(candidate)
+
+        NavigationLink {
+            if appConfig.appMode == .alphaHeavyDevelopmentUnsafe {
+                IdeaDetailPage(ideaId: idea.id.uuidString)
+            } else {
+                ConsumerIdeaDetailPage(
+                    route: ConsumerIdeaDetailRoute(
+                        ideaId: idea.id.uuidString.lowercased(),
+                        addressHint: addr,
+                        addedByDisplayName: nil,
+                        addedByColorIndex: nil,
+                        categorySnapshot: candidate?.cardCategory
+                    )
+                )
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    if showRank {
+                        Text("#\(rank)")
+                            .font(RoamFont.mono(14, weight: .bold))
+                            .foregroundStyle(RoamColors.reviewBorder)
+                            .frame(width: 28, alignment: .center)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(idea.title)
+                            .font(Font.system(size: 15, weight: .semibold))
+                            .foregroundStyle(RoamColors.text)
+                            .multilineTextAlignment(.leading)
+                        if let addr, !addr.isEmpty {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(RoamColors.textMuted)
+                                Text(addr)
+                                    .font(Font.system(size: 11))
+                                    .foregroundStyle(RoamColors.textMuted)
+                                    .lineLimit(2)
+                            }
+                        }
+                        if !blurb.isEmpty {
+                            Text(blurb)
+                                .font(Font.system(size: 12))
+                                .foregroundStyle(RoamColors.textMuted)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        HStack(spacing: 4) {
+                            Text(catLabel)
+                                .font(RoamFont.mono(9, weight: .medium))
+                                .foregroundStyle(RoamColors.textMuted)
+                                .textCase(.uppercase)
+                                .tracking(0.5)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(RoamColors.reviewSurfaceAlt)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            if showFromReelTag {
+                                Text("from reel")
+                                    .font(RoamFont.mono(9, weight: .medium))
+                                    .foregroundStyle(RoamColors.reviewAccent)
+                                    .textCase(.uppercase)
+                                    .tracking(0.5)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .background(RoamColors.reviewAccentLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(RoamColors.reviewBorder)
+                }
+                .padding(14)
+
+                if showCollectionsFooter {
+                    HStack(alignment: .center, spacing: 6) {
+                        Text("In:")
+                            .font(Font.system(size: 10))
+                            .foregroundStyle(RoamColors.textMuted)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(RoamColors.reviewSuccess)
+                                .frame(width: 5, height: 5)
+                            Text(personalCollectionName)
+                                .font(Font.system(size: 10, weight: .medium))
+                                .foregroundStyle(RoamColors.textMuted)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(RoamColors.reviewSurfaceAlt)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .padding(.leading, showRank ? 54 : 14)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 10)
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(RoamColors.reviewBorder.opacity(0.45))
+                            .frame(height: 1)
+                    }
+                }
+            }
+            .background(RoamColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(RoamColors.reviewBorder, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func readOnlySkippedSection(candidates: [APIClient.ReelCandidateDetailDTO]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Not saved (\(candidates.count))")
+                .font(RoamFont.mono(11, weight: .medium))
+                .foregroundStyle(RoamColors.textMuted)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
+            ForEach(candidates) { c in
+                HStack(alignment: .center, spacing: 10) {
+                    Text(c.previewTitle.isEmpty ? "—" : c.previewTitle)
+                        .font(Font.system(size: 13))
+                        .foregroundStyle(RoamColors.textMuted)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Text(skipReasonLabel(c))
+                        .font(RoamFont.mono(10, weight: .medium))
+                        .foregroundStyle(RoamColors.textMuted)
+                }
+                .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
+                .background(RoamColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(RoamColors.reviewBorder.opacity(0.6), lineWidth: 1)
+                )
+                .opacity(0.72)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 6)
+            }
+        }
+    }
+
+    private func readOnlyDeleteReelRow() -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(RoamColors.reviewBorder.opacity(0.45))
+                .frame(height: 1)
+                .padding(.horizontal, 20)
+
+            Button {
+                showDeleteReelConfirm = true
+            } label: {
+                Group {
+                    if isDeletingReel {
+                        ProgressView()
+                            .padding(.vertical, 10)
+                    } else {
+                        Text("Delete this reel")
+                            .font(Font.system(size: 13, weight: .medium))
+                            .foregroundStyle(RoamColors.reviewPartnerPink)
+                            .padding(.vertical, 10)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(isDeletingReel)
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func deleteSavedReelFromHistory() async {
+        isDeletingReel = true
+        defer { isDeletingReel = false }
+        do {
+            try await apiClient.deleteReel(id: reelId)
+            ReelDetailPromotionSharedIdsStore.clear(reelId: reelId)
+            await stores.reels.refresh()
+            dismiss()
+        } catch {
+            deleteReelError = error.localizedDescription
         }
     }
 
@@ -1033,13 +1555,6 @@ struct ReelDetailPage: View {
             detail = try await apiClient.getReel(id: reelId)
             if let d = detail {
                 syncSelections(for: d)
-                if isAutoSavedSingle(d), let first = d.ideasNonEmpty.first {
-                    loadedAutoSavedIdea = try? await apiClient.getIdea(id: first.id.uuidString)
-                } else {
-                    loadedAutoSavedIdea = nil
-                }
-            } else {
-                loadedAutoSavedIdea = nil
             }
         } catch {
             loadError = error.localizedDescription
@@ -1048,6 +1563,14 @@ struct ReelDetailPage: View {
         do {
             collections = try await apiClient.listCollections()
             stripPersonalFromSharedSelection()
+            if let d = detail {
+                if isHybridSavedPlusPending(d) {
+                    restoreHybridLockedSharedSelections()
+                }
+                if isReadOnlyPromotedReel(d) {
+                    ReelDetailPromotionSharedIdsStore.clear(reelId: reelId)
+                }
+            }
         } catch {
             /* reel detail still usable; shared chips may be empty */
         }
@@ -1057,12 +1580,25 @@ struct ReelDetailPage: View {
         do {
             collections = try await apiClient.listCollections()
             stripPersonalFromSharedSelection()
+            if let d = detail, isHybridSavedPlusPending(d) {
+                restoreHybridLockedSharedSelections()
+            }
         } catch { /* ignore */ }
+    }
+
+    private func restoreHybridLockedSharedSelections() {
+        guard let stored = ReelDetailPromotionSharedIdsStore.load(reelId: reelId) else { return }
+        let valid = Set(collections.filter { !$0.isPersonalDefault }.map(\.id))
+        selectedSharedCollectionIds = Set(stored).intersection(valid)
     }
 
     private func syncSelections(for d: APIClient.SavedReelDetailDTO) {
         let pending = pendingCandidates(d).map(\.id)
-        selectedCandidateIds = Set(pending)
+        if isHybridSavedPlusPending(d) {
+            selectedCandidateIds = []
+        } else {
+            selectedCandidateIds = Set(pending)
+        }
     }
 
     private func promote(_ d: APIClient.SavedReelDetailDTO) async {
@@ -1104,6 +1640,7 @@ struct ReelDetailPage: View {
                 promotions: items,
                 sharedCollectionIds: sharedIds
             )
+            ReelDetailPromotionSharedIdsStore.save(reelId: reelId, sharedCollectionIds: sharedIds)
             await stores.ideas.refresh()
             await stores.reels.refresh()
             await stores.mapCollections.refreshCollections()

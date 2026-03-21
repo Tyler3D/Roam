@@ -61,7 +61,7 @@ struct ConsumerIdeaDetailPage: View {
                     .padding(.bottom, 14)
 
                 sectionTitle("In collections")
-                collectionsSection
+                collectionsSection(idea: idea)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 14)
 
@@ -223,42 +223,65 @@ struct ConsumerIdeaDetailPage: View {
         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 
-    private var collectionsSection: some View {
-        HStack(spacing: 6) {
-            if let pid = stores.mapCollections.personalDefaultId,
-               let personal = stores.mapCollections.collections.first(where: { $0.id == pid }) {
-                collectionChip(
-                    dot: RoamColors.reviewSuccess,
-                    title: personal.name
-                )
-            }
+    private func collectionsSection(idea: Idea) -> some View {
+        let linked = idea.linkedCollectionUUIDs
+        let fallbackPersonal: [UUID] = {
+            if linked.isEmpty, let pid = stores.mapCollections.personalDefaultId { return [pid] }
+            return []
+        }()
+        let ordered = linked.isEmpty ? fallbackPersonal : linked
 
-            Button {
-                attachSelection = []
-                showAttachCollections = true
-            } label: {
-                HStack(spacing: 5) {
-                    Text("+")
-                        .font(.system(size: 13, weight: .medium))
-                    Text("Add")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(RoamColors.reviewAccent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(
-                            RoamColors.reviewAccent.opacity(0.45),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ordered, id: \.self) { cid in
+                    if let col = stores.mapCollections.collections.first(where: { $0.id == cid }) {
+                        collectionChip(
+                            dot: col.isPersonalDefault
+                                ? RoamColors.reviewSuccess
+                                : MapPinPalette.color(forIndex: abs(cid.hashValue % 8)),
+                            title: col.name
                         )
-                )
-            }
-            .buttonStyle(.plain)
+                    } else {
+                        collectionChip(
+                            dot: RoamColors.reviewBorder,
+                            title: "Collection"
+                        )
+                    }
+                }
 
-            Spacer(minLength: 0)
+                Button {
+                    let sharedLinked = idea.linkedCollectionUUIDs.filter { cid in
+                        guard let c = stores.mapCollections.collections.first(where: { $0.id == cid }) else {
+                            return true
+                        }
+                        return !c.isPersonalDefault
+                    }
+                    attachSelection = Set(sharedLinked)
+                    showAttachCollections = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("+")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Add")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(RoamColors.reviewAccent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(
+                                RoamColors.reviewAccent.opacity(0.45),
+                                style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -539,6 +562,7 @@ struct ConsumerIdeaDetailPage: View {
         errorText = nil
         defer { isLoading = false }
         do {
+            await stores.mapCollections.refreshCollections()
             let loaded = try await apiClient.getIdea(id: route.ideaId)
             idea = loaded
             stores.ideas.replaceLocal(loaded)
@@ -581,7 +605,9 @@ struct ConsumerIdeaDetailPage: View {
                 ideaId: ideaUUID,
                 sharedCollectionIds: Array(attachSelection)
             )
+            await stores.mapCollections.refreshCollections()
             await stores.mapCollections.refreshPins()
+            await load()
             showAttachCollections = false
         } catch {
             errorText = error.localizedDescription
