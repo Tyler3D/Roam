@@ -563,6 +563,7 @@
     "/api/reels/{reelId}/promote": {
       "post": {
         "summary": "Promotereel",
+        "description": "Promote candidates to ideas. Each idea is always linked to the user's personal default collection.",
         "operationId": "promoteReel_api_reels__reelId__promote_post",
         "parameters": [
           {
@@ -770,6 +771,50 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{ideaId}/shared-collections": {
+      "post": {
+        "summary": "Attachideasharedcollections",
+        "description": "Link the idea into extra shared collections. Personal default is always present and is ignored if sent.",
+        "operationId": "attachIdeaSharedCollections_api_ideas__ideaId__shared_collections_post",
+        "parameters": [
+          {
+            "name": "ideaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ideaid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaSharedCollectionsAttach"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -1903,6 +1948,297 @@
           }
         }
       }
+    },
+    "/api/collections/everything/ideas": {
+      "get": {
+        "summary": "Listeverythingmapideas",
+        "operationId": "listEverythingMapIdeas_api_collections_everything_ideas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionMapIdeaRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listeverythingmapideas Api Collections Everything Ideas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections": {
+      "get": {
+        "summary": "Listcollections",
+        "operationId": "listCollections_api_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listcollections Api Collections Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Createsharedcollection",
+        "operationId": "createSharedCollection_api_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}": {
+      "patch": {
+        "summary": "Patchcollection",
+        "operationId": "patchCollection_api_collections__collectionId__patch",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deletecollection",
+        "operationId": "deleteCollection_api_collections__collectionId__delete",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/members": {
+      "post": {
+        "summary": "Addcollectionmember",
+        "operationId": "addCollectionMember_api_collections__collectionId__members_post",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionMemberAddBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/members/{memberUserId}": {
+      "delete": {
+        "summary": "Removecollectionmember",
+        "operationId": "removeCollectionMember_api_collections__collectionId__members__memberUserId__delete",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          },
+          {
+            "name": "memberUserId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Memberuserid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionId}/ideas": {
+      "get": {
+        "summary": "Listcollectionmapideas",
+        "operationId": "listCollectionMapIdeas_api_collections__collectionId__ideas_get",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collectionid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionMapIdeaRead"
+                  },
+                  "title": "Response Listcollectionmapideas Api Collections  Collectionid  Ideas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2010,6 +2346,226 @@
         "type": "object",
         "title": "Body_retryReelIngest_api_reels__reelId__retry_ingest_post"
       },
+      "CollectionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          },
+          "memberUserIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Memberuserids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CollectionCreate"
+      },
+      "CollectionMapIdeaRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Displayname"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
+          },
+          "placeName": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placename"
+          },
+          "placeAddress": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placeaddress"
+          },
+          "placeLatitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelatitude"
+          },
+          "placeLongitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelongitude"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "title": "Category"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "addedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Addedbyuserid"
+          },
+          "addedByFirstName": {
+            "type": "string",
+            "title": "Addedbyfirstname",
+            "default": ""
+          },
+          "addedByLastName": {
+            "type": "string",
+            "title": "Addedbylastname",
+            "default": ""
+          },
+          "addedByColorIndex": {
+            "type": "integer",
+            "title": "Addedbycolorindex",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "createdAt",
+          "addedByUserId"
+        ],
+        "title": "CollectionMapIdeaRead"
+      },
+      "CollectionMemberAddBody": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "CollectionMemberAddBody"
+      },
+      "CollectionMemberPreview": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "firstName": {
+            "type": "string",
+            "title": "Firstname",
+            "default": ""
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Lastname",
+            "default": ""
+          },
+          "photoUrl": {
+            "type": "string",
+            "nullable": true,
+            "title": "Photourl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "CollectionMemberPreview"
+      },
+      "CollectionPatch": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "CollectionPatch"
+      },
+      "CollectionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "creatorId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Creatorid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          },
+          "isPersonalDefault": {
+            "type": "boolean",
+            "title": "Ispersonaldefault"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "memberPreview": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMemberPreview"
+            },
+            "type": "array",
+            "title": "Memberpreview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "creatorId",
+          "name",
+          "isPersonalDefault",
+          "createdAt"
+        ],
+        "title": "CollectionRead"
+      },
       "CreateIdeaOnReelBody": {
         "properties": {
           "title": {
@@ -2026,6 +2582,15 @@
             "format": "uuid",
             "nullable": true,
             "title": "Placeid"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",
@@ -2170,6 +2735,15 @@
             "type": "string",
             "nullable": true,
             "title": "Displayname"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",
@@ -2269,6 +2843,22 @@
           "updatedAt"
         ],
         "title": "IdeaRead"
+      },
+      "IdeaSharedCollectionsAttach": {
+        "properties": {
+          "sharedCollectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sharedcollectionids",
+            "description": "Shared collections only. Personal default remains linked; do not send it."
+          }
+        },
+        "type": "object",
+        "title": "IdeaSharedCollectionsAttach",
+        "description": "Add shared collection links for an existing idea (idempotent per collection)."
       },
       "IdeaStatus": {
         "type": "string",
@@ -2432,6 +3022,12 @@
             "nullable": true,
             "title": "Planid"
           },
+          "collectionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Collectionid"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -2471,7 +3067,8 @@
           "task_assigned",
           "plan_reminder",
           "rate_prompt",
-          "friend_request"
+          "friend_request",
+          "added_to_collection"
         ],
         "title": "NotificationType"
       },
@@ -2940,6 +3537,15 @@
             },
             "type": "array",
             "title": "Promotions"
+          },
+          "collectionIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Collectionids",
+            "description": "Additional shared collections only. Personal default is always linked; do not send it."
           }
         },
         "type": "object",
@@ -3012,6 +3618,31 @@
             "type": "string",
             "nullable": true,
             "title": "Resolvedplacename"
+          },
+          "previewDescription": {
+            "type": "string",
+            "title": "Previewdescription",
+            "default": ""
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": ""
+          },
+          "placeAddress": {
+            "type": "string",
+            "nullable": true,
+            "title": "Placeaddress"
+          },
+          "mapsQuery": {
+            "type": "string",
+            "nullable": true,
+            "title": "Mapsquery"
+          },
+          "confidence": {
+            "type": "number",
+            "nullable": true,
+            "title": "Confidence"
           }
         },
         "type": "object",

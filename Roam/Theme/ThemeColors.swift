@@ -32,6 +32,16 @@ enum RoamColors {
     static let glassTint = Color(red: 245 / 255, green: 243 / 255, blue: 250 / 255).opacity(0.92)
 
     static let dotGridDot = Color(red: 171 / 255, green: 161 / 255, blue: 198 / 255).opacity(0.30)
+
+    /// Reel review concept (HTML mock): accent + success chips.
+    static let reviewAccent = Color(red: 108 / 255, green: 92 / 255, blue: 231 / 255)
+    static let reviewAccentLight = Color(red: 108 / 255, green: 92 / 255, blue: 231 / 255).opacity(0.12)
+    static let reviewSuccess = Color(red: 46 / 255, green: 204 / 255, blue: 135 / 255)
+    static let reviewSuccessBg = Color(red: 46 / 255, green: 204 / 255, blue: 135 / 255).opacity(0.12)
+    static let reviewBorder = Color(red: 221 / 255, green: 216 / 255, blue: 232 / 255)
+    static let reviewSurfaceAlt = Color(red: 237 / 255, green: 234 / 255, blue: 243 / 255)
+    static let reviewSquadBlue = Color(red: 91 / 255, green: 141 / 255, blue: 239 / 255)
+    static let reviewPartnerPink = Color(red: 232 / 255, green: 101 / 255, blue: 122 / 255)
 }
 
 /// Legacy name used by older auth screens; maps to Roam primary actions.

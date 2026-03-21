@@ -146,6 +146,21 @@ final class APIClient {
         try await apiFetch(path: "/api/ideas/\(id.lowercased())")
     }
 
+    private struct IdeaSharedCollectionsAttachPayload: Encodable {
+        let sharedCollectionIds: [UUID]
+    }
+
+    /// Idempotent: adds `collection_ideas` rows for shared collections the user belongs to.
+    func attachIdeaSharedCollections(ideaId: UUID, sharedCollectionIds: [UUID]) async throws {
+        guard !sharedCollectionIds.isEmpty else { return }
+        let body = try JSONEncoder.roam.encode(IdeaSharedCollectionsAttachPayload(sharedCollectionIds: sharedCollectionIds))
+        try await apiPerform(
+            path: "/api/ideas/\(ideaId.uuidString.lowercased())/shared-collections",
+            method: "POST",
+            body: body
+        )
+    }
+
     func createIdea(title: String) async throws -> Idea {
         let payload = IdeaCreatePayload(title: title, notes: "", sourceUrl: "")
         let body = try JSONEncoder.roam.encode(payload)
@@ -447,6 +462,25 @@ final class APIClient {
         let promotedIdeaId: UUID?
         let createdAt: Date
         let resolvedPlaceName: String?
+        let previewDescription: String?
+        let category: String?
+        let placeAddress: String?
+        let mapsQuery: String?
+        let confidence: Double?
+
+        var cardDescription: String { (previewDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+        var cardCategory: String {
+            let c = (category ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return c.isEmpty ? "other" : c
+        }
+        var cardAddressLine: String? {
+            let a = (placeAddress ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !a.isEmpty { return a }
+            let r = (resolvedPlaceName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !r.isEmpty { return r }
+            let m = (mapsQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return m.isEmpty ? nil : m
+        }
     }
 
     struct SavedReelIdeaSummaryDTO: Decodable, Identifiable {
@@ -513,13 +547,17 @@ final class APIClient {
 
     private struct PromoteReelBodyEnc: Encodable {
         let promotions: [ReelPromoteItem]
+        let collectionIds: [UUID]
     }
 
     func promoteReel(
         reelId: String,
-        promotions: [ReelPromoteItem]
+        promotions: [ReelPromoteItem],
+        sharedCollectionIds: [UUID] = []
     ) async throws -> PromoteReelResponseDTO {
-        let body = try JSONEncoder().encode(PromoteReelBodyEnc(promotions: promotions))
+        let body = try JSONEncoder.roam.encode(
+            PromoteReelBodyEnc(promotions: promotions, collectionIds: sharedCollectionIds)
+        )
         return try await apiFetch(
             path: "/api/reels/\(reelId.lowercased())/promote",
             method: "POST",
@@ -538,14 +576,146 @@ final class APIClient {
         let title: String
         let notes: String
         let placeId: UUID?
+        let collectionIds: [UUID]
     }
 
-    func createIdeaOnReel(reelId: String, title: String, notes: String, placeId: UUID?) async throws -> Idea {
+    func createIdeaOnReel(
+        reelId: String,
+        title: String,
+        notes: String,
+        placeId: UUID?,
+        sharedCollectionIds: [UUID] = []
+    ) async throws -> Idea {
         let body = try JSONEncoder.roam.encode(
-            CreateIdeaOnReelBodyEnc(title: title, notes: notes, placeId: placeId)
+            CreateIdeaOnReelBodyEnc(
+                title: title,
+                notes: notes,
+                placeId: placeId,
+                collectionIds: sharedCollectionIds
+            )
         )
         return try await apiFetch(
             path: "/api/reels/\(reelId.lowercased())/ideas",
+            method: "POST",
+            body: body
+        )
+    }
+
+    // MARK: - Collections + map pins
+
+    struct CollectionMemberPreviewDTO: Decodable {
+        let userId: UUID
+        let firstName: String?
+        let lastName: String?
+        let photoUrl: String?
+    }
+
+    struct CollectionReadDTO: Decodable, Identifiable {
+        let id: UUID
+        let creatorId: UUID
+        let name: String
+        let description: String?
+        let isPersonalDefault: Bool
+        let createdAt: Date
+        let memberPreview: [CollectionMemberPreviewDTO]?
+    }
+
+    struct CollectionMapPinDTO: Decodable, Identifiable {
+        let id: UUID
+        let title: String
+        let notes: String
+        let displayName: String?
+        let placeId: UUID?
+        let placeName: String?
+        let placeAddress: String?
+        let placeLatitude: Double?
+        let placeLongitude: Double?
+        let category: String?
+        let createdAt: Date
+        let addedByUserId: UUID
+        let addedByFirstName: String?
+        let addedByLastName: String?
+        let addedByColorIndex: Int?
+
+        var pinTitle: String {
+            let d = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return d.isEmpty ? title : d
+        }
+
+        var addedByDisplayName: String {
+            let f = (addedByFirstName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let l = (addedByLastName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let combined = [f, l].filter { !$0.isEmpty }.joined(separator: " ")
+            return combined.isEmpty ? "Someone" : combined
+        }
+
+        var colorIndex: Int { addedByColorIndex ?? 0 }
+    }
+
+    struct FriendshipRowDTO: Decodable, Identifiable {
+        let id: UUID
+        let friendId: UUID?
+        let friendFirstName: String?
+        let friendLastName: String?
+    }
+
+    struct FriendSearchResultDTO: Decodable {
+        let friends: [RoamUser]
+        let others: [RoamUser]
+    }
+
+    func listFriends() async throws -> [FriendshipRowDTO] {
+        try await apiFetch(path: "/api/friends")
+    }
+
+    func searchFriends(query: String) async throws -> FriendSearchResultDTO {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+=")
+        let enc = query.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        return try await apiFetch(path: "/api/friends/search?q=\(enc)")
+    }
+
+    func listCollections() async throws -> [CollectionReadDTO] {
+        try await apiFetch(path: "/api/collections")
+    }
+
+    func listEverythingMapPins() async throws -> [CollectionMapPinDTO] {
+        try await apiFetch(path: "/api/collections/everything/ideas")
+    }
+
+    func listCollectionMapPins(collectionId: UUID) async throws -> [CollectionMapPinDTO] {
+        try await apiFetch(path: "/api/collections/\(collectionId.uuidString.lowercased())/ideas")
+    }
+
+    private struct CollectionCreatePayload: Encodable {
+        let name: String
+        let description: String?
+        let memberUserIds: [UUID]
+    }
+
+    func createSharedCollection(
+        name: String,
+        description: String? = nil,
+        memberUserIds: [UUID]
+    ) async throws -> CollectionReadDTO {
+        let body = try JSONEncoder.roam.encode(
+            CollectionCreatePayload(
+                name: name,
+                description: description,
+                memberUserIds: memberUserIds
+            )
+        )
+        return try await apiFetch(path: "/api/collections", method: "POST", body: body)
+    }
+
+    private struct CollectionMemberAddPayload: Encodable {
+        let userId: UUID
+    }
+
+    func addCollectionMember(collectionId: UUID, userId: UUID) async throws {
+        let body = try JSONEncoder.roam.encode(CollectionMemberAddPayload(userId: userId))
+        try await apiPerform(
+            path: "/api/collections/\(collectionId.uuidString.lowercased())/members",
             method: "POST",
             body: body
         )

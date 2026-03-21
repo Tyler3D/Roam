@@ -23,6 +23,7 @@ final class RoamStores {
     let plans: PlansQueryStore
     let notifications: NotificationsQueryStore
     let user: UserQueryStore
+    let mapCollections: MapCollectionsQueryStore
 
     init(api: APIClient) {
         ideas = IdeasQueryStore(api: api)
@@ -30,6 +31,7 @@ final class RoamStores {
         plans = PlansQueryStore(api: api)
         notifications = NotificationsQueryStore(api: api)
         user = UserQueryStore(api: api)
+        mapCollections = MapCollectionsQueryStore(api: api)
     }
 
     func refreshAll() async {
@@ -38,5 +40,7 @@ final class RoamStores {
         await plans.refresh()
         await notifications.refresh()
         await user.refresh()
+        await mapCollections.refreshCollections()
+        await mapCollections.refreshPins()
     }
 }
