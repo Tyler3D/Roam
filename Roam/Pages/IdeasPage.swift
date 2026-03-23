@@ -96,8 +96,9 @@ struct IdeasPage: View {
 
                 ForEach(stores.ideas.ideas) { idea in
                     NavigationLink(value: idea.id) {
+                        let needsConfirm = stores.ideas.interpretationInsights[idea.id]?.uncertainty?.requiresConfirmation ?? false
                         ZStack {
-                            IdeaCardView(idea: idea)
+                            IdeaCardView(idea: idea, requiresConfirmation: needsConfirm)
                             if enrichingIds.contains(idea.id) {
                                 Color.white.opacity(0.35)
                                 ProgressView()

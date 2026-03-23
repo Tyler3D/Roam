@@ -27,7 +27,7 @@ function createTask(planId: string, data: { description: string; assigneeId: str
 function updateTask(
   planId: string,
   taskId: string,
-  data: { isCompleted: boolean }
+  data: { isCompleted?: boolean; description?: string; assigneeId?: string }
 ) {
   return request<Task>(`/api/tasks/${planId}/${taskId}`, {
     method: "PATCH",
@@ -70,8 +70,8 @@ export function useCreateTask(planId: string) {
 export function useUpdateTask(planId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ taskId, isCompleted }: { taskId: string; isCompleted: boolean }) =>
-      updateTask(planId, taskId, { isCompleted }),
+    mutationFn: ({ taskId, ...data }: { taskId: string; isCompleted?: boolean; description?: string; assigneeId?: string }) =>
+      updateTask(planId, taskId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: planKeys.all });
       qc.invalidateQueries({ queryKey: planKeys.drafts });

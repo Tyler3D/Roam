@@ -1,9 +1,10 @@
 import logging
+import os
 import secrets
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select, col
 
 from app.auth.auth import getCurrentUser
@@ -17,6 +18,7 @@ from app.models.ideas import (
     IdeaRead,
     IdeaSharedCollectionsAttach,
     IdeaUpdate,
+    IdeaPromoteRequest,
     IdeaStatus,
     IdeaWithPlanCountView,
 )
@@ -35,7 +37,8 @@ from app.models.plans import (
 from app.models.users import UserModel
 from app.models.friendships import FriendshipModel, FriendshipStatus
 from app.models.notifications import NotificationModel, NotificationType
-from app.services.interpret import get_scribble_prompt_version, interpret_idea
+from app.services.interpret import get_scribble_prompt_version
+from app.services.interpret_orchestrator import run_interpret_orchestration
 from app.services.places import search_google_places
 from app.services.scheduling import suggest_time_slots
 
@@ -56,6 +59,9 @@ def _getLatestPipelineResult(session: Session, ideaId: UUID) -> PipelineResultRe
         select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
     ).all()
     read = PipelineResultRead.model_validate(result)
+    raw = result.rawOutput or {}
+    read.orchestrationSteps = raw.get("steps") if isinstance(raw.get("steps"), list) else []
+    read.uncertainty = raw.get("uncertainty") if isinstance(raw.get("uncertainty"), dict) else None
     read.placeSuggestions = []
     for s in suggestions:
         sr = PlaceSuggestionRead.model_validate(s)
@@ -278,7 +284,16 @@ def interpretIdea(
     session.add(idea)
     session.flush()
 
-    resultDict = interpret_idea(idea.title)
+    orchestration_enabled = os.getenv("INTERPRET_ORCHESTRATION_ENABLED", "true").lower() != "false"
+    if orchestration_enabled:
+        resultDict = run_interpret_orchestration(
+            raw_input=idea.title,
+            resolve_invitees=lambda names: _resolveInvitees(session, user.id, names),
+        )
+    else:
+        # Backward-compatible fallback path for phased rollout.
+        from app.services.interpret import interpret_idea  # local import to avoid idle dependency when orchestrated
+        resultDict = interpret_idea(idea.title)
 
     pipelineResult = PipelineResultModel(
         ideaId=idea.id,
@@ -325,13 +340,7 @@ def interpretIdea(
     ).first()
     read = _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
 
-    invitees = resultDict.get("invitees", [])
-    if invitees and read.pipelineResult:
-        resolved = _resolveInvitees(session, user.id, invitees)
-        read.pipelineResult.rawOutput = {
-            **(read.pipelineResult.rawOutput or {}),
-            "resolvedInvitees": resolved,
-        }
+    # Orchestration already includes resolvedInvitees + uncertainty metadata in rawOutput.
 
     return read
 
@@ -411,9 +420,18 @@ def suggestSlotsForIdea(
     return {"slots": slots}
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.lower() in {"1", "true", "yes", "on"}
+
+
 @ideasRouter.post("/ideas/{ideaId}/plan", response_model=PlanRead)
 def promoteIdeaToPlan(
     ideaId: UUID,
+    request: Request,
+    body: IdeaPromoteRequest | None = None,
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> PlanRead:
@@ -430,6 +448,33 @@ def promoteIdeaToPlan(
 
     if pipelineResult:
         raw = pipelineResult.rawOutput or {}
+        uncertainty = raw.get("uncertainty", {}) if isinstance(raw, dict) else {}
+        requires_confirmation = bool(
+            isinstance(uncertainty, dict) and uncertainty.get("requiresConfirmation")
+        )
+        client_kind = request.headers.get("X-Roam-Client", "").lower()
+        enforce_any = _env_flag("ENFORCE_INTERPRET_CONFIRMATION", False)
+        enforce_web = _env_flag("ENFORCE_INTERPRET_CONFIRMATION_WEB", False)
+        enforce_ios = _env_flag("ENFORCE_INTERPRET_CONFIRMATION_IOS", False)
+        enforce_client = (
+            enforce_any
+            or (client_kind == "web" and enforce_web)
+            or (client_kind == "ios" and enforce_ios)
+        )
+        if requires_confirmation and enforce_client and not (body and body.ambiguityAcknowledged):
+            raise BadRequest("Interpretation requires confirmation before promotion")
+
+        if body:
+            if body.confirmedInvitees:
+                raw["invitees"] = body.confirmedInvitees
+            if body.confirmedTaskAssignments is not None:
+                raw["taskAssignments"] = body.confirmedTaskAssignments
+            if body.confirmedSearchQuery:
+                raw["searchQuery"] = body.confirmedSearchQuery
+            raw["ambiguityAcknowledged"] = body.ambiguityAcknowledged
+            pipelineResult.rawOutput = raw
+            session.add(pipelineResult)
+
         estimatedMinutes = pipelineResult.estimatedMinutes or 60
         invitees = raw.get("invitees", [])
         if pipelineResult.refinedTitle:
@@ -554,6 +599,7 @@ def _resolveInvitees(
     for name in inviteeNames:
         nameLower = name.lower()
         found = None
+        candidates: list[dict] = []
 
         if friendIds:
             friends = session.exec(
@@ -567,25 +613,52 @@ def _resolveInvitees(
             ).all()
             if friends:
                 found = friends[0]
+                candidates = [
+                    {
+                        "userId": str(f.id),
+                        "firstName": f.firstName,
+                        "lastName": f.lastName,
+                        "isFriend": True,
+                    }
+                    for f in friends[:3]
+                ]
 
         if not found:
             allMatches = session.exec(
                 select(UserModel).where(
                     col(UserModel.firstName).ilike(f"%{nameLower}%")
                     | col(UserModel.lastName).ilike(f"%{nameLower}%")
-                ).limit(1)
+                ).limit(3)
             ).all()
             if allMatches:
                 found = allMatches[0]
+                candidates = [
+                    {
+                        "userId": str(f.id),
+                        "firstName": f.firstName,
+                        "lastName": f.lastName,
+                        "isFriend": f.id in friendIds,
+                    }
+                    for f in allMatches
+                ]
 
         if found:
             resolved.append({
+                "name": name,
                 "userId": str(found.id),
                 "firstName": found.firstName,
                 "lastName": found.lastName,
                 "isFriend": found.id in friendIds,
+                "isAmbiguous": len(candidates) > 1,
+                "candidates": candidates,
             })
         else:
-            resolved.append({"name": name, "userId": None, "isFriend": False})
+            resolved.append({
+                "name": name,
+                "userId": None,
+                "isFriend": False,
+                "isAmbiguous": True,
+                "candidates": [],
+            })
 
     return resolved

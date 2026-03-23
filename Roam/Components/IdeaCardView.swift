@@ -2,6 +2,7 @@ import SwiftUI
 
 struct IdeaCardView: View {
     let idea: Idea
+    var requiresConfirmation: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -23,6 +24,11 @@ struct IdeaCardView: View {
                 Text(place)
                     .font(RoamFont.mono(9))
                     .foregroundStyle(RoamColors.loganDeep)
+            }
+            if requiresConfirmation {
+                Text("Needs confirmation")
+                    .font(RoamFont.mono(9, weight: .medium))
+                    .foregroundStyle(RoamColors.error)
             }
         }
         .padding(14)

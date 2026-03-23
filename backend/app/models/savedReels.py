@@ -85,6 +85,8 @@ class ReelIngestCandidateRead(SQLModel):
     placeAddress: Optional[str] = None
     mapsQuery: Optional[str] = None
     confidence: Optional[float] = None
+    confidenceReason: Optional[str] = None
+    fallbackLabel: Optional[str] = None
 
 
 class SavedReelDetailRead(SQLModel):

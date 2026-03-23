@@ -9,6 +9,8 @@ struct IdeaDetailPage: View {
     @State private var isLoading = true
     @State private var errorText: String?
     @State private var isWorking = false
+    @State private var insights = APIClient.IdeaInterpretationInsights(steps: [], uncertainty: nil)
+    @State private var acknowledgedAmbiguity = false
 
     var body: some View {
         Group {
@@ -40,6 +42,37 @@ struct IdeaDetailPage: View {
                                     .foregroundStyle(RoamColors.textMuted)
                             }
                         }
+                        if !insights.steps.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Pipeline Steps")
+                                    .font(RoamFont.mono(9, weight: .medium))
+                                    .textCase(.uppercase)
+                                ForEach(insights.steps) { step in
+                                    Text("\(step.status == "ok" ? "✓" : step.status == "error" ? "!" : "·") \(step.name)")
+                                        .font(RoamFont.mono(10))
+                                        .foregroundStyle(RoamColors.textMid)
+                                }
+                            }
+                        }
+                        if let uncertainty = insights.uncertainty, uncertainty.requiresConfirmation {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Confirmation required")
+                                    .font(RoamFont.mono(9, weight: .medium))
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(RoamColors.error)
+                                ForEach(uncertainty.reasons, id: \.self) { reason in
+                                    Text("• \(reason)")
+                                        .font(RoamFont.mono(10))
+                                        .foregroundStyle(RoamColors.textMid)
+                                }
+                                Toggle("I reviewed these ambiguities", isOn: $acknowledgedAmbiguity)
+                                    .font(RoamFont.mono(10))
+                                    .tint(RoamColors.loganDeep)
+                            }
+                            .padding(10)
+                            .background(RoamColors.lavender.opacity(0.35))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
                         if let place = idea.placeName {
                             Text(place)
                                 .font(RoamFont.notes(14, italic: true))
@@ -69,7 +102,7 @@ struct IdeaDetailPage: View {
                             }
                             .buttonStyle(.bordered)
                             .tint(RoamColors.loganDark)
-                            .disabled(isWorking)
+                            .disabled(isWorking || ((insights.uncertainty?.requiresConfirmation ?? false) && !acknowledgedAmbiguity))
 
                             Button(role: .destructive) {
                                 Task { await deleteIdea() }
@@ -118,6 +151,8 @@ struct IdeaDetailPage: View {
             let loaded = try await apiClient.getIdea(id: ideaId)
             idea = loaded
             stores.ideas.replaceLocal(loaded)
+            insights = (try? await apiClient.getIdeaInterpretationInsights(id: ideaId))
+                ?? APIClient.IdeaInterpretationInsights(steps: [], uncertainty: nil)
         } catch {
             errorText = error.localizedDescription
         }
@@ -131,6 +166,8 @@ struct IdeaDetailPage: View {
             guard let reloaded = try? await apiClient.getIdea(id: ideaId) else { continue }
             idea = reloaded
             stores.ideas.replaceLocal(reloaded)
+            insights = (try? await apiClient.getIdeaInterpretationInsights(id: ideaId))
+                ?? APIClient.IdeaInterpretationInsights(steps: [], uncertainty: nil)
             if reloaded.pipelineResult != nil || reloaded.status != .suggesting {
                 break
             }
@@ -143,6 +180,10 @@ struct IdeaDetailPage: View {
         do {
             try await stores.ideas.interpretIdea(id: ideaId)
             idea = stores.ideas.ideas.first { $0.id == ideaId }
+            await stores.ideas.refreshInterpretationInsights(id: ideaId)
+            insights = stores.ideas.interpretationInsights[ideaId]
+                ?? APIClient.IdeaInterpretationInsights(steps: [], uncertainty: nil)
+            acknowledgedAmbiguity = false
         } catch {
             errorText = error.localizedDescription
         }

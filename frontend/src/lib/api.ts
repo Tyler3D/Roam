@@ -1,10 +1,11 @@
 import { getIdToken } from "firebase/auth";
 import { firebaseAuth } from "@/auth/firebase";
-import { ROAM_API_BASE } from "@/utils/util";
+import { DEV_AUTH_BYPASS_ENABLED, DEV_AUTH_BYPASS_SECRET, ROAM_API_BASE } from "@/utils/util";
 
 async function getHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "X-Roam-Client": "web",
   };
   const user = firebaseAuth.currentUser;
   if (user) {
@@ -13,6 +14,9 @@ async function getHeaders(): Promise<Record<string, string>> {
     headers["Authorization"] = bearer;
     // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
     headers["X-Roam-Authorization"] = bearer;
+  }
+  if (DEV_AUTH_BYPASS_ENABLED && DEV_AUTH_BYPASS_SECRET) {
+    headers["X-Dev-Auth-Bypass"] = DEV_AUTH_BYPASS_SECRET;
   }
   return headers;
 }

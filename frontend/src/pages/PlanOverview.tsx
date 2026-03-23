@@ -16,8 +16,10 @@ import {
   useUpdateTask,
   useDeleteTask,
 } from "@/api/tasks";
+import { useIdea } from "@/api/ideas";
 import { useMe } from "@/api/users";
 import type { User } from "@/models/user";
+import { getIdeaOrchestrationSteps, getIdeaUncertainty, hasUnresolvedAmbiguity } from "@/lib/orchestration";
 
 type Slot = { start: string; end: string; label: string };
 
@@ -52,6 +54,7 @@ export default function PlanOverview() {
   const pid = planId ?? "";
   const { data: plan, isLoading } = usePlan(pid);
   const { data: me } = useMe();
+  const { data: idea } = useIdea(plan?.ideaId ?? undefined);
   const updatePlan = useUpdatePlan();
   const suggestSlots = useSuggestSlots();
   const createCalendar = useCreateCalendarEvent();
@@ -91,6 +94,9 @@ export default function PlanOverview() {
   const isCompleted = plan.status === "completed";
   const isCancelled = plan.status === "cancelled";
   const isCreator = me?.id === plan.creatorId;
+  const ideaHasAmbiguity = idea ? hasUnresolvedAmbiguity(idea) : false;
+  const ideaUncertainty = idea ? getIdeaUncertainty(idea) : null;
+  const ideaSteps = idea ? getIdeaOrchestrationSteps(idea) : [];
 
   function fetchSlots() {
     setShowSlotPicker(true);
@@ -179,6 +185,37 @@ export default function PlanOverview() {
         </div>
       </div>
 
+      {ideaSteps.length > 0 && (
+        <div className="mb-6">
+          <p className="label-mono mb-2">Interpretation Steps</p>
+          <div className="flex flex-col gap-1.5">
+            {ideaSteps.map((step) => (
+              <div
+                key={step.name}
+                className="font-mono text-[10px] px-2.5 py-2 rounded-lg border border-roam-logan/20 text-roam-text-mid"
+              >
+                {step.status === "ok" ? "✓" : step.status === "error" ? "!" : "·"} {step.name}{" "}
+                {typeof step.durationMs === "number" ? `(${step.durationMs}ms)` : ""}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ideaHasAmbiguity && isDraft && (
+        <div className="mb-6 p-3 rounded-lg border border-roam-error/40 bg-roam-error/5">
+          <p className="label-mono mb-2">Pending Ambiguities</p>
+          <p className="font-mono text-[11px] text-roam-text-mid mb-2">
+            This plan was created from an idea with unresolved interpretation ambiguity.
+          </p>
+          {(ideaUncertainty?.reasons ?? []).map((reason) => (
+            <div key={reason} className="font-mono text-[10px] text-roam-text-muted">
+              - {reason}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Time section */}
       <div className="mb-6">
         <p className="label-mono mb-2">Time</p>
@@ -232,10 +269,10 @@ export default function PlanOverview() {
             {plan.scheduledAt && (
               <button
                 onClick={handleConfirmPlan}
-                disabled={updatePlan.isPending}
+                disabled={updatePlan.isPending || ideaHasAmbiguity}
                 className="btn-primary mt-3 font-mono text-[11px] px-4 py-2 rounded-lg"
               >
-                Confirm Plan
+                {ideaHasAmbiguity ? "Resolve ambiguity on idea first" : "Confirm Plan"}
               </button>
             )}
           </>

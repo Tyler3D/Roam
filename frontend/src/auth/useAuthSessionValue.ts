@@ -24,7 +24,14 @@ import { syncFirebaseSessionFromCurrentUser } from "@/auth/firebaseSessionStore"
 import { readGoogleOAuthFromUserCredential } from "@/auth/googleOAuthRedirect";
 import { userMeetsVerificationPolicy } from "@/auth/verificationPolicy";
 import type { AuthContextValue } from "@/auth/types";
-import { ROAM_DOMAIN } from "@/utils/util";
+import { DEV_AUTH_BYPASS_ENABLED, ROAM_DOMAIN } from "@/utils/util";
+
+const DEV_BYPASS_USER = {
+  uid: "dev-auth-user",
+  email: "dev-auth@local.test",
+  displayName: "Dev Bypass User",
+  emailVerified: true,
+} as unknown as User;
 
 /** Builds the object passed to `AuthSessionContext.Provider` (sign-in, profile, backend hooks). */
 export function useAuthSessionValue(
@@ -37,6 +44,26 @@ export function useAuthSessionValue(
   const storeOAuthToken = useStoreOAuthToken();
 
   return useMemo<AuthContextValue>(() => {
+    if (DEV_AUTH_BYPASS_ENABLED) {
+      console.warn("[roam-auth] Dev auth bypass enabled in frontend.");
+      return {
+        user: DEV_BYPASS_USER,
+        loading: false,
+        isVerified: true,
+        isUserVerified: () => true,
+        signIn: async () => DEV_BYPASS_USER,
+        signUp: async () => DEV_BYPASS_USER,
+        signInWithGoogle: async () => {},
+        requestGoogleCalendarAccess: async () => {},
+        signOutUser: async () => {},
+        sendVerificationEmail: async () => {},
+        resetPassword: async () => {},
+        refreshUser: async () => DEV_BYPASS_USER,
+        ensureBackendUser: async () => {},
+        verifyBackendUser: async () => {},
+      };
+    }
+
     const isUserVerified = (inputUser?: User | null) =>
       userMeetsVerificationPolicy(inputUser ?? user);
 

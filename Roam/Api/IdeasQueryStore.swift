@@ -8,6 +8,7 @@ final class IdeasQueryStore {
     private let staleDuration: TimeInterval = 30
 
     private(set) var ideas: [Idea] = []
+    private(set) var interpretationInsights: [String: APIClient.IdeaInterpretationInsights] = [:]
     private(set) var isLoading = false
     private(set) var lastError: String?
     private var lastFetchedAt: Date?
@@ -29,6 +30,11 @@ final class IdeasQueryStore {
         defer { isLoading = false }
         do {
             ideas = try await api.listIdeas()
+            for idea in ideas {
+                if let insight = try? await api.getIdeaInterpretationInsights(id: idea.id) {
+                    interpretationInsights[idea.id] = insight
+                }
+            }
             lastFetchedAt = Date()
         } catch {
             lastError = error.localizedDescription
@@ -53,6 +59,9 @@ final class IdeasQueryStore {
         if let idx = ideas.firstIndex(where: { $0.id == id }) {
             ideas[idx] = updated
         }
+        if let insight = try? await api.getIdeaInterpretationInsights(id: id) {
+            interpretationInsights[id] = insight
+        }
     }
 
     func promoteIdea(id: String) async throws -> Plan {
@@ -67,6 +76,12 @@ final class IdeasQueryStore {
     func replaceLocal(_ idea: Idea) {
         if let idx = ideas.firstIndex(where: { $0.id == idea.id }) {
             ideas[idx] = idea
+        }
+    }
+
+    func refreshInterpretationInsights(id: String) async {
+        if let insight = try? await api.getIdeaInterpretationInsights(id: id) {
+            interpretationInsights[id] = insight
         }
     }
 }

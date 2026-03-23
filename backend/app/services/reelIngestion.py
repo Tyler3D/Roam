@@ -244,6 +244,32 @@ def _shouldResolveMaps(c: ReelCandidate) -> bool:
     return bool(c.mapsQuery and c.mapsQuery.strip())
 
 
+def _candidate_threshold(c: ReelCandidate) -> float:
+    if c.kind == "location":
+        return 0.78
+    if c.kind == "experience":
+        return 0.62
+    if c.kind == "inspiration":
+        return 0.55
+    return CONFIDENCE_THRESHOLD
+
+
+def _tokenize(s: str) -> set[str]:
+    return {tok for tok in "".join(ch.lower() if ch.isalnum() else " " for ch in s).split() if tok}
+
+
+def _place_match_score(candidate: ReelCandidate, resolved_name: str | None) -> float:
+    if not resolved_name:
+        return 0.0
+    source = f"{candidate.title} {candidate.mapsQuery or ''}".strip()
+    a = _tokenize(source)
+    b = _tokenize(resolved_name)
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    return inter / max(1, len(a))
+
+
 def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
     apiKey = getGoogleMapsApiKey()
     if not apiKey:
@@ -275,6 +301,7 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
             "longitude": location.get("lng"),
             "googlePlaceId": top.get("place_id"),
             "placeAddress": top.get("formatted_address"),
+            "placeName": top.get("name"),
         }
     except ProviderRateLimitError:
         raise
@@ -362,9 +389,18 @@ def createIdeaPipelineFromCandidate(
         query_key = (candidate.mapsQuery or candidate.title or "").strip()
         if query_key:
             resolved = _resolveGoogleMaps(query_key, candidate.placeAddress) or {}
+            match_score = _place_match_score(candidate, resolved.get("placeName"))
+            min_score = 0.35 if candidate.kind == "location" else 0.25
+            if match_score < min_score:
+                raw_output["placeResolution"] = {
+                    "status": "rejected_low_match",
+                    "matchScore": match_score,
+                    "resolvedName": resolved.get("placeName"),
+                }
+                resolved = {}
             place = _createOrGetPlace(
                 session,
-                place_name=candidate.title or query_key,
+                place_name=resolved.get("placeName") or candidate.title or query_key,
                 address=resolved.get("placeAddress", candidate.placeAddress),
                 google_place_id=resolved.get("googlePlaceId"),
                 category=candidate.category,
@@ -420,9 +456,13 @@ def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | Non
     if not q:
         return None
     resolved = _resolveGoogleMaps(q, c.placeAddress) or {}
+    match_score = _place_match_score(c, resolved.get("placeName"))
+    min_score = 0.35 if c.kind == "location" else 0.25
+    if match_score < min_score:
+        return None
     place = _createOrGetPlace(
         session,
-        place_name=c.title or q,
+        place_name=resolved.get("placeName") or c.title or q,
         address=resolved.get("placeAddress", c.placeAddress),
         google_place_id=resolved.get("googlePlaceId"),
         category=c.category,
@@ -457,7 +497,7 @@ def processIngestionJob(
         title = metadata.get("reelTitle") or metadata.get("shareText") or "Untitled reel"
 
         parsed = _callVisionReel(framesData, thumbnailData, metadata)
-        filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
+        filtered = [c for c in parsed.candidates if c.confidence >= _candidate_threshold(c)]
         filtered_ordered = sorted(filtered, key=lambda c: c.confidence, reverse=True)
         reel_url = metadata.get("reelUrl")
 
@@ -553,7 +593,24 @@ def processIngestionJob(
             job = session.get(IngestionJobModel, UUID(jobId))
             if job:
                 job.status = JobStatus.failed
-                job.error = str(e)
+                job.error = f"provider_rate_limit: {str(e)}"
+                job.updatedAt = datetime.utcnow()
+                session.add(job)
+                sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
+                if sr:
+                    sr.status = SavedReelStatus.failed
+                    sr.updatedAt = datetime.utcnow()
+                    session.add(sr)
+                session.commit()
+        except Exception:
+            logger.exception("failed_to_update_job_status", extra={"jobId": jobId})
+    except ValidationError:
+        logger.exception("reel_ingestion_parse_failed", extra={"jobId": jobId})
+        try:
+            job = session.get(IngestionJobModel, UUID(jobId))
+            if job:
+                job.status = JobStatus.failed
+                job.error = "parse_failure: Unable to parse model output"
                 job.updatedAt = datetime.utcnow()
                 session.add(job)
                 sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
@@ -570,7 +627,7 @@ def processIngestionJob(
             job = session.get(IngestionJobModel, UUID(jobId))
             if job:
                 job.status = JobStatus.failed
-                job.error = "Processing failed"
+                job.error = "processing_failure: Processing failed"
                 job.updatedAt = datetime.utcnow()
                 session.add(job)
                 sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()

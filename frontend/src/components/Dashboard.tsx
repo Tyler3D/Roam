@@ -81,7 +81,7 @@ export default function Dashboard() {
   }
 
   function handlePlanThis(id: string) {
-    promoteIdea.mutate(id, {
+    promoteIdea.mutate({ id }, {
       onSuccess: () => setActiveTab("plans"),
     });
   }

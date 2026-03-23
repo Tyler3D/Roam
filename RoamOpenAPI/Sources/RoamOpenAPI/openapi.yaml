@@ -3220,6 +3220,21 @@
             "nullable": true,
             "title": "Rawoutput"
           },
+          "orchestrationSteps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Orchestrationsteps",
+            "default": []
+          },
+          "uncertainty": {
+            "additionalProperties": true,
+            "type": "object",
+            "nullable": true,
+            "title": "Uncertainty"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",

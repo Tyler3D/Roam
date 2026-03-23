@@ -17,6 +17,8 @@ from app.models.notifications import NotificationModel, NotificationType
 
 logger = logging.getLogger("roam.tasks")
 tasksRouter = APIRouter()
+MIN_TASK_DESC_LEN = 3
+MAX_TASK_DESC_LEN = 200
 
 
 def _ensure_plan_member(session: Session, plan_id: UUID, user_id: UUID) -> PlanModel:
@@ -70,10 +72,15 @@ def createTask(
     assignee = session.get(PlanMemberModel, body.assigneeId)
     if not assignee or assignee.planId != planId:
         raise BadRequest("Assignee must be a plan member")
+    description = body.description.strip()
+    if len(description) < MIN_TASK_DESC_LEN:
+        raise BadRequest("Task description is too short")
+    if len(description) > MAX_TASK_DESC_LEN:
+        raise BadRequest("Task description is too long")
     task = PlanTaskModel(
         planId=planId,
         assigneeId=body.assigneeId,
-        description=body.description.strip(),
+        description=description,
     )
     session.add(task)
     session.flush()
@@ -106,8 +113,56 @@ def updateTask(
     is_assignee = assignee and assignee.userId == user.id
     if not is_organizer and not is_assignee:
         raise Forbidden("Only organizer or assignee can update this task")
-    task.isCompleted = body.isCompleted
-    task.completedAt = datetime.utcnow() if body.isCompleted else None
+
+    if body.description is not None:
+        if not is_organizer:
+            raise Forbidden("Only organizer can edit task description")
+        desc = body.description.strip()
+        if len(desc) < MIN_TASK_DESC_LEN:
+            raise BadRequest("Task description is too short")
+        if len(desc) > MAX_TASK_DESC_LEN:
+            raise BadRequest("Task description is too long")
+        task.description = desc
+        session.add(
+            NotificationModel(
+                userId=assignee.userId if assignee else user.id,
+                type=NotificationType.task_assigned,
+                planId=planId,
+                title=f"{user.firstName or 'Someone'} updated a task: {desc}",
+            )
+        )
+
+    if body.assigneeId is not None:
+        if not is_organizer:
+            raise Forbidden("Only organizer can reassign tasks")
+        new_assignee = session.get(PlanMemberModel, body.assigneeId)
+        if not new_assignee or new_assignee.planId != planId:
+            raise BadRequest("Assignee must be a current plan member")
+        task.assigneeId = body.assigneeId
+        assignee = new_assignee
+        session.add(
+            NotificationModel(
+                userId=new_assignee.userId,
+                type=NotificationType.task_assigned,
+                planId=planId,
+                title=f"{user.firstName or 'Someone'} reassigned a task to you: {task.description}",
+            )
+        )
+
+    if body.isCompleted is not None:
+        task.isCompleted = body.isCompleted
+        task.completedAt = datetime.utcnow() if body.isCompleted else None
+        if body.isCompleted and assignee:
+            assignee_user = session.get(UserModel, assignee.userId)
+            session.add(
+                NotificationModel(
+                    userId=plan.creatorId,
+                    type=NotificationType.plan_reminder,
+                    planId=planId,
+                    title=f"{assignee_user.firstName if assignee_user else 'A member'} completed a task: {task.description}",
+                )
+            )
+
     session.add(task)
     commitAndRefresh(session, task)
     return _build_task_read(session, task)

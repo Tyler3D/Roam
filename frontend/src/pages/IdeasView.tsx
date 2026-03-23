@@ -4,6 +4,8 @@ import { useIdeas, useCreateIdea, useDeleteIdea, useInterpretIdea, usePromoteIde
 import { usePlans } from "@/api/plans";
 import { useSearchFriendsAndUsers } from "@/api/friends";
 import { extractMentionQuery, replaceMention, type MentionResult } from "@/lib/mentions";
+import { getIdeaUncertainty, hasUnresolvedAmbiguity } from "@/lib/orchestration";
+import { trackEvent } from "@/lib/telemetry";
 import { Avatar } from "@/components/ui/avatar-roam";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -103,7 +105,19 @@ export default function IdeasView() {
   }
 
   function handlePlanThis(id: string) {
-    promoteIdea.mutate(id, {
+    const selected = ideas.find((i) => i.id === id);
+    if (selected && hasUnresolvedAmbiguity(selected)) {
+      const reasons = getIdeaUncertainty(selected)?.reasons ?? [];
+      const details = reasons.length ? `\n\n- ${reasons.join("\n- ")}` : "";
+      const proceed = window.confirm(
+        `This idea has unresolved ambiguities. Review in idea details before planning for best results.${details}\n\nContinue anyway?`
+      );
+      if (!proceed) {
+        trackEvent("idea_promote_blocked_due_ambiguity", { ideaId: id });
+        return;
+      }
+    }
+    promoteIdea.mutate({ id }, {
       onSuccess: () => navigate("/app/plans"),
     });
   }

@@ -37,4 +37,6 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    isCompleted: bool
+    isCompleted: Optional[bool] = None
+    description: Optional[str] = None
+    assigneeId: Optional[UUID] = None

@@ -66,6 +66,7 @@ final class APIClient {
         request.setValue(bearer, forHTTPHeaderField: "Authorization")
         // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
         request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+        request.setValue("ios", forHTTPHeaderField: "X-Roam-Client")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         if let body {
             request.httpBody = body
@@ -138,6 +139,25 @@ final class APIClient {
 
     // MARK: - Ideas
 
+    struct InterpretStepDTO: Decodable, Identifiable {
+        let id = UUID()
+        let name: String
+        let status: String
+        let durationMs: Int?
+        let errorCode: String?
+    }
+
+    struct InterpretUncertaintyDTO: Decodable {
+        let requiresConfirmation: Bool
+        let confidence: Double?
+        let reasons: [String]
+    }
+
+    struct IdeaInterpretationInsights: Decodable {
+        let steps: [InterpretStepDTO]
+        let uncertainty: InterpretUncertaintyDTO?
+    }
+
     func listIdeas() async throws -> [Idea] {
         try await apiFetch(path: "/api/ideas")
     }
@@ -173,6 +193,27 @@ final class APIClient {
 
     func interpretIdea(id: String) async throws -> Idea {
         try await apiFetch(path: "/api/ideas/\(id.lowercased())/interpret", method: "POST")
+    }
+
+    func getIdeaInterpretationInsights(id: String) async throws -> IdeaInterpretationInsights {
+        let data = try await apiData(path: "/api/ideas/\(id.lowercased())")
+        guard
+            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let pipeline = obj["pipelineResult"] as? [String: Any]
+        else {
+            return IdeaInterpretationInsights(steps: [], uncertainty: nil)
+        }
+        let stepsAny = pipeline["orchestrationSteps"] as? [[String: Any]] ?? []
+        let uncertaintyAny = pipeline["uncertainty"] as? [String: Any]
+
+        let stepsData = try JSONSerialization.data(withJSONObject: stepsAny)
+        let uncertaintyData = uncertaintyAny.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+
+        let steps = (try? JSONDecoder.roam.decode([InterpretStepDTO].self, from: stepsData)) ?? []
+        let uncertainty = uncertaintyData.flatMap {
+            try? JSONDecoder.roam.decode(InterpretUncertaintyDTO.self, from: $0)
+        }
+        return IdeaInterpretationInsights(steps: steps, uncertainty: uncertainty)
     }
 
     func promoteIdea(id: String) async throws -> Plan {
@@ -296,6 +337,7 @@ final class APIClient {
         request.httpMethod = "POST"
         request.setValue(bearer, forHTTPHeaderField: "Authorization")
         request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+        request.setValue("ios", forHTTPHeaderField: "X-Roam-Client")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
@@ -374,6 +416,7 @@ final class APIClient {
         request.httpMethod = "POST"
         request.setValue(bearer, forHTTPHeaderField: "Authorization")
         request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+        request.setValue("ios", forHTTPHeaderField: "X-Roam-Client")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()

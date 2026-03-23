@@ -129,6 +129,28 @@ Implementations: web `frontend/src/lib/api.ts`, iOS `Roam/Services/APIClient.swi
 
 ---
 
+## Scribble orchestration and uncertainty contract
+
+`POST /api/ideas/{ideaId}/interpret` now runs a lightweight backend orchestrator with explicit steps:
+
+- `interpret_scribble`
+- `validate_output`
+- `resolve_invitees`
+- `search_places` (deferred marker in response path)
+
+The API remains backward compatible for legacy clients (`refinedTitle`, `category`, `estimatedMinutes`, etc. still populate), and also emits orchestration metadata on `pipelineResult`:
+
+- `pipelineResult.orchestrationSteps`: ordered step telemetry (`name`, `status`, `durationMs`, optional `errorCode`)
+- `pipelineResult.uncertainty`: validation/ambiguity summary with:
+  - `requiresConfirmation` boolean
+  - `confidence` float (0-1)
+  - `flags` (`queryTooGeneric`, `inviteesAmbiguous`, `taskAssignmentsAmbiguous`, `datetimeUncertain`)
+  - `reasons` (human-readable explanation list)
+
+For ambiguous invitees/tasks, the raw output preserves proposed values (`inviteesProposed`, `taskAssignmentsProposed`) and avoids silently auto-committing these side effects; clients should request user confirmation before irreversible actions (e.g. plan promotion/confirmation).
+
+---
+
 ## Collections and shared ideas (API contract)
 
 **Personal library:** Each user has exactly one **`isPersonalDefault`** collection (**“My saves”**). It is **created in the same transaction** as the user row when **`POST /api/users`** succeeds (and for guest users created via the share RSVP flow). **`ensurePersonalDefaultCollection`** also runs on **`GET /api/collections`**, map “everything,” and idea/reel linking as an **idempotent** safety net. It is not deletable and its membership is not mutable (owner only).

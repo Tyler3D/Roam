@@ -35,8 +35,18 @@ function interpretIdea(id: string) {
   return request<Idea>(`/api/ideas/${id}/interpret`, { method: "POST" });
 }
 
-function promoteIdea(id: string) {
-  return request<Plan>(`/api/ideas/${id}/plan`, { method: "POST" });
+export type PromoteIdeaPayload = {
+  confirmedInvitees?: string[];
+  confirmedTaskAssignments?: string | null;
+  confirmedSearchQuery?: string | null;
+  ambiguityAcknowledged?: boolean;
+};
+
+function promoteIdea(id: string, payload?: PromoteIdeaPayload) {
+  return request<Plan>(`/api/ideas/${id}/plan`, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
 }
 
 function selectPlaceSuggestion(ideaId: string, suggestionId: string) {
@@ -95,10 +105,11 @@ export function useInterpretIdea() {
 export function usePromoteIdea() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: promoteIdea,
-    onSuccess: (_plan, id) => {
+    mutationFn: ({ id, payload }: { id: string; payload?: PromoteIdeaPayload }) =>
+      promoteIdea(id, payload),
+    onSuccess: (_plan, vars) => {
       qc.setQueryData<Idea[]>(ideaKeys.all, (old) =>
-        old?.filter((i) => i.id !== id)
+        old?.filter((i) => i.id !== vars.id)
       );
       qc.invalidateQueries({ queryKey: ["plans"] });
     },

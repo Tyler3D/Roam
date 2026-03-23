@@ -24,6 +24,22 @@ class FriendSearchResult(BaseModel):
     others: list[UserRead]
 
 
+def _rank_user_match(user: UserModel, q_lower: str) -> tuple[int, str]:
+    username = (user.username or "").lower()
+    first = (user.firstName or "").lower()
+    last = (user.lastName or "").lower()
+    full = f"{first} {last}".strip()
+    if username == q_lower:
+        return (0, username)
+    if full == q_lower:
+        return (1, full)
+    if username.startswith(q_lower):
+        return (2, username)
+    if first.startswith(q_lower) or last.startswith(q_lower):
+        return (3, full)
+    return (4, full)
+
+
 @friendsRouter.get("/friends", response_model=list[FriendshipRead])
 def listFriends(
     user: UserModel = Depends(getCurrentUser),
@@ -119,7 +135,11 @@ def sendFriendRequest(
 
     existing = _find_existing_friendship(session, user.id, body.targetUserId)
     if existing:
-        raise Conflict("Friendship already exists")
+        if existing.status == FriendshipStatus.accepted:
+            raise Conflict("already_friends")
+        if existing.requesterId == user.id:
+            raise Conflict("already_pending_outgoing")
+        raise Conflict("already_pending_incoming")
 
     friendship = FriendshipModel(
         requesterId=user.id,
@@ -214,7 +234,7 @@ def searchFriends(
                 ),
             ).limit(10)
         ).all()
-        friend_matches = [UserRead.model_validate(f) for f in friends]
+        friend_matches = [UserRead.model_validate(f) for f in sorted(friends, key=lambda u: _rank_user_match(u, q_lower))]
 
     others = session.exec(
         select(UserModel).where(
@@ -227,7 +247,7 @@ def searchFriends(
             ),
         ).limit(10)
     ).all()
-    other_matches = [UserRead.model_validate(u) for u in others]
+    other_matches = [UserRead.model_validate(u) for u in sorted(others, key=lambda u: _rank_user_match(u, q_lower))]
 
     return FriendSearchResult(friends=friend_matches, others=other_matches)
 

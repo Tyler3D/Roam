@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/duration";
 import { Spinner } from "@/components/ui/spinner";
 import { LocationLink } from "@/components/ui/location-link";
@@ -9,6 +10,12 @@ import {
 } from "@/api/ideas";
 import { usePlans } from "@/api/plans";
 import type { Plan } from "@/models/plan";
+import {
+  getIdeaOrchestrationSteps,
+  getIdeaUncertainty,
+  hasUnresolvedAmbiguity,
+} from "@/lib/orchestration";
+import { trackEvent } from "@/lib/telemetry";
 
 function formatSlotLabel(iso: string): string {
   try {
@@ -57,6 +64,10 @@ export default function IdeaOverview() {
   const { data: plansForIdea = [] } = usePlans(ideaId);
   const selectPlace = useSelectPlaceSuggestion();
   const promoteIdea = usePromoteIdea();
+  const [ackAmbiguity, setAckAmbiguity] = useState(false);
+  const [inviteesDraft, setInviteesDraft] = useState("");
+  const [taskAssignmentsDraft, setTaskAssignmentsDraft] = useState("");
+  const [searchQueryDraft, setSearchQueryDraft] = useState("");
 
   if (!ideaId) {
     return (
@@ -80,10 +91,46 @@ export default function IdeaOverview() {
   const category = pr?.category;
   const tags = (pr?.rawOutput as { tags?: string[] } | undefined)?.tags ?? [];
   const displayTitle = currentIdea.displayName ?? pr?.refinedTitle ?? currentIdea.title;
+  const uncertainty = getIdeaUncertainty(currentIdea);
+  const requiresConfirmation = hasUnresolvedAmbiguity(currentIdea);
+  const steps = getIdeaOrchestrationSteps(currentIdea);
+  const raw = (pr?.rawOutput as Record<string, unknown> | undefined) ?? {};
+  const proposedInvitees = ((raw.inviteesProposed as string[] | undefined) ?? (raw.invitees as string[] | undefined) ?? []);
+  const proposedTaskAssignments =
+    (raw.taskAssignmentsProposed as string | undefined) ??
+    (raw.taskAssignments as string | undefined) ??
+    "";
+  const proposedSearchQuery = (raw.searchQuery as string | undefined) ?? "";
+
+  useEffect(() => {
+    if (!requiresConfirmation) return;
+    setInviteesDraft(proposedInvitees.join(", "));
+    setTaskAssignmentsDraft(proposedTaskAssignments);
+    setSearchQueryDraft(proposedSearchQuery);
+    trackEvent("idea_ambiguity_viewed", { ideaId: currentIdea.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIdea.id, requiresConfirmation]);
 
   function handlePlanThis() {
-    promoteIdea.mutate(currentIdea.id, {
+    const confirmedInvitees = inviteesDraft
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    promoteIdea.mutate({
+      id: currentIdea.id,
+      payload: {
+        confirmedInvitees,
+        confirmedTaskAssignments: taskAssignmentsDraft || null,
+        confirmedSearchQuery: searchQueryDraft || null,
+        ambiguityAcknowledged: requiresConfirmation ? ackAmbiguity : true,
+      },
+    }, {
       onSuccess: (plan: Plan) => {
+        trackEvent("idea_promoted", {
+          ideaId: currentIdea.id,
+          hadAmbiguity: requiresConfirmation,
+          ambiguityAcknowledged: ackAmbiguity,
+        });
         navigate(`/plans/${plan.id}`);
       },
     });
@@ -129,6 +176,76 @@ export default function IdeaOverview() {
       </div>
 
       {/* Suggested Places */}
+      {steps.length > 0 && (
+        <div className="mb-6">
+          <p className="label-mono mb-2">Pipeline Steps</p>
+          <div className="flex flex-col gap-1.5">
+            {steps.map((step) => (
+              <div
+                key={step.name}
+                className="font-mono text-[10px] px-2.5 py-2 rounded-lg border border-roam-logan/20 text-roam-text-mid"
+              >
+                {step.status === "ok" ? "✓" : step.status === "error" ? "!" : "·"} {step.name}{" "}
+                {typeof step.durationMs === "number" ? `(${step.durationMs}ms)` : ""}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {requiresConfirmation && (
+        <div className="mb-6 p-3 rounded-lg border border-roam-error/40 bg-roam-error/5">
+          <p className="label-mono mb-2">Confirmation Required</p>
+          <p className="font-mono text-[11px] text-roam-text-mid mb-2">
+            This interpretation has ambiguous fields. Review before promoting to plan.
+          </p>
+          {(uncertainty?.reasons ?? []).length > 0 && (
+            <div className="font-mono text-[10px] text-roam-text-muted mb-2">
+              {(uncertainty?.reasons ?? []).map((reason) => (
+                <div key={reason}>- {reason}</div>
+              ))}
+            </div>
+          )}
+          <label className="font-mono text-[10px] text-roam-text-mid flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={ackAmbiguity}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setAckAmbiguity(checked);
+                trackEvent("idea_ambiguity_ack_toggled", {
+                  ideaId: currentIdea.id,
+                  checked,
+                });
+              }}
+            />
+            I reviewed these ambiguities and want to continue
+          </label>
+          <div className="mt-3 flex flex-col gap-2">
+            <label className="font-mono text-[10px] text-roam-text-mid">
+              Invitees (comma-separated)
+            </label>
+            <input
+              value={inviteesDraft}
+              onChange={(e) => setInviteesDraft(e.target.value)}
+              className="font-mono text-[11px] py-2 px-2.5 rounded-lg border border-roam-logan/20 bg-roam-surface"
+            />
+            <label className="font-mono text-[10px] text-roam-text-mid">Task assignments</label>
+            <input
+              value={taskAssignmentsDraft}
+              onChange={(e) => setTaskAssignmentsDraft(e.target.value)}
+              className="font-mono text-[11px] py-2 px-2.5 rounded-lg border border-roam-logan/20 bg-roam-surface"
+            />
+            <label className="font-mono text-[10px] text-roam-text-mid">Search query</label>
+            <input
+              value={searchQueryDraft}
+              onChange={(e) => setSearchQueryDraft(e.target.value)}
+              className="font-mono text-[11px] py-2 px-2.5 rounded-lg border border-roam-logan/20 bg-roam-surface"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <p className="label-mono mb-2">Suggested Places</p>
         {pr?.placeSuggestions && pr.placeSuggestions.length > 1 ? (
@@ -215,7 +332,7 @@ export default function IdeaOverview() {
       <div className="pt-4 border-t border-roam-logan/10">
         <button
           onClick={handlePlanThis}
-          disabled={promoteIdea.isPending}
+          disabled={promoteIdea.isPending || (requiresConfirmation && !ackAmbiguity)}
           className="btn-primary w-full rounded-[11px] py-3 px-[18px] text-[11px] tracking-[2px] shadow-[0_2px_12px_rgba(74,64,112,0.2)]"
         >
           {promoteIdea.isPending ? "creating..." : "plan this →"}

@@ -74,6 +74,9 @@ def _pipelineResultToRead(session: Session, result: PipelineResultModel) -> Pipe
         select(PlaceSuggestionModel).where(PlaceSuggestionModel.resultId == result.id)
     ).all()
     read = PipelineResultRead.model_validate(result)
+    raw = result.rawOutput or {}
+    read.orchestrationSteps = raw.get("steps") if isinstance(raw.get("steps"), list) else []
+    read.uncertainty = raw.get("uncertainty") if isinstance(raw.get("uncertainty"), dict) else None
     read.placeSuggestions = []
     for s in suggestions:
         sr = PlaceSuggestionRead.model_validate(s)
@@ -90,6 +93,7 @@ class IngestJobResponse(IngestionJobRead):
 
     pipelineResult: PipelineResultRead | None = None
     pipelineResults: list[PipelineResultRead] = Field(default_factory=list)
+    errorType: str | None = None
 
 
 @ingestRouter.post("/ingest", status_code=202)
@@ -253,9 +257,13 @@ def getIngestionJob(
             pipelineReads.append(_pipelineResultToRead(session, result))
 
     jobRead = IngestionJobRead.model_validate(job)
+    error_type = None
+    if job.error and ":" in job.error:
+        error_type = job.error.split(":", 1)[0].strip()
     first = pipelineReads[0] if pipelineReads else None
     return IngestJobResponse(
         **jobRead.model_dump(),
         pipelineResult=first,
         pipelineResults=pipelineReads,
+        errorType=error_type,
     )

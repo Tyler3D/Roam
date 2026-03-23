@@ -113,3 +113,10 @@ class IdeaUpdate(SQLModel):
     displayName: Optional[str] = None
     status: Optional[IdeaStatus] = None
     placeId: Optional[UUID] = None
+
+
+class IdeaPromoteRequest(SQLModel):
+    confirmedInvitees: list[str] = Field(default_factory=list)
+    confirmedTaskAssignments: Optional[str] = None
+    confirmedSearchQuery: Optional[str] = None
+    ambiguityAcknowledged: bool = False

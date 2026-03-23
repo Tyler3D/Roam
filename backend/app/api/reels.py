@@ -236,6 +236,8 @@ def getReel(
             place_addr = None
             maps_q = None
             conf = None
+            conf_reason = "No candidates above confidence threshold"
+            fallback_label = "synthetic_fallback"
         else:
             candPayload = raw.get("candidate")
             previewTitle = (candPayload.get("title") if isinstance(candPayload, dict) else None) or ""
@@ -255,6 +257,16 @@ def getReel(
             )
             maps_q = candPayload.get("mapsQuery") if isinstance(candPayload, dict) else None
             conf = _candidate_payload_confidence(candPayload)
+            conf_reason = (
+                candPayload.get("confidenceReason")
+                if isinstance(candPayload, dict)
+                else None
+            )
+            fallback_label = (
+                raw.get("branch")
+                if isinstance(raw.get("branch"), str)
+                else None
+            )
         candReads.append(
             ReelIngestCandidateRead(
                 id=c.id,
@@ -271,6 +283,8 @@ def getReel(
                 placeAddress=place_addr,
                 mapsQuery=maps_q,
                 confidence=conf,
+                confidenceReason=conf_reason,
+                fallbackLabel=fallback_label,
             )
         )
 

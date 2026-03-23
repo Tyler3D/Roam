@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { backendUserGateQueryKey, fetchBackendUserGate } from "@/api/auth";
 import { useAuth } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { DEV_AUTH_BYPASS_ENABLED } from "@/utils/util";
 
 function getErrorStatus(error: unknown): number | undefined {
   if (error && typeof error === "object" && "status" in error) {
@@ -15,8 +16,9 @@ function getErrorStatus(error: unknown): number | undefined {
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, isVerified, signOutUser } = useAuth();
+  const bypassEnabled = DEV_AUTH_BYPASS_ENABLED;
 
-  const gateOpen = Boolean(user && isVerified && !loading);
+  const gateOpen = Boolean(!bypassEnabled && user && isVerified && !loading);
 
   const backendGate = useQuery({
     queryKey: backendUserGateQueryKey(user?.uid),
@@ -25,6 +27,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     staleTime: 0,
     retry: false,
   });
+
+  if (bypassEnabled) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (

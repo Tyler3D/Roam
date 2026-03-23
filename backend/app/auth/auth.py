@@ -7,6 +7,12 @@ from sqlmodel import Session, select
 
 from app.auth.firebase import getFirebaseApp
 from app.common.backendErrors import NotFound, Unauthorized
+from app.common.config import (
+    getDevAuthBypassEmail,
+    getDevAuthBypassSecret,
+    getDevAuthBypassUid,
+    isDevAuthBypassEnabled,
+)
 from app.common.db import getSession
 from app.models.users import UserModel
 
@@ -52,6 +58,10 @@ def getCurrentAuth(
     uid = decoded.get("uid")
     user = session.exec(select(UserModel).where(UserModel.firebaseUid == uid)).first()
     if not user:
+        if isDevAuthBypassEnabled() and uid == getDevAuthBypassUid():
+            raise NotFound(
+                "Dev auth bypass user not found. Create a user with this firebaseUid or set DEV_AUTH_BYPASS_UID to an existing user."
+            )
         logger.info(
             "user_not_found",
             extra={
@@ -126,7 +136,19 @@ def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
 def verifyFirebaseToken(
     authorization: str | None = Header(default=None),
     x_roam_authorization: str | None = Header(default=None, alias="X-Roam-Authorization"),
+    x_dev_auth_bypass: str | None = Header(default=None, alias="X-Dev-Auth-Bypass"),
 ) -> Dict[str, Any]:
+    if isDevAuthBypassEnabled():
+        expected_secret = getDevAuthBypassSecret()
+        if x_dev_auth_bypass == expected_secret:
+            logger.warning("dev_auth_bypass_active")
+            return {
+                "uid": getDevAuthBypassUid(),
+                "email": getDevAuthBypassEmail(),
+                "email_verified": True,
+                "provider_id": "custom",
+            }
+
     token = getFirebaseBearerToken(
         authorization=authorization,
         xRoamAuthorization=x_roam_authorization,

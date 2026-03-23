@@ -62,3 +62,5 @@ class PipelineResultRead(SQLModel):
     rawOutput: Optional[dict[str, Any]] = None
     createdAt: datetime
     placeSuggestions: list[PlaceSuggestionRead] = []
+    orchestrationSteps: list[dict[str, Any]] = []
+    uncertainty: Optional[dict[str, Any]] = None

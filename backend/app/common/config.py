@@ -74,3 +74,25 @@ def getGcsReelBucketName() -> str:
 def getOAuthEncryptionKey() -> str:
     """Base64-encoded 32-byte key for Fernet. Required for OAuth token storage."""
     return getEnv("OAUTH_ENCRYPTION_KEY")
+
+
+def isDevAuthBypassEnabled() -> bool:
+    """Local-only auth bypass switch. Never active outside ENVIRONMENT=dev."""
+    if not IS_DEV():
+        return False
+    return (os.getenv("DEV_AUTH_BYPASS", "false").lower() in {"1", "true", "yes", "on"})
+
+
+def getDevAuthBypassSecret() -> str:
+    """Shared secret required in X-Dev-Auth-Bypass when bypass is enabled."""
+    return getEnv("DEV_AUTH_BYPASS_SECRET")
+
+
+def getDevAuthBypassUid() -> str:
+    """Synthetic Firebase UID used in bypass mode."""
+    return os.getenv("DEV_AUTH_BYPASS_UID", "dev-auth-user")
+
+
+def getDevAuthBypassEmail() -> str:
+    """Synthetic email used in bypass mode."""
+    return os.getenv("DEV_AUTH_BYPASS_EMAIL", "dev-auth@local.test")
