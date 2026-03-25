@@ -36,7 +36,13 @@ export default function IdeasView() {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: ideas = [], isLoading } = useIdeas();
+  const {
+    data: ideas = [],
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useIdeas();
   const { data: plans = [] } = usePlans();
 
   const nextUp = useMemo(() => {
@@ -153,6 +159,16 @@ export default function IdeasView() {
               />
             </div>
           ))}
+              {hasNextPage && (
+                <button
+                  type="button"
+                  className="font-mono text-[10px] tracking-[1px] uppercase text-roam-logan-deep border border-roam-logan/25 rounded-xl py-2.5 px-4 bg-white/80 hover:bg-roam-lavender/30 disabled:opacity-50"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? "loading…" : "load more"}
+                </button>
+              )}
             </div>
             </>
           )}

@@ -144,7 +144,7 @@ struct ProfilePage: View {
             Button {
                 onDismiss?()
             } label: {
-                statCell(value: stores.ideas.ideas.count, label: "Ideas")
+                statCell(value: stores.ideas.totalIdeasCount ?? stores.ideas.ideas.count, label: "Ideas")
             }
             .buttonStyle(.plain)
             statDivider

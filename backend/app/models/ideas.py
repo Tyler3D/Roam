@@ -106,6 +106,15 @@ class IdeaRead(SQLModel):
     )
 
 
+class IdeaPageRead(SQLModel):
+    """Paginated ideas list (GET /api/ideas with cursor + limit)."""
+
+    items: list[IdeaRead] = Field(default_factory=list)
+    nextCursor: Optional[str] = None
+    hasMore: bool = False
+    totalCount: Optional[int] = None
+
+
 class IdeaUpdate(SQLModel):
     title: Optional[str] = None
     notes: Optional[str] = None

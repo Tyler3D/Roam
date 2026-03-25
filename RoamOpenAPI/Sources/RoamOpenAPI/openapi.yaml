@@ -647,17 +647,57 @@
       "get": {
         "summary": "Listideas",
         "operationId": "listIdeas_api_ideas_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/IdeaRead"
-                  },
-                  "type": "array",
-                  "title": "Response Listideas Api Ideas Get"
+                  "$ref": "#/components/schemas/IdeaPageRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -668,14 +708,14 @@
         "summary": "Createidea",
         "operationId": "createIdea_api_ideas_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/IdeaCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2806,6 +2846,35 @@
           "title"
         ],
         "title": "IdeaCreate"
+      },
+      "IdeaPageRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IdeaRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "title": "Nextcursor"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "title": "Hasmore",
+            "default": false
+          },
+          "totalCount": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Totalcount"
+          }
+        },
+        "type": "object",
+        "title": "IdeaPageRead",
+        "description": "Paginated ideas list (GET /api/ideas with cursor + limit)."
       },
       "IdeaRead": {
         "properties": {

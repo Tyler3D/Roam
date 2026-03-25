@@ -94,7 +94,7 @@ struct IdeasPage: View {
                         .foregroundStyle(RoamColors.error)
                 }
 
-                ForEach(stores.ideas.ideas) { idea in
+                ForEach(Array(stores.ideas.ideas.enumerated()), id: \.element.id) { index, idea in
                     NavigationLink(value: idea.id) {
                         ZStack {
                             IdeaCardView(idea: idea)
@@ -108,6 +108,17 @@ struct IdeasPage: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(enrichingIds.contains(idea.id))
+                    .onAppear {
+                        if index == stores.ideas.ideas.count - 1 {
+                            Task { await stores.ideas.loadMore() }
+                        }
+                    }
+                }
+                if stores.ideas.isLoadingMore {
+                    ProgressView()
+                        .tint(RoamColors.loganDeep)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                 }
             }
             .padding(.horizontal, 16)

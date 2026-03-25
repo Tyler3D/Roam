@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import and_, func
 from sqlmodel import Session, col, or_, select
 
 from app.auth.auth import getCurrentUser
@@ -60,25 +61,50 @@ def _isMember(session: Session, collectionId: UUID, userId: UUID) -> bool:
     )
 
 
-def _memberPreview(session: Session, collectionId: UUID) -> list[CollectionMemberPreview]:
+def _memberPreviewsForCollections(
+    session: Session, collection_ids: list[UUID]
+) -> dict[UUID, list[CollectionMemberPreview]]:
+    if not collection_ids:
+        return {}
     members = session.exec(
-        select(CollectionMemberModel).where(CollectionMemberModel.collectionId == collectionId)
-    ).all()
-    out: list[CollectionMemberPreview] = []
-    for m in members[:_memberPreviewCap]:
-        u = session.get(UserModel, m.userId)
-        out.append(
-            CollectionMemberPreview(
-                userId=m.userId,
-                firstName=u.firstName if u else "",
-                lastName=u.lastName if u else "",
-                photoUrl=u.photoUrl if u else None,
-            )
+        select(CollectionMemberModel)
+        .where(CollectionMemberModel.collectionId.in_(collection_ids))
+        .order_by(
+            CollectionMemberModel.collectionId,
+            col(CollectionMemberModel.joinedAt).asc(),
         )
+    ).all()
+    by_cid: dict[UUID, list[UUID]] = {}
+    for m in members:
+        lst = by_cid.setdefault(m.collectionId, [])
+        if len(lst) < _memberPreviewCap:
+            lst.append(m.userId)
+    all_uids: set[UUID] = set()
+    for lst in by_cid.values():
+        all_uids.update(lst)
+    user_map: dict[UUID, UserModel] = {}
+    if all_uids:
+        urows = session.exec(select(UserModel).where(col(UserModel.id).in_(all_uids))).all()
+        user_map = {u.id: u for u in urows}
+    out: dict[UUID, list[CollectionMemberPreview]] = {cid: [] for cid in collection_ids}
+    for cid, uids in by_cid.items():
+        prev: list[CollectionMemberPreview] = []
+        for uid in uids:
+            u = user_map.get(uid)
+            prev.append(
+                CollectionMemberPreview(
+                    userId=uid,
+                    firstName=u.firstName if u else "",
+                    lastName=u.lastName if u else "",
+                    photoUrl=u.photoUrl if u else None,
+                )
+            )
+        out[cid] = prev
     return out
 
 
 def _collectionToRead(session: Session, c: CollectionModel) -> CollectionRead:
+    previews = _memberPreviewsForCollections(session, [c.id])
     return CollectionRead(
         id=c.id,
         creatorId=c.creatorId,
@@ -86,69 +112,102 @@ def _collectionToRead(session: Session, c: CollectionModel) -> CollectionRead:
         description=c.description,
         isPersonalDefault=c.isPersonalDefault,
         createdAt=c.createdAt,
-        memberPreview=_memberPreview(session, c.id),
+        memberPreview=previews.get(c.id, []),
     )
 
 
-def _latestCategory(session: Session, ideaId: UUID) -> str | None:
-    pr = session.exec(
-        select(PipelineResultModel)
-        .where(PipelineResultModel.ideaId == ideaId)
-        .order_by(col(PipelineResultModel.createdAt).desc())
-        .limit(1)
-    ).first()
-    return pr.category if pr else None
+def _latestCategoryBatch(session: Session, idea_ids: list[UUID]) -> dict[UUID, str | None]:
+    if not idea_ids:
+        return {}
+    subq = (
+        select(
+            PipelineResultModel.ideaId.label("iid"),
+            func.max(PipelineResultModel.createdAt).label("mx"),
+        )
+        .where(col(PipelineResultModel.ideaId).in_(idea_ids))
+        .group_by(PipelineResultModel.ideaId)
+    ).subquery()
+    pr_rows = session.exec(
+        select(PipelineResultModel).join(
+            subq,
+            and_(
+                PipelineResultModel.ideaId == subq.c.iid,
+                PipelineResultModel.createdAt == subq.c.mx,
+            ),
+        )
+    ).all()
+    out: dict[UUID, str | None] = {iid: None for iid in idea_ids}
+    seen: set[UUID] = set()
+    for pr in pr_rows:
+        if pr.ideaId and pr.ideaId not in seen:
+            seen.add(pr.ideaId)
+            out[pr.ideaId] = pr.category
+    return out
 
 
-def _ideaToMapRead(session: Session, idea: IdeaModel) -> CollectionMapIdeaRead:
-    placeName = None
-    placeAddress = None
-    lat = None
-    lng = None
-    if idea.placeId:
-        pl = session.get(PlaceModel, idea.placeId)
-        if pl:
+def _ideasToMapReadBatch(session: Session, ideas: list[IdeaModel]) -> list[CollectionMapIdeaRead]:
+    if not ideas:
+        return []
+    idea_ids = [i.id for i in ideas]
+    cat_map = _latestCategoryBatch(session, idea_ids)
+    place_ids = {i.placeId for i in ideas if i.placeId}
+    user_ids = {i.userId for i in ideas}
+    place_map: dict[UUID, PlaceModel] = {}
+    if place_ids:
+        pls = session.exec(select(PlaceModel).where(col(PlaceModel.id).in_(place_ids))).all()
+        place_map = {p.id: p for p in pls}
+    user_map: dict[UUID, UserModel] = {}
+    if user_ids:
+        us = session.exec(select(UserModel).where(col(UserModel.id).in_(user_ids))).all()
+        user_map = {u.id: u for u in us}
+    out: list[CollectionMapIdeaRead] = []
+    for idea in ideas:
+        placeName = placeAddress = None
+        lat = lng = None
+        if idea.placeId and idea.placeId in place_map:
+            pl = place_map[idea.placeId]
             placeName = pl.name
             placeAddress = pl.address
             lat = pl.latitude
             lng = pl.longitude
-    owner = session.get(UserModel, idea.userId)
-    fn = owner.firstName if owner else ""
-    ln = owner.lastName if owner else ""
-    return CollectionMapIdeaRead(
-        id=idea.id,
-        title=idea.title,
-        notes=idea.notes,
-        displayName=idea.displayName,
-        placeId=idea.placeId,
-        placeName=placeName,
-        placeAddress=placeAddress,
-        placeLatitude=lat,
-        placeLongitude=lng,
-        category=_latestCategory(session, idea.id),
-        createdAt=idea.createdAt,
-        addedByUserId=idea.userId,
-        addedByFirstName=fn,
-        addedByLastName=ln,
-        addedByColorIndex=userColorIndex(idea.userId),
-    )
+        owner = user_map.get(idea.userId)
+        fn = owner.firstName if owner else ""
+        ln = owner.lastName if owner else ""
+        out.append(
+            CollectionMapIdeaRead(
+                id=idea.id,
+                title=idea.title,
+                notes=idea.notes,
+                displayName=idea.displayName,
+                placeId=idea.placeId,
+                placeName=placeName,
+                placeAddress=placeAddress,
+                placeLatitude=lat,
+                placeLongitude=lng,
+                category=cat_map.get(idea.id),
+                createdAt=idea.createdAt,
+                addedByUserId=idea.userId,
+                addedByFirstName=fn,
+                addedByLastName=ln,
+                addedByColorIndex=userColorIndex(idea.userId),
+            )
+        )
+    return out
 
 
 def _ideasVisibleInCollection(session: Session, collectionId: UUID) -> list[IdeaModel]:
-    links = session.exec(
-        select(CollectionIdeaModel).where(CollectionIdeaModel.collectionId == collectionId)
+    rows = session.exec(
+        select(CollectionIdeaModel.ideaId).where(CollectionIdeaModel.collectionId == collectionId)
     ).all()
-    ideas: list[IdeaModel] = []
-    for link in links:
-        idea = session.get(IdeaModel, link.ideaId)
-        if idea:
-            ideas.append(idea)
+    if not rows:
+        return []
+    ideas = list(session.exec(select(IdeaModel).where(col(IdeaModel.id).in_(rows))).all())
     ideas.sort(key=lambda i: i.createdAt, reverse=True)
     return ideas
 
 
 def _ideasEverythingForUser(session: Session, userId: UUID) -> list[IdeaModel]:
-    ideaIds = session.exec(
+    idea_ids = session.exec(
         select(CollectionIdeaModel.ideaId)
         .join(
             CollectionMemberModel,
@@ -156,14 +215,17 @@ def _ideasEverythingForUser(session: Session, userId: UUID) -> list[IdeaModel]:
         )
         .where(CollectionMemberModel.userId == userId)
     ).all()
-    seen: dict[UUID, IdeaModel] = {}
-    for ideaId in ideaIds:
-        if ideaId in seen:
-            continue
-        idea = session.get(IdeaModel, ideaId)
-        if idea:
-            seen[ideaId] = idea
-    return sorted(seen.values(), key=lambda i: i.createdAt, reverse=True)
+    unique: list[UUID] = []
+    seen: set[UUID] = set()
+    for iid in idea_ids:
+        if iid not in seen:
+            seen.add(iid)
+            unique.append(iid)
+    if not unique:
+        return []
+    ideas = list(session.exec(select(IdeaModel).where(col(IdeaModel.id).in_(unique))).all())
+    ideas.sort(key=lambda i: i.createdAt, reverse=True)
+    return ideas
 
 
 @collectionsRouter.get("/collections/everything/ideas", response_model=list[CollectionMapIdeaRead])
@@ -174,7 +236,7 @@ def listEverythingMapIdeas(
     ensurePersonalDefaultCollection(session, user.id)
     session.commit()
     ideas = _ideasEverythingForUser(session, user.id)
-    return [_ideaToMapRead(session, i) for i in ideas]
+    return _ideasToMapReadBatch(session, ideas)
 
 
 @collectionsRouter.get("/collections", response_model=list[CollectionRead])
@@ -187,16 +249,29 @@ def listCollections(
     collIds = session.exec(
         select(CollectionMemberModel.collectionId).where(CollectionMemberModel.userId == user.id)
     ).all()
-    collections: list[CollectionModel] = []
-    for cid in collIds:
-        c = session.get(CollectionModel, cid)
-        if c:
-            collections.append(c)
+    if not collIds:
+        session.commit()
+        return []
+    collections = list(
+        session.exec(select(CollectionModel).where(col(CollectionModel.id).in_(collIds))).all()
+    )
     collections.sort(
         key=lambda x: (not x.isPersonalDefault, x.createdAt),
     )
     session.commit()
-    return [_collectionToRead(session, c) for c in collections]
+    preview_map = _memberPreviewsForCollections(session, [c.id for c in collections])
+    return [
+        CollectionRead(
+            id=c.id,
+            creatorId=c.creatorId,
+            name=c.name,
+            description=c.description,
+            isPersonalDefault=c.isPersonalDefault,
+            createdAt=c.createdAt,
+            memberPreview=preview_map.get(c.id, []),
+        )
+        for c in collections
+    ]
 
 
 @collectionsRouter.post("/collections", response_model=CollectionRead, status_code=201)
@@ -372,4 +447,4 @@ def listCollectionMapIdeas(
     if not _isMember(session, collectionId, user.id):
         raise Forbidden("Not a member of this collection")
     ideas = _ideasVisibleInCollection(session, collectionId)
-    return [_ideaToMapRead(session, i) for i in ideas]
+    return _ideasToMapReadBatch(session, ideas)

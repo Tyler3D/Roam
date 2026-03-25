@@ -31,7 +31,13 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: ideas = [], isLoading } = useIdeas();
+  const {
+    data: ideas = [],
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useIdeas();
   const createIdea = useCreateIdea();
   const deleteIdea = useDeleteIdea();
   const interpretIdea = useInterpretIdea();
@@ -114,6 +120,16 @@ export default function Dashboard() {
                       <IdeaCard idea={idea} onDelete={handleDelete} onPlanThis={handlePlanThis} enriching={enrichingIds.has(idea.id)} />
                     </div>
                   ))}
+                  {hasNextPage && (
+                    <button
+                      type="button"
+                      className="font-mono text-[10px] tracking-[1px] uppercase text-roam-logan-deep border border-roam-logan/25 rounded-xl py-2.5 px-4 bg-white/80 hover:bg-roam-lavender/30 disabled:opacity-50"
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                    >
+                      {isFetchingNextPage ? "loading…" : "load more"}
+                    </button>
+                  )}
                 </div>
               )}
             </>

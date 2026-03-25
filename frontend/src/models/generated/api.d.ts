@@ -1146,6 +1146,23 @@ export interface components {
              */
             collectionIds?: string[];
         };
+        /**
+         * IdeaPageRead
+         * @description Paginated ideas list (GET /api/ideas with cursor + limit).
+         */
+        IdeaPageRead: {
+            /** Items */
+            items?: components["schemas"]["IdeaRead"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+            /**
+             * Hasmore
+             * @default false
+             */
+            hasMore: boolean;
+            /** Totalcount */
+            totalCount?: number | null;
+        };
         /** IdeaRead */
         IdeaRead: {
             /**
@@ -2415,7 +2432,11 @@ export interface operations {
     };
     listIdeas_api_ideas_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                include_total?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2428,7 +2449,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdeaRead"][];
+                    "application/json": components["schemas"]["IdeaPageRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

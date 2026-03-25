@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useIdeas } from "@/api/ideas";
+import { useIdeasForMap } from "@/api/ideas";
 import { MapView } from "@/components/MapView";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -53,7 +53,7 @@ function ideaToDatePin(idea: Idea): DatePin | null {
 
 export default function IdeaMap() {
   const navigate = useNavigate();
-  const { data: ideas = [], isLoading } = useIdeas();
+  const { data: ideas = [], isLoading } = useIdeasForMap();
 
   const pins = useMemo(() => {
     return ideas

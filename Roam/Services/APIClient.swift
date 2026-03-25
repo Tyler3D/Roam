@@ -138,8 +138,19 @@ final class APIClient {
 
     // MARK: - Ideas
 
-    func listIdeas() async throws -> [Idea] {
-        try await apiFetch(path: "/api/ideas")
+    /// Paginated ideas (`IdeaPageRead`). Pass `includeTotal: true` on the first page for profile counts.
+    func listIdeasPage(cursor: String?, limit: Int = 30, includeTotal: Bool = false) async throws -> IdeaPage {
+        var items: [URLQueryItem] = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if includeTotal {
+            items.append(URLQueryItem(name: "include_total", value: "true"))
+        }
+        if let cursor, !cursor.isEmpty {
+            items.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        var comps = URLComponents()
+        comps.queryItems = items
+        let qs = comps.percentEncodedQuery.map { "?\($0)" } ?? ""
+        return try await apiFetch(path: "/api/ideas\(qs)")
     }
 
     func getIdea(id: String) async throws -> Idea {

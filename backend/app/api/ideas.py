@@ -1,9 +1,12 @@
+import base64
+import json
 import logging
 import secrets
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, select, col
 
 from app.auth.auth import getCurrentUser
@@ -14,6 +17,7 @@ from app.models.collections import CollectionIdeaModel, CollectionMemberModel, C
 from app.models.ideas import (
     IdeaCreate,
     IdeaModel,
+    IdeaPageRead,
     IdeaRead,
     IdeaSharedCollectionsAttach,
     IdeaUpdate,
@@ -83,6 +87,140 @@ def _collection_ids_for_idea_visible_to_user(
     return list(rows)
 
 
+def _collection_ids_for_ideas_visible_to_user_batch(
+    session: Session,
+    idea_ids: list[UUID],
+    viewer_user_id: UUID,
+) -> dict[UUID, list[UUID]]:
+    if not idea_ids:
+        return {}
+    rows = session.exec(
+        select(
+            CollectionIdeaModel.ideaId,
+            CollectionModel.id,
+            CollectionModel.isPersonalDefault,
+            CollectionModel.name,
+        )
+        .join(CollectionModel, CollectionModel.id == CollectionIdeaModel.collectionId)
+        .join(CollectionMemberModel, CollectionMemberModel.collectionId == CollectionModel.id)
+        .where(CollectionIdeaModel.ideaId.in_(idea_ids))
+        .where(CollectionMemberModel.userId == viewer_user_id)
+    ).all()
+    grouped: dict[UUID, list[tuple[UUID, bool, str]]] = {}
+    for idea_id, coll_id, is_personal, name in rows:
+        grouped.setdefault(idea_id, []).append((coll_id, is_personal, name or ""))
+    out: dict[UUID, list[UUID]] = {iid: [] for iid in idea_ids}
+    for idea_id, tuples in grouped.items():
+        tuples.sort(key=lambda t: (-int(t[1]), t[2].lower()))
+        out[idea_id] = [t[0] for t in tuples]
+    return out
+
+
+def _encode_idea_cursor(created_at: datetime, idea_id: UUID) -> str:
+    payload = {"c": created_at.isoformat(), "i": str(idea_id)}
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    b = base64.urlsafe_b64encode(raw).decode("ascii")
+    return b.rstrip("=")
+
+
+def _decode_idea_cursor(cursor: str) -> tuple[datetime, UUID]:
+    try:
+        pad = "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode(cursor + pad)
+        obj = json.loads(raw.decode("utf-8"))
+        c = datetime.fromisoformat(obj["c"])
+        i = UUID(str(obj["i"]))
+        return c, i
+    except Exception as e:
+        raise BadRequest("Invalid cursor") from e
+
+
+def _ideaReadWithExtrasBatch(
+    session: Session,
+    rows: list[IdeaWithPlanCountView],
+    *,
+    viewer_user_id: UUID,
+) -> list[IdeaRead]:
+    if not rows:
+        return []
+    idea_ids = [r.id for r in rows]
+    coll_map = _collection_ids_for_ideas_visible_to_user_batch(session, idea_ids, viewer_user_id)
+
+    subq = (
+        select(
+            PipelineResultModel.ideaId.label("iid"),
+            func.max(PipelineResultModel.createdAt).label("mx"),
+        )
+        .where(col(PipelineResultModel.ideaId).in_(idea_ids))
+        .group_by(PipelineResultModel.ideaId)
+    ).subquery()
+
+    pr_rows = session.exec(
+        select(PipelineResultModel).join(
+            subq,
+            and_(
+                PipelineResultModel.ideaId == subq.c.iid,
+                PipelineResultModel.createdAt == subq.c.mx,
+            ),
+        )
+    ).all()
+    by_idea: dict[UUID, PipelineResultModel] = {}
+    for pr in pr_rows:
+        if pr.ideaId and pr.ideaId not in by_idea:
+            by_idea[pr.ideaId] = pr
+
+    result_ids = [pr.id for pr in by_idea.values()]
+    suggestions_by_result: dict[UUID, list[PlaceSuggestionModel]] = {rid: [] for rid in result_ids}
+    all_sugs: list[PlaceSuggestionModel] = []
+    if result_ids:
+        all_sugs = list(
+            session.exec(
+                select(PlaceSuggestionModel).where(col(PlaceSuggestionModel.resultId).in_(result_ids))
+            ).all()
+        )
+        for s in all_sugs:
+            suggestions_by_result.setdefault(s.resultId, []).append(s)
+
+    place_ids: set[UUID] = set()
+    for row in rows:
+        if row.placeId:
+            place_ids.add(row.placeId)
+    for s in all_sugs:
+        if s.placeId:
+            place_ids.add(s.placeId)
+
+    place_map: dict[UUID, PlaceModel] = {}
+    if place_ids:
+        places = session.exec(select(PlaceModel).where(col(PlaceModel.id).in_(place_ids))).all()
+        place_map = {p.id: p for p in places}
+
+    pipeline_read_by_idea: dict[UUID, PipelineResultRead] = {}
+    for idea_id, pr in by_idea.items():
+        read = PipelineResultRead.model_validate(pr)
+        read.placeSuggestions = []
+        for s in suggestions_by_result.get(pr.id, []):
+            sr = PlaceSuggestionRead.model_validate(s)
+            if s.placeId and s.placeId in place_map:
+                sr.placeName = place_map[s.placeId].name
+            read.placeSuggestions.append(sr)
+        pipeline_read_by_idea[idea_id] = read
+
+    out: list[IdeaRead] = []
+    for row in rows:
+        read = IdeaRead.model_validate(row)
+        read.planCount = getattr(row, "planCount", 0)
+        read.collectionIds = coll_map.get(row.id, [])
+        read.pipelineResult = pipeline_read_by_idea.get(row.id)
+        if row.placeId and row.placeId in place_map:
+            pl = place_map[row.placeId]
+            read.placeName = pl.name
+            read.placeLatitude = pl.latitude
+            read.placeLongitude = pl.longitude
+            read.googlePlaceId = pl.googlePlaceId
+        out.append(read)
+    return out
+
+
 def _ideaReadWithExtras(
     session: Session,
     idea: IdeaModel | IdeaWithPlanCountView,
@@ -104,21 +242,52 @@ def _ideaReadWithExtras(
     return read
 
 
-@ideasRouter.get("/ideas", response_model=list[IdeaRead])
+@ideasRouter.get("/ideas", response_model=IdeaPageRead)
 def listIdeas(
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
-) -> list[IdeaRead]:
-    rows = session.exec(
-        select(IdeaWithPlanCountView)
-        .where(IdeaWithPlanCountView.userId == user.id)
-        .order_by(col(IdeaWithPlanCountView.createdAt).desc())
-    ).all()
-
-    results: list[IdeaRead] = []
-    for row in rows:
-        results.append(_ideaReadWithExtras(session, row, viewer_user_id=user.id))
-    return results
+    limit: int = Query(default=30, ge=1, le=100),
+    cursor: str | None = Query(default=None),
+    include_total: bool = Query(default=False),
+) -> IdeaPageRead:
+    q = select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.userId == user.id)
+    if cursor:
+        c_at, c_id = _decode_idea_cursor(cursor)
+        q = q.where(
+            or_(
+                col(IdeaWithPlanCountView.createdAt) < c_at,
+                and_(
+                    col(IdeaWithPlanCountView.createdAt) == c_at,
+                    col(IdeaWithPlanCountView.id) < c_id,
+                ),
+            )
+        )
+    q = q.order_by(
+        col(IdeaWithPlanCountView.createdAt).desc(),
+        col(IdeaWithPlanCountView.id).desc(),
+    ).limit(limit + 1)
+    rows = list(session.exec(q).all())
+    has_more = len(rows) > limit
+    if has_more:
+        rows = rows[:limit]
+    items = _ideaReadWithExtrasBatch(session, rows, viewer_user_id=user.id)
+    total_count: int | None = None
+    if include_total:
+        total_count = session.exec(
+            select(func.count(col(IdeaWithPlanCountView.id))).where(
+                IdeaWithPlanCountView.userId == user.id
+            )
+        ).one()
+    next_cur: str | None = None
+    if has_more and rows:
+        last = rows[-1]
+        next_cur = _encode_idea_cursor(last.createdAt, last.id)
+    return IdeaPageRead(
+        items=items,
+        nextCursor=next_cur,
+        hasMore=has_more,
+        totalCount=total_count,
+    )
 
 
 @ideasRouter.post("/ideas", response_model=IdeaRead, status_code=201)

@@ -3,6 +3,7 @@ import Foundation
 
 typealias RoamUser = Components.Schemas.UserRead
 typealias Idea = Components.Schemas.IdeaRead
+typealias IdeaPage = Components.Schemas.IdeaPageRead
 typealias Plan = Components.Schemas.PlanRead
 typealias PlanMemberRead = Components.Schemas.PlanMemberRead
 typealias RoamNotification = Components.Schemas.NotificationRead

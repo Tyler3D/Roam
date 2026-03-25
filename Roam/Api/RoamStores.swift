@@ -35,12 +35,21 @@ final class RoamStores {
     }
 
     func refreshAll() async {
-        await ideas.refresh()
-        await reels.refresh()
-        await plans.refresh()
-        await notifications.refresh()
-        await user.refresh()
-        await mapCollections.refreshCollections()
-        await mapCollections.refreshPins()
+        async let ideasTask = ideas.refresh()
+        async let reelsTask = reels.refresh()
+        async let plansTask = plans.refresh()
+        async let notificationsTask = notifications.refresh()
+        async let userTask = user.refresh()
+        async let collectionsTask = mapCollections.refreshCollections()
+        async let pinsTask = mapCollections.refreshPins()
+        _ = await (
+            ideasTask,
+            reelsTask,
+            plansTask,
+            notificationsTask,
+            userTask,
+            collectionsTask,
+            pinsTask
+        )
     }
 }
