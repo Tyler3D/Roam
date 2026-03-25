@@ -42,6 +42,15 @@ struct DebugMenuView: View {
                 }
 
                 Section {
+                    Toggle("Should Roam UI show up on ShareExtension?", isOn: Binding(
+                        get: { appConfig.showShareExtensionConfirmationUI },
+                        set: { appConfig.showShareExtensionConfirmationUI = $0 }
+                    ))
+                } footer: {
+                    Text("When off, the extension saves the reel and metadata then closes without the confirmation card.")
+                }
+
+                Section {
                     LabeledContent("Effective URL", value: appConfig.effectiveBaseURLDisplay)
                         .lineLimit(2)
                 } header: {

@@ -82,6 +82,13 @@ final class AppConfig {
     /// Shown in debug menu.
     var effectiveBaseURLDisplay: String { baseURL }
 
+    /// Mirrored to app group `UserDefaults` for the share extension (see `SharedStore.shareExtensionShowsConfirmationUI`).
+    var showShareExtensionConfirmationUI: Bool {
+        didSet {
+            SharedStore.shareExtensionShowsConfirmationUI = showShareExtensionConfirmationUI
+        }
+    }
+
     private static var defaultLocalBaseURL: String {
         let fromPlist = Bundle.main.infoDictionary?[RoamBuildEnvironment.localBaseURLPlistKey] as? String
         return Self.normalizedBaseURL(fromPlist ?? "http://localhost:8000")
@@ -120,6 +127,7 @@ final class AppConfig {
         self.networkEnv = NetworkEnv(rawValue: envRaw) ?? .production
         self.appMode = AppMode(rawValue: modeRaw) ?? .mainRoam
         self.stagingBaseURLOverride = UserDefaults.standard.string(forKey: stagingURLKey)
+        self.showShareExtensionConfirmationUI = SharedStore.shareExtensionShowsConfirmationUI
     }
 
     /// Former "Mock" network mode stored `mock` in UserDefaults; map to production.
