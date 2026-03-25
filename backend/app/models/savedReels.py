@@ -67,7 +67,7 @@ class ReelCandidateUserPlaceModel(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     candidate_id: UUID = Field(foreign_key="reel_ingest_candidates.id", nullable=False, index=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
-    place_id: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    place_id: UUID = Field(foreign_key="places.id", nullable=False)
     place_name: Optional[str] = None
     place_address: Optional[str] = None
     latitude: Optional[float] = None
@@ -141,6 +141,8 @@ class ReelPromotionItem(SQLModel):
     placeAddress: Optional[str] = None
     category: Optional[str] = None
     placeId: Optional[UUID] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class PromoteReelRequest(SQLModel):
@@ -172,6 +174,7 @@ class UpdateCandidatePlaceBody(SQLModel):
 class UpdateCandidatePlaceRead(SQLModel):
     """Response after confirming a candidate place."""
     candidateId: UUID
+    placeId: UUID
     placeName: Optional[str] = None
     placeAddress: Optional[str] = None
     latitude: Optional[float] = None

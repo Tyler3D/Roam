@@ -441,7 +441,7 @@ CREATE TABLE IF NOT EXISTS "reel_candidate_user_places" (
   "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "candidate_id"  uuid NOT NULL REFERENCES "reel_ingest_candidates"("id") ON DELETE CASCADE,
   "user_id"       uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "place_id"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "place_id"      uuid NOT NULL REFERENCES "places"("id") ON DELETE RESTRICT,
   "place_name"    text,
   "place_address" text,
   "latitude"      double precision,

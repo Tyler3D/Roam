@@ -572,6 +572,8 @@ final class APIClient {
         let placeAddress: String?
         let category: String?
         let placeId: UUID?
+        let latitude: Double?
+        let longitude: Double?
     }
 
     private struct PromoteReelBodyEnc: Encodable {
@@ -606,6 +608,7 @@ final class APIClient {
 
     struct UpdateCandidatePlaceResponse: Decodable {
         let candidateId: UUID
+        let placeId: UUID
         let placeName: String?
         let placeAddress: String?
         let latitude: Double?

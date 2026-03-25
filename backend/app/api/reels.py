@@ -36,8 +36,19 @@ from app.models.savedReels import (
 from app.models.users import UserModel
 from app.services.gcsReels import signedUrlForObject, uploadReelThumbnail
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
-from app.services.reelIngestion import processIngestionJob
+from app.services.reelIngestion import processIngestionJob, resolve_place_from_user_pick
 from app.services.reelPromote import promoteSavedReel
+
+
+def _category_from_ingest_candidate(cand: ReelIngestCandidateModel) -> str:
+    raw = cand.llmRawOutput or {}
+    if raw.get("synthetic"):
+        return "other"
+    cp = raw.get("candidate")
+    if isinstance(cp, dict):
+        c = (cp.get("category") or "").strip()
+        return normalize_category(c) if c else "other"
+    return "other"
 
 logger = logging.getLogger("roam.reels")
 
@@ -562,17 +573,44 @@ def updateCandidatePlace(
         )
     ).first()
 
+    pn = existing.place_name if existing else None
+    pa = existing.place_address if existing else None
+    plat = existing.latitude if existing else None
+    plng = existing.longitude if existing else None
+    pmq = existing.maps_query if existing else None
+    if body.placeName is not None:
+        pn = body.placeName
+    if body.placeAddress is not None:
+        pa = body.placeAddress
+    if body.latitude is not None:
+        plat = body.latitude
+    if body.longitude is not None:
+        plng = body.longitude
+    if body.mapsQuery is not None:
+        pmq = body.mapsQuery
+
+    cat = _category_from_ingest_candidate(cand)
+    resolved = resolve_place_from_user_pick(
+        session,
+        name=pn,
+        address=pa,
+        latitude=plat,
+        longitude=plng,
+        maps_query=pmq,
+        category=cat,
+    )
+    if not resolved:
+        raise BadRequest(
+            "Could not resolve this location to a place. Adjust the pin or address and try again."
+        )
+
     if existing:
-        if body.placeName is not None:
-            existing.place_name = body.placeName
-        if body.placeAddress is not None:
-            existing.place_address = body.placeAddress
-        if body.latitude is not None:
-            existing.latitude = body.latitude
-        if body.longitude is not None:
-            existing.longitude = body.longitude
-        if body.mapsQuery is not None:
-            existing.maps_query = body.mapsQuery
+        existing.place_id = resolved.id
+        existing.place_name = resolved.name
+        existing.place_address = resolved.address
+        existing.latitude = resolved.latitude
+        existing.longitude = resolved.longitude
+        existing.maps_query = pmq
         existing.source = "user"
         existing.confirmed_at = datetime.utcnow()
         session.add(existing)
@@ -580,11 +618,12 @@ def updateCandidatePlace(
         existing = ReelCandidateUserPlaceModel(
             candidate_id=candidateId,
             user_id=user.id,
-            place_name=body.placeName,
-            place_address=body.placeAddress,
-            latitude=body.latitude,
-            longitude=body.longitude,
-            maps_query=body.mapsQuery,
+            place_id=resolved.id,
+            place_name=resolved.name,
+            place_address=resolved.address,
+            latitude=resolved.latitude,
+            longitude=resolved.longitude,
+            maps_query=pmq,
             source="user",
         )
         session.add(existing)
@@ -594,6 +633,7 @@ def updateCandidatePlace(
 
     return UpdateCandidatePlaceRead(
         candidateId=candidateId,
+        placeId=existing.place_id,
         placeName=existing.place_name,
         placeAddress=existing.place_address,
         latitude=existing.latitude,

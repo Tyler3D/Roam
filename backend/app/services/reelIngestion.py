@@ -295,6 +295,107 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
         return None
 
 
+def _reverse_geocode_lat_lng(latitude: float, longitude: float) -> dict | None:
+    """Google Geocoding API: return googlePlaceId, placeAddress, latitude, longitude."""
+    api_key = getGoogleMapsApiKey()
+    if not api_key:
+        return None
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                "https://maps.googleapis.com/maps/api/geocode/json",
+                params={"latlng": f"{latitude},{longitude}", "key": api_key},
+            )
+            if resp.status_code == 429:
+                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
+            resp.raise_for_status()
+            data = resp.json()
+        results = data.get("results", [])
+        if not results:
+            return None
+        top = results[0]
+        loc = top.get("geometry", {}).get("location", {})
+        return {
+            "latitude": loc.get("lat"),
+            "longitude": loc.get("lng"),
+            "googlePlaceId": top.get("place_id"),
+            "placeAddress": top.get("formatted_address"),
+        }
+    except ProviderRateLimitError:
+        raise
+    except Exception:
+        logger.exception(
+            "Google Geocoding API call failed",
+            extra={"latitude": latitude, "longitude": longitude},
+        )
+        return None
+
+
+def resolve_place_from_user_pick(
+    session: Session,
+    *,
+    name: str | None,
+    address: str | None,
+    latitude: float | None,
+    longitude: float | None,
+    maps_query: str | None,
+    category: str | None,
+) -> PlaceModel | None:
+    """Create or reuse a places row from user-confirmed picker data (promote / PATCH).
+
+    Prefers coordinates (reverse geocode → place_id), then text search (maps query / name + address).
+    """
+    name_t = (name or "").strip()
+    addr_t = (address or "").strip()
+    mq_t = (maps_query or "").strip()
+
+    def _create_from_resolved(
+        resolved: dict,
+        display_name: str,
+        lat_fallback: float | None,
+        lng_fallback: float | None,
+    ) -> PlaceModel | None:
+        gid = resolved.get("googlePlaceId")
+        lat_r = resolved.get("latitude")
+        lng_r = resolved.get("longitude")
+        addr_r = resolved.get("placeAddress") or addr_t or None
+        return _createOrGetPlace(
+            session,
+            place_name=(display_name or "Place")[:500],
+            address=addr_r,
+            google_place_id=gid,
+            category=category,
+            latitude=lat_r if lat_r is not None else lat_fallback,
+            longitude=lng_r if lng_r is not None else lng_fallback,
+        )
+
+    if latitude is not None and longitude is not None:
+        geo = _reverse_geocode_lat_lng(latitude, longitude)
+        if geo and geo.get("googlePlaceId"):
+            label = name_t or mq_t or (geo.get("placeAddress") or "Place").split(",")[0].strip() or "Place"
+            return _create_from_resolved(geo, label, latitude, longitude)
+        return _createOrGetPlace(
+            session,
+            place_name=(name_t or mq_t or "Pinned location")[:500],
+            address=addr_t or ((geo or {}).get("placeAddress")),
+            google_place_id=None,
+            category=category,
+            latitude=latitude,
+            longitude=longitude,
+        )
+
+    query_key = mq_t or name_t
+    if query_key:
+        resolved = _resolveGoogleMaps(query_key, addr_t or None) or {}
+        if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
+            return _create_from_resolved(resolved, query_key, latitude, longitude)
+    if addr_t:
+        resolved = _resolveGoogleMaps(addr_t, None) or {}
+        if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
+            return _create_from_resolved(resolved, addr_t, latitude, longitude)
+    return None
+
+
 def _createOrGetPlace(
     session: Session,
     place_name: str,

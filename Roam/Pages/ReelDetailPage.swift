@@ -1749,13 +1749,18 @@ struct ReelDetailPage: View {
                 if let a = c.placeAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !a.isEmpty { return c.placeAddress }
                 return nil
             }()
+            // Only send coordinates when the user chose a pin this session; PATCH coords are merged on the server from reel_candidate_user_places.
+            let promoteLat: Double? = picked.map(\.latitude)
+            let promoteLng: Double? = picked.map(\.longitude)
             return APIClient.ReelPromoteItem(
                 candidateId: c.id,
                 title: useTitle,
                 mapsQuery: promoteMapsQuery,
                 placeAddress: promotePlaceAddress,
                 category: nil,
-                placeId: picked?.placeId
+                placeId: picked?.placeId,
+                latitude: promoteLat,
+                longitude: promoteLng
             )
         }
         let sharedIds: [UUID] = {

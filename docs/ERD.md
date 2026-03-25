@@ -218,7 +218,7 @@ erDiagram
         uuid id PK
         uuid candidate_id FK
         uuid user_id FK
-        uuid place_id FK "nullable"
+        uuid place_id FK
         text place_name "nullable"
         text place_address "nullable"
         double latitude "nullable"
@@ -331,7 +331,7 @@ erDiagram
 | `reel_ingest_candidates.promotedIdeaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
 | `reel_candidate_user_places.candidate_id` | `reel_ingest_candidates.id` | many-to-one | CASCADE |
 | `reel_candidate_user_places.user_id` | `users.id` | many-to-one | CASCADE |
-| `reel_candidate_user_places.place_id` | `places.id` | many-to-one (nullable) | SET NULL |
+| `reel_candidate_user_places.place_id` | `places.id` | many-to-one (required) | RESTRICT |
 | `user_feature_flags.user_id` | `users.id` | many-to-one | CASCADE |
 | `user_oauth_tokens.userId` | `users.id` | many-to-one | CASCADE |
 

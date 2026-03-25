@@ -4688,6 +4688,28 @@
               }
             ],
             "title": "Placeid"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           }
         },
         "type": "object",
@@ -5176,6 +5198,11 @@
             "format": "uuid",
             "title": "Candidateid"
           },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Placeid"
+          },
           "placeName": {
             "anyOf": [
               {
@@ -5239,7 +5266,8 @@
         },
         "type": "object",
         "required": [
-          "candidateId"
+          "candidateId",
+          "placeId"
         ],
         "title": "UpdateCandidatePlaceRead",
         "description": "Response after confirming a candidate place."

@@ -1719,6 +1719,10 @@ export interface components {
             category?: string | null;
             /** Placeid */
             placeId?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
         };
         /** ReelsSummaryRead */
         ReelsSummaryRead: {
@@ -1933,6 +1937,11 @@ export interface components {
              * Format: uuid
              */
             candidateId: string;
+            /**
+             * Placeid
+             * Format: uuid
+             */
+            placeId: string;
             /** Placename */
             placeName?: string | null;
             /** Placeaddress */

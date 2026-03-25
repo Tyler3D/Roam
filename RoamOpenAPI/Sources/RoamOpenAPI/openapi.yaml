@@ -4004,6 +4004,16 @@
             "format": "uuid",
             "nullable": true,
             "title": "Placeid"
+          },
+          "latitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Longitude"
           }
         },
         "type": "object",
@@ -4402,6 +4412,11 @@
             "format": "uuid",
             "title": "Candidateid"
           },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Placeid"
+          },
           "placeName": {
             "type": "string",
             "nullable": true,
@@ -4435,7 +4450,8 @@
         },
         "type": "object",
         "required": [
-          "candidateId"
+          "candidateId",
+          "placeId"
         ],
         "title": "UpdateCandidatePlaceRead",
         "description": "Response after confirming a candidate place."

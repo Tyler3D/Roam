@@ -22,6 +22,7 @@ from app.services.reelIngestion import (
     ReelCandidate,
     ReelInterpretOutput,
     createIdeaPipelineFromCandidate,
+    resolve_place_from_user_pick,
     _refinedTitle,
 )
 
@@ -59,17 +60,6 @@ def promoteSavedReel(
                 ReelCandidateUserPlaceModel.user_id == user_id,
             )
         ).first()
-        patch_snapshot = (
-            (
-                existing_up.place_name,
-                existing_up.place_address,
-                existing_up.latitude,
-                existing_up.longitude,
-                existing_up.maps_query,
-            )
-            if existing_up
-            else None
-        )
 
         raw = dict(cand.llmRawOutput or {})
         meta = raw.get("metadata") or {}
@@ -138,6 +128,41 @@ def promoteSavedReel(
                 "promotedFromStaged": True,
             }
 
+        pn = existing_up.place_name if existing_up else None
+        pa = existing_up.place_address if existing_up else None
+        plat = existing_up.latitude if existing_up else None
+        plng = existing_up.longitude if existing_up else None
+        pmq = existing_up.maps_query if existing_up else None
+        if item.placeAddress is not None:
+            pa = item.placeAddress
+        if item.mapsQuery is not None:
+            pmq = item.mapsQuery
+        if item.latitude is not None:
+            plat = item.latitude
+        if item.longitude is not None:
+            plng = item.longitude
+
+        override_place_id: UUID | None = item.placeId
+        if override_place_id is None:
+            has_user_hint = (
+                (plat is not None and plng is not None)
+                or (pa or "").strip()
+                or (pmq or "").strip()
+                or (pn or "").strip()
+            )
+            if has_user_hint:
+                user_place = resolve_place_from_user_pick(
+                    session,
+                    name=pn,
+                    address=pa,
+                    latitude=plat,
+                    longitude=plng,
+                    maps_query=pmq,
+                    category=rc.category,
+                )
+                if user_place:
+                    override_place_id = user_place.id
+
         iid = createIdeaPipelineFromCandidate(
             session,
             job_id=saved.jobId,
@@ -146,7 +171,7 @@ def promoteSavedReel(
             candidate=rc,
             raw_output=raw_out,
             saved_reel_id=saved.id,
-            override_place_id=item.placeId,
+            override_place_id=override_place_id,
         )
         cand.promotedIdeaId = iid
         session.add(cand)
@@ -155,29 +180,23 @@ def promoteSavedReel(
         # Record user-confirmed place in the join table (upsert).
         from app.models.ideas import IdeaModel
         idea = session.get(IdeaModel, iid)
-        place = session.get(PlaceModel, idea.placeId) if idea and idea.placeId else None
+        if not idea or not idea.placeId:
+            raise BadRequest("Promotion did not resolve a place for this candidate")
+        place = session.get(PlaceModel, idea.placeId)
         if existing_up:
-            existing_up.place_id = idea.placeId if idea else None
-            pn, pa, plat, plng, pmq = patch_snapshot  # set together with existing_up above
-            has_user_patch = (
-                plat is not None
-                or plng is not None
-                or (pa or "").strip()
-                or (pmq or "").strip()
-                or (pn or "").strip()
-            )
-            if has_user_patch:
+            existing_up.place_id = idea.placeId
+            if place:
+                existing_up.place_name = place.name
+                existing_up.place_address = place.address
+                existing_up.latitude = place.latitude
+                existing_up.longitude = place.longitude
+                existing_up.maps_query = rc.mapsQuery
+            else:
                 existing_up.place_name = pn
                 existing_up.place_address = pa
                 existing_up.latitude = plat
                 existing_up.longitude = plng
                 existing_up.maps_query = pmq
-            else:
-                existing_up.place_name = place.name if place else (rc.title or None)
-                existing_up.place_address = place.address if place else (rc.placeAddress or None)
-                existing_up.latitude = place.latitude if place else None
-                existing_up.longitude = place.longitude if place else None
-                existing_up.maps_query = rc.mapsQuery
             existing_up.source = "user"
             existing_up.confirmed_at = datetime.utcnow()
             session.add(existing_up)
@@ -185,7 +204,7 @@ def promoteSavedReel(
             user_place = ReelCandidateUserPlaceModel(
                 candidate_id=cand.id,
                 user_id=user_id,
-                place_id=idea.placeId if idea else None,
+                place_id=idea.placeId,
                 place_name=place.name if place else (rc.title or None),
                 place_address=place.address if place else (rc.placeAddress or None),
                 latitude=place.latitude if place else None,
