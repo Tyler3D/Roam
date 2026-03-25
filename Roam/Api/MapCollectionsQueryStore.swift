@@ -23,8 +23,19 @@ final class MapCollectionsQueryStore {
 
     var selection: ChipSelection = .everything
 
+    /// Per-selection pin cache so chip switching is instant.
+    private var pinCache: [String: [APIClient.CollectionMapPinDTO]] = [:]
+
     init(api: APIClient) {
         self.api = api
+    }
+
+    private func cacheKey(for sel: ChipSelection) -> String {
+        switch sel {
+        case .everything: return "everything"
+        case .mySaves: return "mySaves"
+        case .sharedCollection(let id): return "shared:\(id.uuidString)"
+        }
     }
 
     var personalDefaultId: UUID? {
@@ -55,31 +66,53 @@ final class MapCollectionsQueryStore {
     }
 
     func refreshPins() async {
+        let sel = selection
+        let key = cacheKey(for: sel)
         isLoadingPins = true
         lastError = nil
         defer { isLoadingPins = false }
         do {
-            switch selection {
+            let fetched: [APIClient.CollectionMapPinDTO]
+            switch sel {
             case .everything:
-                mapPins = try await api.listEverythingMapPins()
+                fetched = try await api.listEverythingMapPins()
             case .mySaves:
                 guard let pid = personalDefaultId else {
                     mapPins = []
+                    pinCache[key] = []
                     return
                 }
-                mapPins = try await api.listCollectionMapPins(collectionId: pid)
+                fetched = try await api.listCollectionMapPins(collectionId: pid)
             case .sharedCollection(let id):
-                mapPins = try await api.listCollectionMapPins(collectionId: id)
+                fetched = try await api.listCollectionMapPins(collectionId: id)
+            }
+            pinCache[key] = fetched
+            // Only apply if the user hasn't switched away while we were loading.
+            if selection == sel {
+                mapPins = fetched
             }
         } catch {
             lastError = error.localizedDescription
-            mapPins = []
+            if selection == sel {
+                mapPins = []
+            }
         }
     }
 
     func setSelection(_ newValue: ChipSelection) async {
+        // Cache outgoing pins.
+        pinCache[cacheKey(for: selection)] = mapPins
         selection = newValue
+        // Instantly show cached pins (or empty if first visit).
+        let key = cacheKey(for: newValue)
+        mapPins = pinCache[key] ?? []
+        // Refresh from network in background.
         await refreshPins()
+    }
+
+    /// Clears the pin cache so the next refresh fetches fresh data for all collections.
+    func invalidateCache() {
+        pinCache.removeAll()
     }
 }
 
