@@ -9,6 +9,7 @@ struct MapPage: View {
             .task {
                 await stores.mapCollections.refreshCollections()
                 await stores.mapCollections.refreshPins()
+                await stores.mapCollections.prefetchAllPins()
             }
     }
 }

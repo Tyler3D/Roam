@@ -114,6 +114,46 @@ final class MapCollectionsQueryStore {
     func invalidateCache() {
         pinCache.removeAll()
     }
+
+    /// Pre-warm pin caches for all collections (up to `maxPrefetch`) so chip switching is instant.
+    /// Call after collections are loaded. The active selection is skipped (already loaded by `refreshPins`).
+    func prefetchAllPins(maxPrefetch: Int = 5) async {
+        var targets: [ChipSelection] = [.everything]
+        if personalDefaultId != nil {
+            targets.append(.mySaves)
+        }
+        for c in sharedCollections {
+            targets.append(.sharedCollection(c.id))
+        }
+        // Remove the active selection — it's already loaded.
+        targets.removeAll { $0 == selection }
+        // Cap to avoid excessive requests.
+        let batch = targets.prefix(maxPrefetch)
+
+        await withTaskGroup(of: Void.self) { group in
+            for sel in batch {
+                let key = cacheKey(for: sel)
+                group.addTask { [api, weak self] in
+                    guard let self else { return }
+                    do {
+                        let pins: [APIClient.CollectionMapPinDTO]
+                        switch sel {
+                        case .everything:
+                            pins = try await api.listEverythingMapPins()
+                        case .mySaves:
+                            guard let pid = await self.personalDefaultId else { return }
+                            pins = try await api.listCollectionMapPins(collectionId: pid)
+                        case .sharedCollection(let id):
+                            pins = try await api.listCollectionMapPins(collectionId: id)
+                        }
+                        await MainActor.run { self.pinCache[key] = pins }
+                    } catch {
+                        // Prefetch is best-effort; cache miss falls back to on-demand fetch.
+                    }
+                }
+            }
+        }
+    }
 }
 
 enum MapPinPalette {
