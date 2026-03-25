@@ -141,7 +141,11 @@ final class ShareViewController: UIViewController {
             }
             let pack = await ReelMetadataService.extract(url: urlObj, shareText: text)
             ShareQueueStore.attachPack(id: id, pack: pack)
-            presentConfirmation(queueItemId: id)
+            if SharedStore.shareExtensionShowsConfirmationUI {
+                presentConfirmation(queueItemId: id)
+            } else {
+                closeExtension()
+            }
         }
     }
 
