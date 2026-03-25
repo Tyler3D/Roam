@@ -3940,8 +3940,7 @@
           "detectedInLabel": {
             "type": "string",
             "nullable": true,
-            "title": "Detectedinlabel",
-            "description": "LLM vague location if present, else pipeline place address/name; unchanged by user location edits."
+            "title": "Detectedinlabel"
           },
           "mapsQuery": {
             "type": "string",

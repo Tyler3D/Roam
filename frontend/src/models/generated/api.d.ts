@@ -1691,8 +1691,7 @@ export interface components {
             category: string;
             /** Placeaddress */
             placeAddress?: string | null;
-            /** Llmplacedescription */
-            /** LLM vague location if present, else pipeline place address/name; unchanged by user location edits. */
+            /** Detectedinlabel */
             detectedInLabel?: string | null;
             /** Mapsquery */
             mapsQuery?: string | null;
