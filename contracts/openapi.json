@@ -4561,6 +4561,17 @@
             ],
             "title": "Placeaddress"
           },
+          "llmPlaceDescription": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llmplacedescription"
+          },
           "mapsQuery": {
             "anyOf": [
               {

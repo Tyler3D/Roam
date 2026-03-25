@@ -1691,6 +1691,8 @@ export interface components {
             category: string;
             /** Placeaddress */
             placeAddress?: string | null;
+            /** Llmplacedescription */
+            llmPlaceDescription?: string | null;
             /** Mapsquery */
             mapsQuery?: string | null;
             /** Confidence */

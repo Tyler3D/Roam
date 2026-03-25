@@ -476,6 +476,7 @@ final class APIClient {
         let previewDescription: String?
         let category: String?
         let placeAddress: String?
+        let llmPlaceDescription: String?
         let mapsQuery: String?
         let confidence: Double?
         let placeLatitude: Double?
@@ -486,6 +487,7 @@ final class APIClient {
             let c = (category ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return c.isEmpty ? "other" : c
         }
+        /// Precise address for the location row (next to Edit button).
         var cardAddressLine: String? {
             let a = (placeAddress ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !a.isEmpty { return a }
@@ -493,6 +495,14 @@ final class APIClient {
             if !r.isEmpty { return r }
             let m = (mapsQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return m.isEmpty ? nil : m
+        }
+        /// LLM's natural language location description ("NYC, near Koreatown") for "Detected in..." text.
+        var detectedInLabel: String? {
+            let d = (llmPlaceDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !d.isEmpty { return d }
+            // Fall back to resolved place name if LLM didn't provide one.
+            let r = (resolvedPlaceName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return r.isEmpty ? nil : r
         }
     }
 

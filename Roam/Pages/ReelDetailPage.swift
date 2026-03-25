@@ -708,8 +708,8 @@ struct ReelDetailPage: View {
                     .font(Font.system(size: 15, weight: .semibold))
                     .foregroundStyle(RoamColors.text)
 
-                    // "Detected in …" non-editable description
-                    if let detectedLocation = c.cardAddressLine {
+                    // "Detected in …" non-editable LLM description
+                    if let detectedLocation = c.detectedInLabel {
                         HStack(alignment: .center, spacing: 3) {
                             Image(systemName: "mappin.and.ellipse")
                                 .font(.system(size: 9))

@@ -104,6 +104,7 @@ class ReelIngestCandidateRead(SQLModel):
     previewDescription: str = ""
     category: str = ""
     placeAddress: Optional[str] = None
+    llmPlaceDescription: Optional[str] = None
     mapsQuery: Optional[str] = None
     confidence: Optional[float] = None
     placeLatitude: Optional[float] = None

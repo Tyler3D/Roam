@@ -3937,6 +3937,11 @@
             "nullable": true,
             "title": "Placeaddress"
           },
+          "llmPlaceDescription": {
+            "type": "string",
+            "nullable": true,
+            "title": "Llmplacedescription"
+          },
           "mapsQuery": {
             "type": "string",
             "nullable": true,

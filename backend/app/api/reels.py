@@ -298,6 +298,13 @@ def getReel(
             if up.maps_query:
                 maps_q = up.maps_query
 
+        # placeAddress = precise Google Maps address (user-confirmed > resolved).
+        # llmPlaceDescription = LLM's natural language location ("NYC, near Koreatown").
+        llm_place_desc = place_addr  # raw LLM value before overrides
+        final_address = resolvedAddr  # Google Maps resolved address
+        if up and up.place_address:
+            final_address = up.place_address
+
         candReads.append(
             ReelIngestCandidateRead(
                 id=c.id,
@@ -311,7 +318,8 @@ def getReel(
                 resolvedPlaceName=resolvedName,
                 previewDescription=preview_desc[:2000] if preview_desc else "",
                 category=(category or "")[:200],
-                placeAddress=place_addr or resolvedAddr,
+                placeAddress=final_address,
+                llmPlaceDescription=llm_place_desc,
                 mapsQuery=maps_q,
                 confidence=conf,
                 placeLatitude=placeLat,
