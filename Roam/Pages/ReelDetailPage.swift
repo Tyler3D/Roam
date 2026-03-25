@@ -1197,7 +1197,7 @@ struct ReelDetailPage: View {
 
         NavigationLink {
             if appConfig.appMode == .alphaHeavyDevelopmentUnsafe {
-                IdeaDetailPage(ideaId: idea.id.uuidString)
+                IdeaDetailPage(ideaId: idea.id.uuidString.lowercased())
             } else {
                 ConsumerIdeaDetailPage(
                     route: ConsumerIdeaDetailRoute(
@@ -1453,7 +1453,7 @@ struct ReelDetailPage: View {
 
                     ForEach(rows) { idea in
                         NavigationLink {
-                            IdeaDetailPage(ideaId: idea.id.uuidString)
+                            IdeaDetailPage(ideaId: idea.id.uuidString.lowercased())
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(idea.title)

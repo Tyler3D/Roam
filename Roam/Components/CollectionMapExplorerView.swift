@@ -602,7 +602,7 @@ struct CollectionMapExplorerView: View {
                         }
                     }
                     NavigationLink {
-                        IdeaDetailPage(ideaId: pin.id.uuidString)
+                        IdeaDetailPage(ideaId: pin.id.uuidString.lowercased())
                     } label: {
                         Text("Plan this →")
                             .font(.system(size: 13, weight: .semibold))

@@ -81,7 +81,8 @@ final class IdeasQueryStore {
 
     func deleteIdea(id: String) async throws {
         try await api.deleteIdea(id: id)
-        ideas.removeAll { $0.id == id }
+        let lowered = id.lowercased()
+        ideas.removeAll { $0.id.lowercased() == lowered }
         if let t = totalIdeasCount {
             totalIdeasCount = max(0, t - 1)
         }

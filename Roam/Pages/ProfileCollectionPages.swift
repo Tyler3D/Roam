@@ -925,7 +925,7 @@ private struct ProfileCollectionIdeaDetailDestination: View {
     var body: some View {
         Group {
             if appConfig.appMode == .alphaHeavyDevelopmentUnsafe {
-                IdeaDetailPage(ideaId: pin.id.uuidString)
+                IdeaDetailPage(ideaId: pin.id.uuidString.lowercased())
             } else {
                 ConsumerIdeaDetailPage(route: ConsumerIdeaDetailRoute.from(pin: pin))
             }
