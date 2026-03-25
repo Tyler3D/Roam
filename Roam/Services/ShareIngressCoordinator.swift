@@ -177,10 +177,14 @@ final class ShareIngressCoordinator: ObservableObject {
                 let job = try await apiClient.getIngestJob(jobId: jobId)
                 switch job.status {
                 case "done":
+                    // Clear scan state BEFORE refreshing so the UI doesn't
+                    // briefly show "Searching…" on an already-finished reel.
+                    ingestScanState = nil
                     await stores.ideas.refresh()
                     await stores.reels.refresh()
                     return .done
                 case "failed":
+                    ingestScanState = nil
                     await stores.ideas.refresh()
                     await stores.reels.refresh()
                     let trimmed = job.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -194,6 +198,7 @@ final class ShareIngressCoordinator: ObservableObject {
             }
         }
 
+        ingestScanState = nil
         await stores.ideas.refresh()
         await stores.reels.refresh()
         return .timeout
@@ -201,7 +206,6 @@ final class ShareIngressCoordinator: ObservableObject {
 
     private func finishBannerPollAfterTerminal(apiClient: APIClient, jobId: String, stores: RoamStores) async {
         let outcome = await pollIngestJobUntilTerminal(apiClient: apiClient, jobId: jobId, stores: stores)
-        ingestScanState = nil
         switch outcome {
         case .done:
             break

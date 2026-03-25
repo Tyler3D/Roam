@@ -106,12 +106,12 @@ def listReels(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[SavedReelListItem]:
-    # needs_review + failed first (action / error), then in-flight, then promoted.
-    # Within each tier: updatedAt desc ≈ when classification last finished (ingest, fail, or promote).
+    # processing (searching) first so the user sees in-flight work, then needs_review / failed, then promoted.
+    # Within each tier: createdAt desc so newest uploads appear first consistently.
     sortPriority = case(
-        (col(SavedReelModel.status) == SavedReelStatus.needs_review, 0),
-        (col(SavedReelModel.status) == SavedReelStatus.failed, 0),
-        (col(SavedReelModel.status) == SavedReelStatus.processing, 1),
+        (col(SavedReelModel.status) == SavedReelStatus.processing, 0),
+        (col(SavedReelModel.status) == SavedReelStatus.needs_review, 1),
+        (col(SavedReelModel.status) == SavedReelStatus.failed, 1),
         (col(SavedReelModel.status) == SavedReelStatus.promoted, 2),
         else_=3,
     )
@@ -120,7 +120,6 @@ def listReels(
         .where(SavedReelModel.userId == user.id)
         .order_by(
             sortPriority.asc(),
-            col(SavedReelModel.updatedAt).desc(),
             col(SavedReelModel.createdAt).desc(),
         )
         .offset(offset)

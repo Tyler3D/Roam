@@ -27,7 +27,9 @@ struct ReelsPage: View {
                         localInboxSection
                     }
                     onDeviceQueueSection
-                    if shareIngress.ingestScanState != nil {
+                    if let scan = shareIngress.ingestScanState,
+                       let rid = scan.reelId,
+                       stores.reels.reels.contains(where: { $0.id.uuidString.lowercased() == rid && $0.status == "processing" }) {
                         scanningBanner
                     }
                     reelsGridSection
@@ -308,10 +310,7 @@ struct ReelsPage: View {
 
     @ViewBuilder
     private func reelCell(_ reel: APIClient.SavedReelListItemDTO) -> some View {
-        let attention = ReelCellAttention.forSavedReel(
-            reel,
-            scanReelId: shareIngress.ingestScanState?.reelId
-        )
+        let attention = ReelCellAttention.forSavedReel(reel)
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topTrailing) {
@@ -421,20 +420,16 @@ struct ReelsPage: View {
 
 private enum ReelCellAttention {
     case none
-    case scanning
-    case processing
+    case searching
     case needsReview
     case failed
 
-    static func forSavedReel(_ reel: APIClient.SavedReelListItemDTO, scanReelId: String?) -> ReelCellAttention {
-        let rid = reel.id.uuidString.lowercased()
-        if let s = scanReelId?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty, s == rid {
-            return .scanning
-        }
+    /// Purely data-driven: uses only `reel.status` so the cell updates as soon as the store refreshes.
+    static func forSavedReel(_ reel: APIClient.SavedReelListItemDTO) -> ReelCellAttention {
         switch reel.status {
-        case "failed": return .failed
+        case "processing": return .searching
         case "needs_review": return .needsReview
-        case "processing": return .processing
+        case "failed": return .failed
         default: return .none
         }
     }
@@ -442,8 +437,7 @@ private enum ReelCellAttention {
     var outlineColor: Color {
         switch self {
         case .none: return .clear
-        case .scanning: return RoamColors.loganDeep
-        case .processing: return RoamColors.processingTeal
+        case .searching: return RoamColors.loganDeep
         case .needsReview: return RoamColors.actionRequired
         case .failed: return RoamColors.error
         }
@@ -452,15 +446,14 @@ private enum ReelCellAttention {
     var outlineWidth: CGFloat {
         switch self {
         case .none: return 0
-        case .scanning: return 2
-        case .processing, .needsReview, .failed: return 2.5
+        case .searching: return 2
+        case .needsReview, .failed: return 2.5
         }
     }
 
     var ribbon: (title: String, fill: Color)? {
         switch self {
-        case .scanning: return ("Searching…", RoamColors.loganDeep)
-        case .processing: return ("Reel processing", RoamColors.processingTeal)
+        case .searching: return ("Searching…", RoamColors.loganDeep)
         case .needsReview: return ("Action required", RoamColors.actionRequired)
         case .failed: return ("Upload failed", RoamColors.error)
         case .none: return nil
@@ -469,7 +462,7 @@ private enum ReelCellAttention {
 
     var showTrailingStatusChip: Bool {
         switch self {
-        case .scanning, .processing, .needsReview, .failed: return false
+        case .searching, .needsReview, .failed: return false
         case .none: return true
         }
     }
