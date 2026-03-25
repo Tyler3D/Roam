@@ -213,6 +213,29 @@ erDiagram
         timestamptz createdAt
     }
 
+    reel_candidate_user_places {
+        uuid id PK
+        uuid candidate_id FK
+        uuid user_id FK
+        uuid place_id FK "nullable"
+        text place_name "nullable"
+        text place_address "nullable"
+        double latitude "nullable"
+        double longitude "nullable"
+        text maps_query "nullable"
+        text source "pipeline or user"
+        timestamptz confirmed_at
+    }
+
+    user_feature_flags {
+        uuid id PK
+        uuid user_id FK
+        text flag_name
+        boolean enabled
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     users ||--o{ friendships : "requests"
     users ||--o{ friendships : "receives"
     users ||--o{ ideas : "creates"
@@ -224,6 +247,8 @@ erDiagram
     users ||--o{ saved_reels : "saves"
     users ||--o{ user_oauth_tokens : "stores"
     users ||--o{ collections : "creates"
+    users ||--o{ reel_candidate_user_places : "confirms"
+    users ||--o{ user_feature_flags : "has"
 
     collections ||--o{ collection_members : "has"
     collections ||--o{ collection_ideas : "groups"
@@ -232,6 +257,8 @@ erDiagram
 
     reel_ingestion_jobs ||--|| saved_reels : "has"
     saved_reels ||--o{ reel_ingest_candidates : "stages"
+    reel_ingest_candidates ||--o{ reel_candidate_user_places : "confirmed by"
+    reel_candidate_user_places }o--|| places : "references"
     saved_reels ||--o{ ideas : "optional"
     ideas ||--o{ pipeline_results : "results"
     reel_ingestion_jobs ||--o{ pipeline_results : "produces"
@@ -301,6 +328,10 @@ erDiagram
 | `reel_ingest_candidates.savedReelId` | `saved_reels.id` | many-to-one | CASCADE |
 | `reel_ingest_candidates.resolvedPlaceId` | `places.id` | many-to-one (nullable) | SET NULL |
 | `reel_ingest_candidates.promotedIdeaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
+| `reel_candidate_user_places.candidate_id` | `reel_ingest_candidates.id` | many-to-one | CASCADE |
+| `reel_candidate_user_places.user_id` | `users.id` | many-to-one | CASCADE |
+| `reel_candidate_user_places.place_id` | `places.id` | many-to-one (nullable) | SET NULL |
+| `user_feature_flags.user_id` | `users.id` | many-to-one | CASCADE |
 | `user_oauth_tokens.userId` | `users.id` | many-to-one | CASCADE |
 
 ### Saved reels & staged candidates (design)
@@ -318,6 +349,8 @@ erDiagram
 | `user_oauth_tokens` | `UNIQUE ("userId", "provider")` |
 | `friendships` | `UNIQUE` on `(LEAST(requesterId, addresseeId), GREATEST(requesterId, addresseeId))` (one row per unordered pair) |
 | `reel_ingestion_jobs` | `UNIQUE ("userId", "reelUrl")` |
+| `reel_candidate_user_places` | `UNIQUE ("candidate_id", "user_id")` |
+| `user_feature_flags` | `UNIQUE ("user_id", "flag_name")` |
 | `collections` | **Partial unique:** at most one row per `creatorId` where `isPersonalDefault` (see `sql/schema.sql`) |
 | `collection_members` | `PRIMARY KEY ("collectionId", "userId")` |
 | `collection_ideas` | `PRIMARY KEY ("collectionId", "ideaId")` |
@@ -328,6 +361,7 @@ erDiagram
 |-------|------|
 | `pipeline_results` | `reel_result_has_idea`: if `jobId` is set, `ideaId` must be set (`jobId IS NULL OR ideaId IS NOT NULL`) |
 | `friendships` | `requesterId <> addresseeId` |
+| `reel_candidate_user_places` | `source IN ('pipeline', 'user')` |
 | `plans` / `plan_members` | `rating` in 1–5 when present (see schema `CHECK`) |
 
 ## Views

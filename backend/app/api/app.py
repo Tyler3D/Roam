@@ -16,6 +16,7 @@ from app.api.share import shareRouter
 from app.api.notifications import notificationsRouter
 from app.api.collections import collectionsRouter
 from app.api.tasks import tasksRouter
+from app.api.featureFlags import featureFlagsRouter
 from app.common.config import getCorsAllowOrigins
 from app.middleware.utils import (
     addCorsHeaders,
@@ -109,3 +110,4 @@ app.include_router(friendsRouter, prefix="/api")
 app.include_router(shareRouter, prefix="/api")
 app.include_router(notificationsRouter, prefix="/api")
 app.include_router(collectionsRouter, prefix="/api")
+app.include_router(featureFlagsRouter, prefix="/api")

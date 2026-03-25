@@ -278,6 +278,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reels/{reelId}/candidates/{candidateId}/place": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Updatecandidateplace
+         * @description Persist the user's confirmed place for a candidate (pre- or post-promote).
+         */
+        patch: operations["updateCandidatePlace_api_reels__reelId__candidates__candidateId__place_patch"];
+        trace?: never;
+    };
     "/api/ideas": {
         parameters: {
             query?: never;
@@ -876,6 +896,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/feature-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listfeatureflags
+         * @description Return all flags for the authenticated user.
+         */
+        get: operations["listFeatureFlags_api_feature_flags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feature-flags/{flagName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upsertfeatureflag
+         * @description Create or update a single feature flag for the authenticated user.
+         */
+        put: operations["upsertFeatureFlag_api_feature_flags__flagName__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1066,6 +1126,18 @@ export interface components {
              * @description Additional shared collections only. Personal default is always linked; do not send it.
              */
             collectionIds?: string[];
+        };
+        /** FeatureFlagRead */
+        FeatureFlagRead: {
+            /** Flagname */
+            flagName: string;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** FeatureFlagUpdate */
+        FeatureFlagUpdate: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** FriendRequest */
         FriendRequest: {
@@ -1833,6 +1905,48 @@ export interface components {
             /** Iscompleted */
             isCompleted: boolean;
         };
+        /**
+         * UpdateCandidatePlaceBody
+         * @description Body for PATCH /reels/{reelId}/candidates/{candidateId}/place.
+         */
+        UpdateCandidatePlaceBody: {
+            /** Placename */
+            placeName?: string | null;
+            /** Placeaddress */
+            placeAddress?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /** Mapsquery */
+            mapsQuery?: string | null;
+        };
+        /**
+         * UpdateCandidatePlaceRead
+         * @description Response after confirming a candidate place.
+         */
+        UpdateCandidatePlaceRead: {
+            /**
+             * Candidateid
+             * Format: uuid
+             */
+            candidateId: string;
+            /** Placename */
+            placeName?: string | null;
+            /** Placeaddress */
+            placeAddress?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /** Mapsquery */
+            mapsQuery?: string | null;
+            /**
+             * Source
+             * @default user
+             */
+            source: string;
+        };
         /** UserCreate */
         UserCreate: {
             /** Username */
@@ -2423,6 +2537,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromoteReelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateCandidatePlace_api_reels__reelId__candidates__candidateId__place_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reelId: string;
+                candidateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCandidatePlaceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCandidatePlaceRead"];
                 };
             };
             /** @description Validation Error */
@@ -3693,6 +3843,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionMapIdeaRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listFeatureFlags_api_feature_flags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureFlagRead"][];
+                };
+            };
+        };
+    };
+    upsertFeatureFlag_api_feature_flags__flagName__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flagName: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureFlagUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureFlagRead"];
                 };
             };
             /** @description Validation Error */

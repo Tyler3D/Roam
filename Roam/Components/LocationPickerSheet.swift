@@ -34,6 +34,13 @@ struct LocationPickerSheet: View {
     @State private var geocodeTask: Task<Void, Never>?
     @State private var isFetchingDetail = false
 
+    init(initialQuery: String, initialCoordinate: CLLocationCoordinate2D?, onConfirm: @escaping (PickedLocation) -> Void) {
+        self.initialQuery = initialQuery
+        self.initialCoordinate = initialCoordinate
+        self.onConfirm = onConfirm
+        _pinCoordinate = State(initialValue: initialCoordinate)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -67,9 +74,6 @@ struct LocationPickerSheet: View {
         }
         .onAppear {
             searchText = initialQuery
-            if let coord = initialCoordinate {
-                pinCoordinate = coord
-            }
             if !initialQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 searchTask = Task { await runAutocomplete(initialQuery) }
             }

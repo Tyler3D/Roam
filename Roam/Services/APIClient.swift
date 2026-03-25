@@ -586,6 +586,39 @@ final class APIClient {
         )
     }
 
+    // MARK: - Candidate place confirmation
+
+    struct UpdateCandidatePlaceBody: Encodable {
+        let placeName: String?
+        let placeAddress: String?
+        let latitude: Double?
+        let longitude: Double?
+        let mapsQuery: String?
+    }
+
+    struct UpdateCandidatePlaceResponse: Decodable {
+        let candidateId: UUID
+        let placeName: String?
+        let placeAddress: String?
+        let latitude: Double?
+        let longitude: Double?
+        let mapsQuery: String?
+        let source: String
+    }
+
+    func updateCandidatePlace(
+        reelId: String,
+        candidateId: String,
+        body: UpdateCandidatePlaceBody
+    ) async throws -> UpdateCandidatePlaceResponse {
+        let data = try JSONEncoder.roam.encode(body)
+        return try await apiFetch(
+            path: "/api/reels/\(reelId.lowercased())/candidates/\(candidateId.lowercased())/place",
+            method: "PATCH",
+            body: data
+        )
+    }
+
     func searchPlacesList(query: String, limit: Int = 8) async throws -> [PlaceSearchRowDTO] {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "+&=")
@@ -793,6 +826,27 @@ final class APIClient {
         try await apiPerform(
             path: "/api/collections/\(collectionId.uuidString.lowercased())",
             method: "DELETE"
+        )
+    }
+
+    // MARK: - Feature Flags
+
+    struct FeatureFlagDTO: Decodable {
+        let flagName: String
+        let enabled: Bool
+    }
+
+    func listFeatureFlags() async throws -> [FeatureFlagDTO] {
+        try await apiFetch(path: "/api/feature-flags")
+    }
+
+    func upsertFeatureFlag(flagName: String, enabled: Bool) async throws -> FeatureFlagDTO {
+        struct Body: Encodable { let enabled: Bool }
+        let data = try JSONEncoder.roam.encode(Body(enabled: enabled))
+        return try await apiFetch(
+            path: "/api/feature-flags/\(flagName)",
+            method: "PUT",
+            body: data
         )
     }
 }

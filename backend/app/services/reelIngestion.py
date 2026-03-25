@@ -20,6 +20,7 @@ from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
+from app.models.featureFlags import UserFeatureFlagModel
 from app.models.savedReels import ReelIngestCandidateModel, SavedReelModel, SavedReelStatus
 
 logger = logging.getLogger("roam.reel_ingestion")
@@ -433,6 +434,22 @@ def _autoSelectPlace(
             return
 
 
+def _isAutoPromoteEnabled(session: Session, user_id: UUID) -> bool:
+    """Check if auto_promote_single_candidate flag is enabled for the user.
+
+    Returns True (auto-promote) by default — the flag lets users opt *out*.
+    """
+    row = session.exec(
+        select(UserFeatureFlagModel).where(
+            UserFeatureFlagModel.user_id == user_id,
+            UserFeatureFlagModel.flag_name == "auto_promote_single_candidate",
+        )
+    ).first()
+    if row is None:
+        return True  # default: auto-promote enabled
+    return row.enabled
+
+
 def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | None:
     if not _shouldResolveMaps(c):
         return None
@@ -489,7 +506,9 @@ def processIngestionJob(
 
         idea_ids: list[UUID] = []
 
-        if len(filtered_ordered) == 1:
+        auto_promote = _isAutoPromoteEnabled(session, job.userId)
+
+        if len(filtered_ordered) == 1 and auto_promote:
             c = _candidate_with_normalized_category(filtered_ordered[0])
             raw_output = {
                 "candidate": c.model_dump(),

@@ -643,6 +643,67 @@
         }
       }
     },
+    "/api/reels/{reelId}/candidates/{candidateId}/place": {
+      "patch": {
+        "summary": "Updatecandidateplace",
+        "description": "Persist the user's confirmed place for a candidate (pre- or post-promote).",
+        "operationId": "updateCandidatePlace_api_reels__reelId__candidates__candidateId__place_patch",
+        "parameters": [
+          {
+            "name": "reelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reelid"
+            }
+          },
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidateid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCandidatePlaceBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCandidatePlaceRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ideas": {
       "get": {
         "summary": "Listideas",
@@ -2358,6 +2419,79 @@
           }
         }
       }
+    },
+    "/api/feature-flags": {
+      "get": {
+        "summary": "Listfeatureflags",
+        "description": "Return all flags for the authenticated user.",
+        "operationId": "listFeatureFlags_api_feature_flags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlagRead"
+                  },
+                  "type": "array",
+                  "title": "Response Listfeatureflags Api Feature Flags Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feature-flags/{flagName}": {
+      "put": {
+        "summary": "Upsertfeatureflag",
+        "description": "Create or update a single feature flag for the authenticated user.",
+        "operationId": "upsertFeatureFlag_api_feature_flags__flagName__put",
+        "parameters": [
+          {
+            "name": "flagName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Flagname"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureFlagUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2855,6 +2989,37 @@
           "title"
         ],
         "title": "CreateIdeaOnReelBody"
+      },
+      "FeatureFlagRead": {
+        "properties": {
+          "flagName": {
+            "type": "string",
+            "title": "Flagname"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flagName",
+          "enabled"
+        ],
+        "title": "FeatureFlagRead"
+      },
+      "FeatureFlagUpdate": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "FeatureFlagUpdate"
       },
       "FriendRequest": {
         "properties": {
@@ -4930,6 +5095,143 @@
           "isCompleted"
         ],
         "title": "TaskUpdate"
+      },
+      "UpdateCandidatePlaceBody": {
+        "properties": {
+          "placeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placename"
+          },
+          "placeAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeaddress"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "mapsQuery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapsquery"
+          }
+        },
+        "type": "object",
+        "title": "UpdateCandidatePlaceBody",
+        "description": "Body for PATCH /reels/{reelId}/candidates/{candidateId}/place."
+      },
+      "UpdateCandidatePlaceRead": {
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Candidateid"
+          },
+          "placeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placename"
+          },
+          "placeAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeaddress"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "mapsQuery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapsquery"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidateId"
+        ],
+        "title": "UpdateCandidatePlaceRead",
+        "description": "Response after confirming a candidate place."
       },
       "UserCreate": {
         "properties": {

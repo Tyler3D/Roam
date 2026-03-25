@@ -526,15 +526,49 @@ struct ProfilePage: View {
 }
 
 struct AccountSettingsPlaceholderPage: View {
+    @EnvironmentObject private var apiClient: APIClient
+
+    @State private var autoPromoteEnabled: Bool = true
+    @State private var isLoading = true
+
     var body: some View {
         List {
             Section {
-                Text("Account settings will live here.")
-                    .font(RoamFont.mono(12))
-                    .foregroundStyle(RoamColors.textMid)
+                Toggle(isOn: $autoPromoteEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-promote single-place reels")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(RoamColors.text)
+                        Text("Skip review when a reel has exactly one high-confidence place")
+                            .font(.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    }
+                }
+                .tint(RoamColors.reviewAccent)
+                .disabled(isLoading)
+                .onChange(of: autoPromoteEnabled) { _, newVal in
+                    Task {
+                        _ = try? await apiClient.upsertFeatureFlag(
+                            flagName: "auto_promote_single_candidate",
+                            enabled: newVal
+                        )
+                    }
+                }
+            } header: {
+                Text("Reel processing")
+                    .font(RoamFont.mono(11))
             }
         }
         .navigationTitle("settings")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            do {
+                let flags = try await apiClient.listFeatureFlags()
+                if let flag = flags.first(where: { $0.flagName == "auto_promote_single_candidate" }) {
+                    autoPromoteEnabled = flag.enabled
+                }
+            } catch {}
+            isLoading = false
+        }
     }
 }

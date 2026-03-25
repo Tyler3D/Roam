@@ -159,6 +159,24 @@ struct ReelDetailPage: View {
                     onConfirm: { picked in
                         pickedPlaces[candidateId] = picked
                         locationQueries[candidateId] = picked.name
+                        // Persist user-confirmed place to the backend.
+                        Task {
+                            _ = try? await apiClient.updateCandidatePlace(
+                                reelId: reelId,
+                                candidateId: candidateId.uuidString,
+                                body: .init(
+                                    placeName: picked.name,
+                                    placeAddress: picked.address,
+                                    latitude: picked.latitude,
+                                    longitude: picked.longitude,
+                                    mapsQuery: picked.name
+                                )
+                            )
+                            // Refresh detail so the GET reflects the updated data.
+                            if let refreshed = try? await apiClient.getReel(id: reelId) {
+                                await MainActor.run { detail = refreshed }
+                            }
+                        }
                     }
                 )
                 .presentationDetents([.fraction(0.85), .large])

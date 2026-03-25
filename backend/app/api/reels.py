@@ -21,6 +21,7 @@ from app.models.savedReels import (
     CreateIdeaOnReelBody,
     PromoteReelRequest,
     PromoteReelResponse,
+    ReelCandidateUserPlaceModel,
     ReelIngestCandidateRead,
     ReelsSummaryRead,
     SavedReelDetailRead,
@@ -29,6 +30,8 @@ from app.models.savedReels import (
     SavedReelModel,
     SavedReelStatus,
     ReelIngestCandidateModel,
+    UpdateCandidatePlaceBody,
+    UpdateCandidatePlaceRead,
 )
 from app.models.users import UserModel
 from app.services.gcsReels import signedUrlForObject, uploadReelThumbnail
@@ -219,17 +222,46 @@ def getReel(
         .where(ReelIngestCandidateModel.savedReelId == r.id)
         .order_by(col(ReelIngestCandidateModel.sortIndex).asc())
     ).all()
+    # Batch-load user-confirmed places for all candidates on this reel.
+    cand_ids = [c.id for c in cands]
+    user_places: dict[UUID, ReelCandidateUserPlaceModel] = {}
+    if cand_ids:
+        ups = session.exec(
+            select(ReelCandidateUserPlaceModel).where(
+                ReelCandidateUserPlaceModel.candidate_id.in_(cand_ids),
+                ReelCandidateUserPlaceModel.user_id == user.id,
+            )
+        ).all()
+        for up in ups:
+            user_places[up.candidate_id] = up
+
     candReads: list[ReelIngestCandidateRead] = []
     for c in cands:
+        # --- Pipeline-resolved place (fallback) ---
         resolvedName = None
+        resolvedAddr = None
         placeLat = None
         placeLng = None
         if c.resolvedPlaceId:
             pl = session.get(PlaceModel, c.resolvedPlaceId)
             if pl:
                 resolvedName = pl.name
+                resolvedAddr = pl.address
                 placeLat = pl.latitude
                 placeLng = pl.longitude
+
+        # --- User-confirmed place (takes priority) ---
+        up = user_places.get(c.id)
+        if up:
+            if up.place_name:
+                resolvedName = up.place_name
+            if up.place_address:
+                resolvedAddr = up.place_address
+            if up.latitude is not None:
+                placeLat = up.latitude
+            if up.longitude is not None:
+                placeLng = up.longitude
+
         raw = c.llmRawOutput or {}
         isSynthetic = bool(raw.get("synthetic"))
         if isSynthetic:
@@ -258,6 +290,14 @@ def getReel(
             )
             maps_q = candPayload.get("mapsQuery") if isinstance(candPayload, dict) else None
             conf = _candidate_payload_confidence(candPayload)
+
+        # User-confirmed address/mapsQuery override LLM-extracted values too.
+        if up:
+            if up.place_address:
+                place_addr = up.place_address
+            if up.maps_query:
+                maps_q = up.maps_query
+
         candReads.append(
             ReelIngestCandidateRead(
                 id=c.id,
@@ -271,7 +311,7 @@ def getReel(
                 resolvedPlaceName=resolvedName,
                 previewDescription=preview_desc[:2000] if preview_desc else "",
                 category=(category or "")[:200],
-                placeAddress=place_addr,
+                placeAddress=place_addr or resolvedAddr,
                 mapsQuery=maps_q,
                 confidence=conf,
                 placeLatitude=placeLat,
@@ -463,6 +503,76 @@ def promoteReel(
 ) -> PromoteReelResponse:
     """Promote candidates to ideas. Each idea is always linked to the user's personal default collection."""
     return promoteSavedReel(session, reel_id=reelId, user_id=user.id, body=body)
+
+
+@reelsRouter.patch(
+    "/reels/{reelId}/candidates/{candidateId}/place",
+    response_model=UpdateCandidatePlaceRead,
+)
+def updateCandidatePlace(
+    reelId: UUID,
+    candidateId: UUID,
+    body: UpdateCandidatePlaceBody,
+    user: UserModel = Depends(getCurrentUser),
+    session: Session = Depends(getSession),
+) -> UpdateCandidatePlaceRead:
+    """Persist the user's confirmed place for a candidate (pre- or post-promote)."""
+    r = session.get(SavedReelModel, reelId)
+    if not r:
+        raise NotFound("Reel not found")
+    if r.userId != user.id:
+        raise Forbidden("Not your reel")
+
+    cand = session.get(ReelIngestCandidateModel, candidateId)
+    if not cand or cand.savedReelId != r.id:
+        raise BadRequest("Invalid candidateId for this reel")
+
+    existing = session.exec(
+        select(ReelCandidateUserPlaceModel).where(
+            ReelCandidateUserPlaceModel.candidate_id == candidateId,
+            ReelCandidateUserPlaceModel.user_id == user.id,
+        )
+    ).first()
+
+    if existing:
+        if body.placeName is not None:
+            existing.place_name = body.placeName
+        if body.placeAddress is not None:
+            existing.place_address = body.placeAddress
+        if body.latitude is not None:
+            existing.latitude = body.latitude
+        if body.longitude is not None:
+            existing.longitude = body.longitude
+        if body.mapsQuery is not None:
+            existing.maps_query = body.mapsQuery
+        existing.source = "user"
+        existing.confirmed_at = datetime.utcnow()
+        session.add(existing)
+    else:
+        existing = ReelCandidateUserPlaceModel(
+            candidate_id=candidateId,
+            user_id=user.id,
+            place_name=body.placeName,
+            place_address=body.placeAddress,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            maps_query=body.mapsQuery,
+            source="user",
+        )
+        session.add(existing)
+
+    session.commit()
+    session.refresh(existing)
+
+    return UpdateCandidatePlaceRead(
+        candidateId=candidateId,
+        placeName=existing.place_name,
+        placeAddress=existing.place_address,
+        latitude=existing.latitude,
+        longitude=existing.longitude,
+        mapsQuery=existing.maps_query,
+        source=existing.source,
+    )
 
 
 @reelsRouter.delete("/reels/{reelId}", status_code=status.HTTP_204_NO_CONTENT)

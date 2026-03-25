@@ -432,6 +432,51 @@ FROM "ideas" i
 LEFT JOIN "plans" p ON p."ideaId" = i.id
 GROUP BY i.id;
 
+-- ============================================================
+-- Reel Candidate User Places (per-user confirmed place for a candidate)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "reel_candidate_user_places" (
+  "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "candidate_id"  uuid NOT NULL REFERENCES "reel_ingest_candidates"("id") ON DELETE CASCADE,
+  "user_id"       uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "place_id"      uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "place_name"    text,
+  "place_address" text,
+  "latitude"      double precision,
+  "longitude"     double precision,
+  "maps_query"    text,
+  "source"        text NOT NULL DEFAULT 'user' CHECK ("source" IN ('pipeline', 'user')),
+  "confirmed_at"  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "uq_rcup_candidate_user" UNIQUE ("candidate_id", "user_id")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_rcup_candidate"
+  ON "reel_candidate_user_places" ("candidate_id");
+
+CREATE INDEX IF NOT EXISTS "idx_rcup_user"
+  ON "reel_candidate_user_places" ("user_id");
+
+-- ============================================================
+-- User Feature Flags (per-user flag toggles)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "user_feature_flags" (
+  "id"          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "user_id"     uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "flag_name"   text NOT NULL,
+  "enabled"     boolean NOT NULL DEFAULT true,
+  "created_at"  timestamptz NOT NULL DEFAULT now(),
+  "updated_at"  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "uq_uff_user_flag" UNIQUE ("user_id", "flag_name")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_uff_user"
+  ON "user_feature_flags" ("user_id");
+
+CREATE INDEX IF NOT EXISTS "idx_uff_flag"
+  ON "user_feature_flags" ("flag_name");
+
 -- Add notification enum value on existing databases (no-op if already present)
 DO $enum_mig$
 BEGIN

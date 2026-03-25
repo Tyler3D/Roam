@@ -3,8 +3,8 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Column, Field, SQLModel
-from sqlalchemy import Enum as SAEnum
+from sqlmodel import Column, Field, SQLModel, UniqueConstraint
+from sqlalchemy import CheckConstraint, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.ideas import IdeaStatus
@@ -49,6 +49,27 @@ class ReelIngestCandidateModel(SQLModel, table=True):
     resolvedPlaceId: Optional[UUID] = Field(default=None, foreign_key="places.id")
     promotedIdeaId: Optional[UUID] = Field(default=None, foreign_key="ideas.id")
     createdAt: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReelCandidateUserPlaceModel(SQLModel, table=True):
+    """Per-user confirmed place for a reel candidate (join table)."""
+    __tablename__ = "reel_candidate_user_places"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", "user_id", name="uq_rcup_candidate_user"),
+        CheckConstraint("source IN ('pipeline', 'user')", name="ck_rcup_source"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    candidate_id: UUID = Field(foreign_key="reel_ingest_candidates.id", nullable=False, index=True)
+    user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
+    place_id: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    place_name: Optional[str] = None
+    place_address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    maps_query: Optional[str] = None
+    source: str = Field(default="user")
+    confirmed_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class SavedReelListItem(SQLModel):
@@ -130,6 +151,26 @@ class PromoteReelResponse(SQLModel):
 
 class ReelsSummaryRead(SQLModel):
     needsReviewCount: int = 0
+
+
+class UpdateCandidatePlaceBody(SQLModel):
+    """Body for PATCH /reels/{reelId}/candidates/{candidateId}/place."""
+    placeName: Optional[str] = None
+    placeAddress: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    mapsQuery: Optional[str] = None
+
+
+class UpdateCandidatePlaceRead(SQLModel):
+    """Response after confirming a candidate place."""
+    candidateId: UUID
+    placeName: Optional[str] = None
+    placeAddress: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    mapsQuery: Optional[str] = None
+    source: str = "user"
 
 
 class CreateIdeaOnReelBody(SQLModel):

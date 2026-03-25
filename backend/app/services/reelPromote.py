@@ -4,13 +4,15 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.common.backendErrors import BadRequest, Forbidden, NotFound
 from app.common.idea_categories import normalize_category
+from app.models.places import PlaceModel
 from app.models.savedReels import (
     PromoteReelRequest,
     PromoteReelResponse,
+    ReelCandidateUserPlaceModel,
     ReelIngestCandidateModel,
     SavedReelModel,
     SavedReelStatus,
@@ -109,6 +111,41 @@ def promoteSavedReel(
         cand.promotedIdeaId = iid
         session.add(cand)
         idea_ids.append(iid)
+
+        # Record user-confirmed place in the join table (upsert).
+        from app.models.ideas import IdeaModel
+        idea = session.get(IdeaModel, iid)
+        place = session.get(PlaceModel, idea.placeId) if idea and idea.placeId else None
+        existing_up = session.exec(
+            select(ReelCandidateUserPlaceModel).where(
+                ReelCandidateUserPlaceModel.candidate_id == cand.id,
+                ReelCandidateUserPlaceModel.user_id == user_id,
+            )
+        ).first()
+        if existing_up:
+            existing_up.place_id = idea.placeId if idea else None
+            existing_up.place_name = place.name if place else (rc.title or None)
+            existing_up.place_address = place.address if place else (rc.placeAddress or None)
+            existing_up.latitude = place.latitude if place else None
+            existing_up.longitude = place.longitude if place else None
+            existing_up.maps_query = rc.mapsQuery
+            existing_up.source = "user"
+            existing_up.confirmed_at = datetime.utcnow()
+            session.add(existing_up)
+        else:
+            user_place = ReelCandidateUserPlaceModel(
+                candidate_id=cand.id,
+                user_id=user_id,
+                place_id=idea.placeId if idea else None,
+                place_name=place.name if place else (rc.title or None),
+                place_address=place.address if place else (rc.placeAddress or None),
+                latitude=place.latitude if place else None,
+                longitude=place.longitude if place else None,
+                maps_query=rc.mapsQuery,
+                source="user",
+            )
+            session.add(user_place)
+
         linkIdeaToPersonalAndShared(
             session,
             ideaId=iid,
