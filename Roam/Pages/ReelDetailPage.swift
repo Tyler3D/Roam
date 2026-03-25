@@ -330,6 +330,9 @@ struct ReelDetailPage: View {
                 }
                 .padding(.horizontal, 16)
             }
+
+            readOnlyDeleteReelRow()
+                .padding(.top, 12)
         }
         .padding(.vertical, 8)
     }
@@ -389,7 +392,11 @@ struct ReelDetailPage: View {
                     .frame(maxWidth: .infinity)
             }
             .padding(.top, 8)
-            .padding(.bottom, 16)
+            .padding(.bottom, 4)
+
+            readOnlyDeleteReelRow()
+                .padding(.top, 8)
+                .padding(.bottom, 16)
         }
     }
 
