@@ -57,6 +57,8 @@ struct ReelDetailPage: View {
     @State private var deleteReelError: String?
     @State private var isAttachingShared = false
     @State private var attachSharedError: String?
+    @State private var locationPickerCandidateId: UUID?
+    @State private var pickedPlaces: [UUID: PickedLocation] = [:]
 
     @Environment(\.dismiss) private var dismiss
 
@@ -136,6 +138,25 @@ struct ReelDetailPage: View {
             }
             .presentationDetents([.fraction(0.92), .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: Binding(
+            get: { locationPickerCandidateId != nil },
+            set: { if !$0 { locationPickerCandidateId = nil } }
+        )) {
+            if let candidateId = locationPickerCandidateId {
+                let candidate = detail?.candidates.first(where: { $0.id == candidateId })
+                let initialQuery = candidate?.resolvedPlaceName ?? candidate?.mapsQuery ?? candidate?.previewTitle ?? ""
+                LocationPickerSheet(
+                    initialQuery: initialQuery,
+                    initialCoordinate: nil,
+                    onConfirm: { picked in
+                        pickedPlaces[candidateId] = picked
+                        locationQueries[candidateId] = picked.name
+                    }
+                )
+                .presentationDetents([.fraction(0.85), .large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .onChange(of: newCollectionBanner?.title) { _, newVal in
             guard newVal != nil else { return }
@@ -623,7 +644,10 @@ struct ReelDetailPage: View {
 
     private func multiPlaceCandidateCard(_ d: APIClient.SavedReelDetailDTO, _ c: APIClient.ReelCandidateDetailDTO, rank: Int) -> some View {
         let checked = selectedCandidateIds.contains(c.id)
+        let picked = pickedPlaces[c.id]
+        let hasExactAddress = picked != nil || c.resolvedPlaceName != nil
         return VStack(alignment: .leading, spacing: 0) {
+            // Header row: checkbox + title + category + rank
             HStack(alignment: .center, spacing: 12) {
                 Button {
                     if checked { selectedCandidateIds.remove(c.id) }
@@ -659,14 +683,17 @@ struct ReelDetailPage: View {
                     .font(Font.system(size: 15, weight: .semibold))
                     .foregroundStyle(RoamColors.text)
 
-                    HStack(alignment: .center, spacing: 4) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 10))
-                            .foregroundStyle(RoamColors.textMuted)
-                        Text(c.cardAddressLine ?? "—")
-                            .font(Font.system(size: 12))
-                            .foregroundStyle(RoamColors.textMuted)
-                            .lineLimit(2)
+                    // "Detected in …" non-editable description
+                    if let detectedLocation = c.cardAddressLine {
+                        HStack(alignment: .center, spacing: 3) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.system(size: 9))
+                                .foregroundStyle(RoamColors.textMuted)
+                            Text("Detected in \(detectedLocation)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(RoamColors.textMuted)
+                                .lineLimit(1)
+                        }
                     }
 
                     Text(c.cardCategory.uppercased())
@@ -676,19 +703,6 @@ struct ReelDetailPage: View {
                         .padding(.vertical, 2)
                         .background(checked ? RoamColors.reviewSuccess.opacity(0.15) : RoamColors.reviewSurfaceAlt)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                    TextField(
-                        "location (maps search)",
-                        text: Binding(
-                            get: {
-                                if let q = locationQueries[c.id] { return q }
-                                return c.resolvedPlaceName ?? c.mapsQuery ?? ""
-                            },
-                            set: { locationQueries[c.id] = $0 }
-                        )
-                    )
-                    .font(RoamFont.mono(10))
-                    .textFieldStyle(.roundedBorder)
                 }
 
                 Text("#\(rank)")
@@ -697,12 +711,22 @@ struct ReelDetailPage: View {
                     .frame(width: 28)
             }
             .padding(14)
+
+            // Tappable location row
+            Button {
+                locationPickerCandidateId = c.id
+            } label: {
+                candidateLocationRow(c, picked: picked, hasExactAddress: hasExactAddress)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
         }
         .background(checked ? RoamColors.reviewSuccessBg : RoamColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(checked ? RoamColors.reviewSuccess : RoamColors.reviewBorder, lineWidth: checked ? 1.5 : 1.5)
+                .stroke(checked ? RoamColors.reviewSuccess : RoamColors.reviewBorder, lineWidth: 1.5)
         )
     }
 
@@ -710,6 +734,62 @@ struct ReelDetailPage: View {
         let n = selectedPending(d).count
         if n == 0 { return "Select places to save" }
         return "Save \(n) place\(n == 1 ? "" : "s")"
+    }
+
+    @ViewBuilder
+    private func candidateLocationRow(_ c: APIClient.ReelCandidateDetailDTO, picked: PickedLocation?, hasExactAddress: Bool) -> some View {
+        let addressText: String
+        let hintText: String
+        let accentColor: Color
+        let actionText: String
+
+        if let picked {
+            addressText = picked.address.isEmpty ? picked.name : picked.address
+            hintText = "Tap to change location"
+            accentColor = RoamColors.reviewAccent
+            actionText = "Edit"
+        } else if let resolved = c.resolvedPlaceName, !resolved.isEmpty {
+            addressText = resolved
+            hintText = "Tap to adjust location"
+            accentColor = RoamColors.reviewAccent
+            actionText = "Edit"
+        } else {
+            addressText = "No exact address found"
+            hintText = "Tap to set location manually"
+            accentColor = RoamColors.reviewPartnerPink
+            actionText = "Set"
+        }
+
+        HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(accentColor.opacity(0.08))
+                    .frame(width: 28, height: 28)
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 12))
+                    .foregroundStyle(accentColor)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(addressText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(hasExactAddress ? RoamColors.text : accentColor)
+                    .lineLimit(1)
+                Text(hintText)
+                    .font(.system(size: 10))
+                    .foregroundStyle(RoamColors.textMuted)
+            }
+            Spacer()
+            Text(actionText)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(RoamColors.reviewAccent)
+        }
+        .padding(10)
+        .background(RoamColors.background)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(hasExactAddress ? RoamColors.reviewBorder : accentColor.opacity(0.3), lineWidth: 1)
+        )
     }
 
     private func ideasSortedByReelOrder(_ d: APIClient.SavedReelDetailDTO) -> [APIClient.SavedReelIdeaSummaryDTO] {
@@ -1625,14 +1705,16 @@ struct ReelDetailPage: View {
             } else {
                 useTitle = nil
             }
+            let picked = pickedPlaces[c.id]
             let loc = locationQueries[c.id]?.trimmingCharacters(in: .whitespacesAndNewlines)
             let mapsQ: String? = (loc?.isEmpty == false) ? loc : nil
             return APIClient.ReelPromoteItem(
                 candidateId: c.id,
                 title: useTitle,
-                mapsQuery: mapsQ,
+                mapsQuery: picked == nil ? mapsQ : nil,
                 placeAddress: nil,
-                category: nil
+                category: nil,
+                placeId: picked?.placeId
             )
         }
         let sharedIds: [UUID] = {
@@ -2235,88 +2317,188 @@ private struct AddReelIdeaSheet: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
-    @State private var searchQuery = ""
-    @State private var searchResults: [APIClient.PlaceSearchRowDTO] = []
-    @State private var selectedPlaceId: UUID?
-    @State private var isSearching = false
+    @State private var notes = ""
+    @State private var pickedLocation: PickedLocation?
+    @State private var showLocationPicker = false
     @State private var isSaving = false
     @State private var error: String?
-    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("title") {
-                    TextField("idea title", text: $title)
-                        .font(RoamFont.mono(12))
-                }
-                Section("place (optional)") {
-                    TextField("search places", text: $searchQuery)
-                        .font(RoamFont.mono(11))
-                        .onChange(of: searchQuery) { _, newVal in
-                            searchTask?.cancel()
-                            let q = newVal.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard q.count >= 2 else {
-                                searchResults = []
-                                return
-                            }
-                            searchTask = Task {
-                                try? await Task.sleep(nanoseconds: 350_000_000)
-                                guard !Task.isCancelled else { return }
-                                await runSearch(q)
-                            }
-                        }
-                    if isSearching {
-                        ProgressView()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Place name
+                    fieldSection("PLACE NAME") {
+                        TextField("e.g. Joe's Pizza, Central Park…", text: $title)
+                            .font(.system(size: 15))
+                            .foregroundStyle(RoamColors.text)
+                            .padding(14)
+                            .background(RoamColors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(RoamColors.reviewBorder, lineWidth: 1.5)
+                            )
                     }
-                    ForEach(searchResults) { row in
-                        Button {
-                            selectedPlaceId = row.id
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(row.name).font(RoamFont.mono(11))
-                                    if let a = row.address, !a.isEmpty {
-                                        Text(a).font(RoamFont.mono(9)).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                if selectedPlaceId == row.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                }
-                            }
+
+                    // Location
+                    fieldSection("LOCATION") {
+                        Button { showLocationPicker = true } label: {
+                            locationTriggerRow
                         }
+                        .buttonStyle(.plain)
                     }
-                }
-                if let error {
-                    Section {
+
+                    // Notes
+                    fieldSection("NOTES (OPTIONAL)") {
+                        TextField("Why do you want to go here?", text: $notes, axis: .vertical)
+                            .font(.system(size: 14))
+                            .foregroundStyle(RoamColors.text)
+                            .lineLimit(3...6)
+                            .padding(14)
+                            .background(RoamColors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(RoamColors.reviewBorder, lineWidth: 1.5)
+                            )
+                    }
+
+                    if let error {
                         Text(error)
-                            .font(RoamFont.mono(10))
+                            .font(.system(size: 12))
                             .foregroundStyle(RoamColors.error)
                     }
+
+                    // Save button
+                    Button { Task { await save() } } label: {
+                        Group {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Save idea")
+                                    .font(.system(size: 16, weight: .bold))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(canSave ? RoamColors.reviewAccent : RoamColors.reviewBorder)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: canSave ? RoamColors.reviewAccent.opacity(0.3) : .clear, radius: 8, y: 2)
+                    }
+                    .disabled(!canSave || isSaving)
                 }
+                .padding(20)
             }
-            .navigationTitle("new idea")
+            .background(RoamColors.background)
+            .navigationTitle("add idea")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel") { dismiss() }
+                    Button("Cancel") { dismiss() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(RoamColors.reviewAccent)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("save") { Task { await save() } }
-                        .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+            }
+            .sheet(isPresented: $showLocationPicker) {
+                LocationPickerSheet(
+                    initialQuery: title,
+                    initialCoordinate: nil,
+                    onConfirm: { picked in
+                        pickedLocation = picked
+                    }
+                )
+                .presentationDetents([.fraction(0.85), .large])
+                .presentationDragIndicator(.visible)
             }
         }
     }
 
-    private func runSearch(_ q: String) async {
-        isSearching = true
-        defer { isSearching = false }
-        do {
-            searchResults = try await apiClient.searchPlacesList(query: q, limit: 8)
-        } catch {
-            searchResults = []
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder
+    private var locationTriggerRow: some View {
+        if let loc = pickedLocation {
+            // Location set
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(RoamColors.reviewSuccess.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 14))
+                        .foregroundStyle(RoamColors.reviewSuccess)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(loc.address.isEmpty ? loc.name : loc.address)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(RoamColors.text)
+                        .lineLimit(1)
+                    if !loc.address.isEmpty {
+                        Text(loc.name)
+                            .font(.system(size: 11))
+                            .foregroundStyle(RoamColors.textMuted)
+                    }
+                }
+                Spacer()
+                Text("Change")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(RoamColors.reviewAccent)
+            }
+            .padding(14)
+            .background(RoamColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(RoamColors.reviewSuccess, lineWidth: 1.5)
+            )
+        } else {
+            // No location yet
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(RoamColors.reviewAccent.opacity(0.08))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 14))
+                        .foregroundStyle(RoamColors.reviewAccent)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Search or drop a pin")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(RoamColors.textMuted)
+                    Text("Find the address or place on the map")
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.textMuted.opacity(0.7))
+                }
+                Spacer()
+                Text("Add →")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(RoamColors.reviewAccent)
+            }
+            .padding(14)
+            .background(RoamColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    .foregroundStyle(RoamColors.reviewBorder)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func fieldSection<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(RoamFont.mono(10, weight: .semibold))
+                .foregroundStyle(RoamColors.textMuted)
+                .tracking(0.8)
+            content()
         }
     }
 
@@ -2330,8 +2512,8 @@ private struct AddReelIdeaSheet: View {
             _ = try await apiClient.createIdeaOnReel(
                 reelId: reelId,
                 title: t,
-                notes: "",
-                placeId: selectedPlaceId
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                placeId: pickedLocation?.placeId
             )
             dismiss()
             onDone()

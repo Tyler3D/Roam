@@ -104,6 +104,7 @@ def promoteSavedReel(
             candidate=rc,
             raw_output=raw_out,
             saved_reel_id=saved.id,
+            override_place_id=item.placeId,
         )
         cand.promotedIdeaId = iid
         session.add(cand)

@@ -322,8 +322,13 @@ def createIdeaPipelineFromCandidate(
     candidate: ReelCandidate,
     raw_output: dict,
     saved_reel_id: UUID | None = None,
+    override_place_id: UUID | None = None,
 ) -> UUID:
-    """Create idea + pipeline_result + optional place suggestion; return new idea id."""
+    """Create idea + pipeline_result + optional place suggestion; return new idea id.
+
+    When *override_place_id* is provided the place is attached directly and
+    Google Maps resolution is skipped (the user already chose a place on the client).
+    """
     candidate = _candidate_with_normalized_category(candidate)
     estimated_minutes = 90
     prompt_version = getReelPromptVersion()
@@ -358,7 +363,22 @@ def createIdeaPipelineFromCandidate(
     session.flush()
 
     suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
-    if _shouldResolveMaps(candidate):
+
+    if override_place_id:
+        # User explicitly selected a place on the client — skip Maps resolution.
+        from app.models.places import PlaceModel
+        place = session.get(PlaceModel, override_place_id)
+        if place:
+            sugg = PlaceSuggestionModel(
+                resultId=pr.id,
+                placeId=place.id,
+                rawName=candidate.title or idea_title,
+                confidence=1.0,
+            )
+            session.add(sugg)
+            session.flush()
+            suggestions.append((sugg, 1.0))
+    elif _shouldResolveMaps(candidate):
         query_key = (candidate.mapsQuery or candidate.title or "").strip()
         if query_key:
             resolved = _resolveGoogleMaps(query_key, candidate.placeAddress) or {}

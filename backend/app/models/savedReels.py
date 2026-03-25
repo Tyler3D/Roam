@@ -110,6 +110,7 @@ class ReelPromotionItem(SQLModel):
     mapsQuery: Optional[str] = None
     placeAddress: Optional[str] = None
     category: Optional[str] = None
+    placeId: Optional[UUID] = None
 
 
 class PromoteReelRequest(SQLModel):

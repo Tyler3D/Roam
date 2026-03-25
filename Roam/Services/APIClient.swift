@@ -506,6 +506,9 @@ final class APIClient {
         let id: UUID
         let name: String
         let address: String?
+        let latitude: Double?
+        let longitude: Double?
+        let city: String?
     }
 
     struct SavedReelDetailDTO: Decodable {
@@ -558,6 +561,7 @@ final class APIClient {
         let mapsQuery: String?
         let placeAddress: String?
         let category: String?
+        let placeId: UUID?
     }
 
     private struct PromoteReelBodyEnc: Encodable {
