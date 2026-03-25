@@ -53,6 +53,24 @@ def promoteSavedReel(
         if cand.promotedIdeaId:
             continue
 
+        existing_up = session.exec(
+            select(ReelCandidateUserPlaceModel).where(
+                ReelCandidateUserPlaceModel.candidate_id == cand.id,
+                ReelCandidateUserPlaceModel.user_id == user_id,
+            )
+        ).first()
+        patch_snapshot = (
+            (
+                existing_up.place_name,
+                existing_up.place_address,
+                existing_up.latitude,
+                existing_up.longitude,
+                existing_up.maps_query,
+            )
+            if existing_up
+            else None
+        )
+
         raw = dict(cand.llmRawOutput or {})
         meta = raw.get("metadata") or {}
         reel_url = meta.get("reelUrl")
@@ -66,11 +84,20 @@ def promoteSavedReel(
             hint = meta.get("reelTitle") or meta.get("shareText") or saved.title or "Saved reel"
             ref = _refinedTitle(parsed, hint, [])
             title = (item.title or ref or hint)[:500]
+            syn_mq = item.mapsQuery
+            syn_pa = item.placeAddress
+            if existing_up:
+                if not (syn_mq or "").strip() and (existing_up.maps_query or "").strip():
+                    syn_mq = existing_up.maps_query
+                elif not (syn_mq or "").strip() and (existing_up.place_name or "").strip():
+                    syn_mq = existing_up.place_name
+                if not (syn_pa or "").strip() and (existing_up.place_address or "").strip():
+                    syn_pa = existing_up.place_address
             rc = ReelCandidate(
                 kind="experience",
                 title=title,
-                mapsQuery=item.mapsQuery,
-                placeAddress=item.placeAddress,
+                mapsQuery=syn_mq,
+                placeAddress=syn_pa,
                 category=normalize_category(item.category or "other")[:200],
                 tags=[],
                 confidence=0.5,
@@ -91,6 +118,19 @@ def promoteSavedReel(
                 rc = rc.model_copy(update={"placeAddress": item.placeAddress})
             if item.category is not None:
                 rc = rc.model_copy(update={"category": normalize_category(item.category)})
+            # Promote body may omit fields; reuse PATCH /place row so Maps resolves the user's pick, not the stale LLM row.
+            if existing_up:
+                mq = (rc.mapsQuery or "").strip()
+                pa = (rc.placeAddress or "").strip()
+                umq = (existing_up.maps_query or "").strip()
+                uaddr = (existing_up.place_address or "").strip()
+                uname = (existing_up.place_name or "").strip()
+                if not mq and umq:
+                    rc = rc.model_copy(update={"mapsQuery": existing_up.maps_query})
+                elif not mq and uname:
+                    rc = rc.model_copy(update={"mapsQuery": existing_up.place_name})
+                if not pa and uaddr:
+                    rc = rc.model_copy(update={"placeAddress": existing_up.place_address})
             raw_out = {
                 "candidate": rc.model_dump(),
                 "fullStructured": raw.get("fullStructured"),
@@ -116,19 +156,28 @@ def promoteSavedReel(
         from app.models.ideas import IdeaModel
         idea = session.get(IdeaModel, iid)
         place = session.get(PlaceModel, idea.placeId) if idea and idea.placeId else None
-        existing_up = session.exec(
-            select(ReelCandidateUserPlaceModel).where(
-                ReelCandidateUserPlaceModel.candidate_id == cand.id,
-                ReelCandidateUserPlaceModel.user_id == user_id,
-            )
-        ).first()
         if existing_up:
             existing_up.place_id = idea.placeId if idea else None
-            existing_up.place_name = place.name if place else (rc.title or None)
-            existing_up.place_address = place.address if place else (rc.placeAddress or None)
-            existing_up.latitude = place.latitude if place else None
-            existing_up.longitude = place.longitude if place else None
-            existing_up.maps_query = rc.mapsQuery
+            pn, pa, plat, plng, pmq = patch_snapshot  # set together with existing_up above
+            has_user_patch = (
+                plat is not None
+                or plng is not None
+                or (pa or "").strip()
+                or (pmq or "").strip()
+                or (pn or "").strip()
+            )
+            if has_user_patch:
+                existing_up.place_name = pn
+                existing_up.place_address = pa
+                existing_up.latitude = plat
+                existing_up.longitude = plng
+                existing_up.maps_query = pmq
+            else:
+                existing_up.place_name = place.name if place else (rc.title or None)
+                existing_up.place_address = place.address if place else (rc.placeAddress or None)
+                existing_up.latitude = place.latitude if place else None
+                existing_up.longitude = place.longitude if place else None
+                existing_up.maps_query = rc.mapsQuery
             existing_up.source = "user"
             existing_up.confirmed_at = datetime.utcnow()
             session.add(existing_up)

@@ -1731,12 +1731,29 @@ struct ReelDetailPage: View {
             }
             let picked = pickedPlaces[c.id]
             let loc = locationQueries[c.id]?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let mapsQ: String? = (loc?.isEmpty == false) ? loc : nil
+            let mapsFromLoc: String? = (loc?.isEmpty == false) ? loc : nil
+            // Backend resolves the idea place from mapsQuery + placeAddress; PickedLocation.placeId is usually nil (Google-only flow).
+            let promoteMapsQuery: String? = {
+                if let picked {
+                    let n = picked.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !n.isEmpty { return picked.name }
+                }
+                if let mq = c.mapsQuery?.trimmingCharacters(in: .whitespacesAndNewlines), !mq.isEmpty { return c.mapsQuery }
+                return mapsFromLoc
+            }()
+            let promotePlaceAddress: String? = {
+                if let picked {
+                    let a = picked.address.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !a.isEmpty { return picked.address }
+                }
+                if let a = c.placeAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !a.isEmpty { return c.placeAddress }
+                return nil
+            }()
             return APIClient.ReelPromoteItem(
                 candidateId: c.id,
                 title: useTitle,
-                mapsQuery: picked == nil ? mapsQ : nil,
-                placeAddress: nil,
+                mapsQuery: promoteMapsQuery,
+                placeAddress: promotePlaceAddress,
                 category: nil,
                 placeId: picked?.placeId
             )
