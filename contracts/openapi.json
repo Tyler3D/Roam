@@ -4478,6 +4478,18 @@
               }
             ],
             "title": "Category"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
           }
         },
         "type": "object",

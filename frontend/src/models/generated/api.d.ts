@@ -1639,6 +1639,8 @@ export interface components {
             placeAddress?: string | null;
             /** Category */
             category?: string | null;
+            /** Placeid */
+            placeId?: string | null;
         };
         /** ReelsSummaryRead */
         ReelsSummaryRead: {

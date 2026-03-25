@@ -3818,6 +3818,12 @@
             "type": "string",
             "nullable": true,
             "title": "Category"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Placeid"
           }
         },
         "type": "object",
