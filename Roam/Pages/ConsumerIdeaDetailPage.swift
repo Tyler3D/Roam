@@ -625,6 +625,8 @@ private struct IdeaHeroPhotoStrip: View {
     let latitude: Double?
     let longitude: Double?
 
+    @State private var isFetchingHero = false
+
     var body: some View {
         ZStack {
             if let image {
@@ -641,13 +643,19 @@ private struct IdeaHeroPhotoStrip: View {
                     endPoint: .bottomTrailing
                 )
                 .overlay {
-                    VStack(spacing: 4) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.black.opacity(0.22))
-                        Text("Photo from Google Maps")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.black.opacity(0.25))
+                    if isFetchingHero {
+                        ProgressView()
+                            .tint(RoamColors.reviewAccent)
+                            .scaleEffect(1.15)
+                    } else {
+                        VStack(spacing: 4) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.black.opacity(0.22))
+                            Text("Photo from Google Maps")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.black.opacity(0.25))
+                        }
                     }
                 }
             }
@@ -655,17 +663,31 @@ private struct IdeaHeroPhotoStrip: View {
         .frame(height: 160)
         .clipped()
         .task(id: loadKey) {
-            image = nil
+            await MainActor.run { image = nil }
             let gid = googlePlaceId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !gid.isEmpty || !trimmed.isEmpty else { return }
-            let loaded = await GooglePlacePhotoService.fetchPlaceHeroUIImage(
+            guard !gid.isEmpty || !trimmed.isEmpty else {
+                await MainActor.run { isFetchingHero = false }
+                return
+            }
+
+            await MainActor.run { isFetchingHero = true }
+            var loaded = await GooglePlacesHeroPhotoService.fetchPlaceHeroUIImage(
                 googlePlaceId: gid.isEmpty ? nil : gid,
                 searchQuery: trimmed,
                 latitude: latitude,
                 longitude: longitude
             )
+            if loaded == nil {
+                loaded = await GooglePlacePhotoService.fetchPlaceHeroUIImage(
+                    googlePlaceId: gid.isEmpty ? nil : gid,
+                    searchQuery: trimmed,
+                    latitude: latitude,
+                    longitude: longitude
+                )
+            }
             await MainActor.run {
+                isFetchingHero = false
                 image = loaded
             }
         }

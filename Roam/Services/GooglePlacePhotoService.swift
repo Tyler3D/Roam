@@ -2,10 +2,10 @@ import Foundation
 import os.log
 import UIKit
 
-/// Loads a venue photo via Google **Places API (legacy)** HTTP endpoints using `GOOGLE_MAPS_IOS_API_KEY`.
+/// Fallback: loads a venue photo via **Places API (legacy)** HTTP + `URLSession` (often fails with iOS-restricted keys).
+/// Prefer **`GooglePlacesHeroPhotoService`** (Places SDK New). Used when the SDK path returns no image.
 ///
-/// Flow: **Place Details** (when Roam exposes `googlePlaceId`) → **Find Place** → **Text Search**,
-/// because Find Place often omits `photos` until you call Details.
+/// Flow: **Place Details** (when `googlePlaceId` is set) → **Find Place** → **Text Search**.
 enum GooglePlacePhotoService {
     private static let log = Logger(subsystem: "Roam", category: "GooglePlacePhoto")
 

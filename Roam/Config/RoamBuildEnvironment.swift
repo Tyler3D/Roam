@@ -8,7 +8,7 @@ import Foundation
 /// | `VITE_ENVIRONMENT` (`dev` / `prod`) | `AppConfig.networkEnv` (default **production** for new installs) |
 /// | `VITE_FIREBASE_*` | **`GoogleService-Info.plist`** at repo root (Xcode target **Resources**). Download from Firebase Console → Project settings → Your apps → iOS. |
 /// | `VITE_TRUSTED_AUTH_PROVIDERS` | **`ROAM_TRUSTED_AUTH_PROVIDERS`** in `Roam/Info.plist` (comma-separated Firebase `providerID`s, e.g. `google.com,password`) |
-/// | `VITE_GOOGLE_MAPS_API_KEY` | **`GOOGLE_MAPS_IOS_API_KEY`** in `Roam/Info.plist` (Maps SDK for iOS + **Places API (legacy)** HTTP for idea hero photos; restrict key to iOS bundle id and enable Find Place + Place Photo in Cloud Console).
+/// | `VITE_GOOGLE_MAPS_API_KEY` | **`GOOGLE_MAPS_IOS_API_KEY`** in `Roam/Info.plist` (Maps SDK + **Places SDK (New)** for idea hero photos; enable **Places API (New)** for the iOS key). Legacy Places `URLSession` calls remain a fallback only (`GooglePlacePhotoService`).
 ///
 /// **Google Sign-In URL scheme:** After replacing `GoogleService-Info.plist`, copy **`REVERSED_CLIENT_ID`** into
 /// `Roam/Info.plist` → `CFBundleURLTypes` → `CFBundleURLSchemes` so OAuth can return to the app.
