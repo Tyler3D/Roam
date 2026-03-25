@@ -56,9 +56,8 @@ struct CollectionMapExplorerView: View {
             locationAuth.requestWhenInUseIfNeeded()
             fitCamera(to: filteredPins.map(\.1))
         }
-        .onChange(of: sheetExpanded) { _, _ in
-            mapFitToken += 1
-        }
+        // Note: sheetExpanded changes update mapInsets reactively via sheetCardHeight
+        // in mapStack, so no manual camera re-fit is needed here.
     }
 
     // MARK: - Collection chips
