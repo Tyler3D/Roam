@@ -709,7 +709,7 @@ struct ReelDetailPage: View {
                     .foregroundStyle(RoamColors.text)
 
                     // "Detected in …" non-editable LLM description
-                    if let detectedLocation = c.detectedInLabel {
+                    if let detectedLocation = c.detectedInDisplayText {
                         HStack(alignment: .center, spacing: 3) {
                             Image(systemName: "mappin.and.ellipse")
                                 .font(.system(size: 9))

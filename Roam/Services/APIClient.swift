@@ -476,7 +476,8 @@ final class APIClient {
         let previewDescription: String?
         let category: String?
         let placeAddress: String?
-        let llmPlaceDescription: String?
+        /// LLM vague location, else pipeline place address/name; not affected by user location edits.
+        let detectedInLabel: String?
         let mapsQuery: String?
         let confidence: Double?
         let placeLatitude: Double?
@@ -496,13 +497,10 @@ final class APIClient {
             let m = (mapsQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return m.isEmpty ? nil : m
         }
-        /// LLM's natural language location description ("NYC, near Koreatown") for "Detected in..." text.
-        var detectedInLabel: String? {
-            let d = (llmPlaceDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !d.isEmpty { return d }
-            // Fall back to resolved place name if LLM didn't provide one.
-            let r = (resolvedPlaceName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return r.isEmpty ? nil : r
+        /// Non-empty trimmed string for "Detected in …", or nil to hide the line.
+        var detectedInDisplayText: String? {
+            let t = (detectedInLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
         }
     }
 

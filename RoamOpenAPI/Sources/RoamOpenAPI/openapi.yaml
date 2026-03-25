@@ -3937,10 +3937,11 @@
             "nullable": true,
             "title": "Placeaddress"
           },
-          "llmPlaceDescription": {
+          "detectedInLabel": {
             "type": "string",
             "nullable": true,
-            "title": "Llmplacedescription"
+            "title": "Detectedinlabel",
+            "description": "LLM vague location if present, else pipeline place address/name; unchanged by user location edits."
           },
           "mapsQuery": {
             "type": "string",

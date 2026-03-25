@@ -62,6 +62,17 @@ class ReelInterpretOutput(BaseModel):
     candidates: list[ReelCandidate] = Field(default_factory=list)
 
 
+def _llmDetectedInLabelFromCandidate(c: ReelCandidate) -> str | None:
+    """Stable vague location for UI; prefer LLM placeAddress, else mapsQuery."""
+    pa = (c.placeAddress or "").strip()
+    if pa:
+        return pa[:500]
+    mq = (c.mapsQuery or "").strip()
+    if mq:
+        return mq[:500]
+    return None
+
+
 class ProviderRateLimitError(Exception):
     """OpenAI or Google Maps returned 429 / rate limit; job should fail with clear message."""
 
@@ -562,6 +573,7 @@ def processIngestionJob(
                             savedReelId=saved.id,
                             sortIndex=idx,
                             llmRawOutput=llm_raw,
+                            llmDetectedInLabel=_llmDetectedInLabelFromCandidate(c),
                             resolvedPlaceId=rp,
                         )
                     )

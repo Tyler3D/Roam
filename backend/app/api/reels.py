@@ -242,6 +242,7 @@ def getReel(
         resolvedAddr = None
         placeLat = None
         placeLng = None
+        pipeline_detected_in_label: str | None = None
         if c.resolvedPlaceId:
             pl = session.get(PlaceModel, c.resolvedPlaceId)
             if pl:
@@ -249,6 +250,12 @@ def getReel(
                 resolvedAddr = pl.address
                 placeLat = pl.latitude
                 placeLng = pl.longitude
+                paddr = (pl.address or "").strip()
+                pname = (pl.name or "").strip()
+                if paddr:
+                    pipeline_detected_in_label = paddr[:500]
+                elif pname:
+                    pipeline_detected_in_label = pname[:500]
 
         # --- User-confirmed place (takes priority) ---
         up = user_places.get(c.id)
@@ -291,16 +298,29 @@ def getReel(
             maps_q = candPayload.get("mapsQuery") if isinstance(candPayload, dict) else None
             conf = _candidate_payload_confidence(candPayload)
 
-        # User-confirmed address/mapsQuery override LLM-extracted values too.
+        # LLM-only vague line (column, then JSON); never user overrides.
+        llm_vague: str | None = None
+        stored = (c.llmDetectedInLabel or "").strip() if c.llmDetectedInLabel else ""
+        if stored:
+            llm_vague = stored[:500]
+        elif not isSynthetic:
+            pa = (str(place_addr).strip() if place_addr is not None else "") or ""
+            mq = (str(maps_q).strip() if maps_q is not None else "") or ""
+            if pa:
+                llm_vague = pa
+            elif mq:
+                llm_vague = mq
+
+        detected_in_label = llm_vague or pipeline_detected_in_label
+
+        # User-confirmed address/mapsQuery override pipeline/LLM for the resolved row + search.
         if up:
             if up.place_address:
                 place_addr = up.place_address
             if up.maps_query:
                 maps_q = up.maps_query
 
-        # placeAddress = precise Google Maps address (user-confirmed > resolved).
-        # llmPlaceDescription = LLM's natural language location ("NYC, near Koreatown").
-        llm_place_desc = place_addr  # raw LLM value before overrides
+        # placeAddress = precise Google Maps address (user-confirmed > pipeline resolved).
         final_address = resolvedAddr  # Google Maps resolved address
         if up and up.place_address:
             final_address = up.place_address
@@ -319,7 +339,7 @@ def getReel(
                 previewDescription=preview_desc[:2000] if preview_desc else "",
                 category=(category or "")[:200],
                 placeAddress=final_address,
-                llmPlaceDescription=llm_place_desc,
+                detectedInLabel=detected_in_label,
                 mapsQuery=maps_q,
                 confidence=conf,
                 placeLatitude=placeLat,

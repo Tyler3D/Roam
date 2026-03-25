@@ -367,13 +367,14 @@ BEGIN
 END $$;
 
 CREATE TABLE IF NOT EXISTS "reel_ingest_candidates" (
-  "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "savedReelId"      uuid NOT NULL REFERENCES "saved_reels"("id") ON DELETE CASCADE,
-  "sortIndex"        integer NOT NULL DEFAULT 0,
-  "llmRawOutput"     jsonb NOT NULL DEFAULT '{}',
-  "resolvedPlaceId"  uuid REFERENCES "places"("id") ON DELETE SET NULL,
-  "promotedIdeaId"   uuid REFERENCES "ideas"("id") ON DELETE SET NULL,
-  "createdAt"        timestamptz NOT NULL DEFAULT now()
+  "id"                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "savedReelId"        uuid NOT NULL REFERENCES "saved_reels"("id") ON DELETE CASCADE,
+  "sortIndex"          integer NOT NULL DEFAULT 0,
+  "llmRawOutput"       jsonb NOT NULL DEFAULT '{}',
+  "llmDetectedInLabel" text,
+  "resolvedPlaceId"    uuid REFERENCES "places"("id") ON DELETE SET NULL,
+  "promotedIdeaId"     uuid REFERENCES "ideas"("id") ON DELETE SET NULL,
+  "createdAt"          timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS "idx_reel_ingest_candidates_savedReelId_sort"

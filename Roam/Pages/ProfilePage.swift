@@ -526,7 +526,7 @@ struct ProfilePage: View {
 }
 
 struct AccountSettingsPlaceholderPage: View {
-    @EnvironmentObject private var apiClient: APIClient
+    @Environment(\.apiClient) private var apiClient
 
     @State private var autoPromoteEnabled: Bool = true
     @State private var isLoading = true

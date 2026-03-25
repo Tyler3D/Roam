@@ -4,7 +4,7 @@ from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlmodel import Column, Field, SQLModel, UniqueConstraint
-from sqlalchemy import CheckConstraint, Enum as SAEnum
+from sqlalchemy import CheckConstraint, Enum as SAEnum, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.ideas import IdeaStatus
@@ -46,6 +46,11 @@ class ReelIngestCandidateModel(SQLModel, table=True):
     savedReelId: UUID = Field(foreign_key="saved_reels.id", nullable=False, index=True)
     sortIndex: int = Field(default=0)
     llmRawOutput: dict[str, Any] = Field(default_factory=dict, sa_column=Column("llmRawOutput", JSONB))
+    # Vague LLM location ("Brooklyn NY"); set at ingest, never overwritten by user place edits.
+    llmDetectedInLabel: Optional[str] = Field(
+        default=None,
+        sa_column=Column("llmDetectedInLabel", String(500), nullable=True),
+    )
     resolvedPlaceId: Optional[UUID] = Field(default=None, foreign_key="places.id")
     promotedIdeaId: Optional[UUID] = Field(default=None, foreign_key="ideas.id")
     createdAt: datetime = Field(default_factory=datetime.utcnow)
@@ -104,7 +109,8 @@ class ReelIngestCandidateRead(SQLModel):
     previewDescription: str = ""
     category: str = ""
     placeAddress: Optional[str] = None
-    llmPlaceDescription: Optional[str] = None
+    # LLM vague text, else pipeline place address/name; never user override (UI "Detected in …").
+    detectedInLabel: Optional[str] = None
     mapsQuery: Optional[str] = None
     confidence: Optional[float] = None
     placeLatitude: Optional[float] = None

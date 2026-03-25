@@ -208,6 +208,7 @@ erDiagram
         uuid savedReelId FK
         int sortIndex
         jsonb llmRawOutput
+        text llmDetectedInLabel "nullable; vague LLM location"
         uuid resolvedPlaceId FK "nullable"
         uuid promotedIdeaId FK "nullable"
         timestamptz createdAt
@@ -341,6 +342,7 @@ erDiagram
 - **`reel_ingest_candidates.sortIndex`** — Ordering among candidates for a reel: **highest model confidence first** (`0` = top). Synthetic “no candidates above threshold” rows use a single row at `0`.
 - **`reel_ingest_candidates.savedReelId`** — Candidates are tied to the **user-facing saved reel** (the grid tile), not directly to `reel_ingestion_jobs`. The job remains on `saved_reels.jobId` for the worker and `pipeline_results.jobId`.
 - **`reel_ingest_candidates.llmRawOutput`** — JSON from the vision step: e.g. `candidate`, `fullStructured`, `metadata`, and flags like `synthetic` / `branch` — the raw input for user review and promote.
+- **`reel_ingest_candidates.llmDetectedInLabel`** — Short vague location from the LLM (`placeAddress` or `mapsQuery`), set at ingest and **not** overwritten when the user picks a different place. The reel detail API exposes **`detectedInLabel`**: that string when present, otherwise the **pipeline** place address (or name), never the user’s overridden location.
 
 ### Unique constraints (indexes)
 
