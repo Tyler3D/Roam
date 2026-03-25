@@ -589,30 +589,34 @@ struct CollectionMapExplorerView: View {
                         let q = pin.pinTitle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                         if let url = URL(string: "http://maps.apple.com/?ll=\(lat),\(lng)&q=\(q)") {
                             Link(destination: url) {
-                                Text("Open in Maps")
+                                Label("Open in Maps", systemImage: "paperplane.fill")
                                     .font(.system(size: 13, weight: .semibold))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
-                                    .background(RoamMapChrome.bg)
+                                    .foregroundStyle(.white)
+                                    .background(RoamColors.reviewAccent)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(RoamMapChrome.border, lineWidth: 1.5))
-                                    .foregroundStyle(RoamMapChrome.text)
+                                    .shadow(color: RoamColors.reviewAccent.opacity(0.28), radius: 8, y: 2)
                             }
                         }
                     }
-                    NavigationLink {
-                        IdeaDetailPage(ideaId: pin.id.uuidString.lowercased())
-                    } label: {
-                        Text("Plan this →")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(RoamMapChrome.accent)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: RoamMapChrome.accent.opacity(0.25), radius: 8, x: 0, y: 2)
+                    if let shareURL = googleMapsShareURL(for: pin) {
+                        ShareLink(
+                            item: shareURL,
+                            subject: Text(pin.pinTitle),
+                            message: Text(pin.placeAddress ?? pin.pinTitle)
+                        ) {
+                            Label("Share", systemImage: "link")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(RoamMapChrome.text)
+                        .background(RoamMapChrome.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(RoamMapChrome.border, lineWidth: 1.5))
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.top, 16)
                 .padding(.bottom, 28)
@@ -625,6 +629,33 @@ struct CollectionMapExplorerView: View {
         }
         .transition(.opacity)
         .zIndex(20)
+    }
+
+    // MARK: - Share
+
+    private func googleMapsShareURL(for pin: APIClient.CollectionMapPinDTO) -> URL? {
+        var components = URLComponents(string: "https://www.google.com/maps/search/")
+        let queryValue: String
+        if let lat = pin.placeLatitude, let lng = pin.placeLongitude {
+            queryValue = "\(lat),\(lng)"
+        } else {
+            let title = pin.pinTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            let addr = pin.placeAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !addr.isEmpty, !title.isEmpty {
+                queryValue = "\(title) \(addr)"
+            } else if !addr.isEmpty {
+                queryValue = addr
+            } else if !title.isEmpty {
+                queryValue = title
+            } else {
+                return nil
+            }
+        }
+        components?.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: queryValue),
+        ]
+        return components?.url
     }
 
     // MARK: - Camera
