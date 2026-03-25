@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 import UIKit
 
@@ -146,9 +147,15 @@ struct ReelDetailPage: View {
             if let candidateId = locationPickerCandidateId {
                 let candidate = detail?.candidates.first(where: { $0.id == candidateId })
                 let initialQuery = candidate?.resolvedPlaceName ?? candidate?.mapsQuery ?? candidate?.previewTitle ?? ""
+                let initialCoord: CLLocationCoordinate2D? = {
+                    if let lat = candidate?.placeLatitude, let lng = candidate?.placeLongitude {
+                        return CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                    }
+                    return nil
+                }()
                 LocationPickerSheet(
                     initialQuery: initialQuery,
-                    initialCoordinate: nil,
+                    initialCoordinate: initialCoord,
                     onConfirm: { picked in
                         pickedPlaces[candidateId] = picked
                         locationQueries[candidateId] = picked.name
@@ -747,8 +754,8 @@ struct ReelDetailPage: View {
             hintText = "Tap to change location"
             accentColor = RoamColors.reviewAccent
             actionText = "Edit"
-        } else if let resolved = c.resolvedPlaceName, !resolved.isEmpty {
-            addressText = resolved
+        } else if let addr = c.placeAddress, !addr.isEmpty {
+            addressText = addr
             hintText = "Tap to adjust location"
             accentColor = RoamColors.reviewAccent
             actionText = "Edit"

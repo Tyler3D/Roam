@@ -3781,6 +3781,16 @@
             "type": "number",
             "nullable": true,
             "title": "Confidence"
+          },
+          "placeLatitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelatitude"
+          },
+          "placeLongitude": {
+            "type": "number",
+            "nullable": true,
+            "title": "Placelongitude"
           }
         },
         "type": "object",

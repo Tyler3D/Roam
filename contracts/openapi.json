@@ -4417,6 +4417,28 @@
               }
             ],
             "title": "Confidence"
+          },
+          "placeLatitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placelatitude"
+          },
+          "placeLongitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placelongitude"
           }
         },
         "type": "object",

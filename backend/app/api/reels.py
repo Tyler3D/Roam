@@ -222,10 +222,14 @@ def getReel(
     candReads: list[ReelIngestCandidateRead] = []
     for c in cands:
         resolvedName = None
+        placeLat = None
+        placeLng = None
         if c.resolvedPlaceId:
             pl = session.get(PlaceModel, c.resolvedPlaceId)
             if pl:
                 resolvedName = pl.name
+                placeLat = pl.latitude
+                placeLng = pl.longitude
         raw = c.llmRawOutput or {}
         isSynthetic = bool(raw.get("synthetic"))
         if isSynthetic:
@@ -270,6 +274,8 @@ def getReel(
                 placeAddress=place_addr,
                 mapsQuery=maps_q,
                 confidence=conf,
+                placeLatitude=placeLat,
+                placeLongitude=placeLng,
             )
         )
 

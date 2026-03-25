@@ -478,6 +478,8 @@ final class APIClient {
         let placeAddress: String?
         let mapsQuery: String?
         let confidence: Double?
+        let placeLatitude: Double?
+        let placeLongitude: Double?
 
         var cardDescription: String { (previewDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
         var cardCategory: String {

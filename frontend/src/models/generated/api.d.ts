@@ -1623,6 +1623,10 @@ export interface components {
             mapsQuery?: string | null;
             /** Confidence */
             confidence?: number | null;
+            /** Placelatitude */
+            placeLatitude?: number | null;
+            /** Placelongitude */
+            placeLongitude?: number | null;
         };
         /** ReelPromotionItem */
         ReelPromotionItem: {

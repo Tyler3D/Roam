@@ -85,6 +85,8 @@ class ReelIngestCandidateRead(SQLModel):
     placeAddress: Optional[str] = None
     mapsQuery: Optional[str] = None
     confidence: Optional[float] = None
+    placeLatitude: Optional[float] = None
+    placeLongitude: Optional[float] = None
 
 
 class SavedReelDetailRead(SQLModel):
