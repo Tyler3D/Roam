@@ -736,7 +736,6 @@ struct ReelDetailPage: View {
         return "Save \(n) place\(n == 1 ? "" : "s")"
     }
 
-    @ViewBuilder
     private func candidateLocationRow(_ c: APIClient.ReelCandidateDetailDTO, picked: PickedLocation?, hasExactAddress: Bool) -> some View {
         let addressText: String
         let hintText: String
@@ -760,7 +759,7 @@ struct ReelDetailPage: View {
             actionText = "Set"
         }
 
-        HStack(spacing: 8) {
+        return HStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(accentColor.opacity(0.08))
