@@ -19,8 +19,8 @@ def getFirebaseServiceAccountJson() -> str:
 
 def IS_DEV() -> bool:
     environment = getEnv("ENVIRONMENT")
-    if environment not in {"dev", "prod"}:
-        raise RuntimeError("ENVIRONMENT must be 'dev' or 'prod'.")
+    if environment not in {"dev", "staging", "prod"}:
+        raise RuntimeError("ENVIRONMENT must be 'dev', 'staging', or 'prod'.")
     return environment == "dev"
 
 
@@ -33,6 +33,10 @@ def getCorsAllowOrigins() -> list[str]:
             "http://localhost:5173",
             "http://127.0.0.1:5173",
         ]
+    # In prod/staging, honour CORS_ORIGINS env var if set; otherwise use defaults.
+    custom = os.getenv("CORS_ORIGINS")
+    if custom:
+        return [o.strip() for o in custom.split(",") if o.strip()]
     return ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
 
 def getTrustedAuthProviders() -> set[str]:

@@ -1,20 +1,20 @@
-# Deploy Roam API to Cloud Run STAGING on push to staging branch.
+# Deploy Roam API to Cloud Run PRODUCTION on push to main.
+# Merging to main requires a PR, 1 approval, and the verify check to pass.
 # Required GitHub secrets: GCP_SA_KEY, GCP_PROJECT_ID
-# Staging secrets in GCP Secret Manager use a -staging suffix.
-name: Deploy Backend to Staging
+name: Deploy Backend to Production
 
 on:
   push:
-    branches: [staging]
+    branches: [main]
     paths:
       - "backend/**"
-      - ".github/workflows/deploy-backend.yml"
+      - ".github/workflows/deploy-backend-prod.yml"
 
 env:
   REGION: us-east1
 
 jobs:
-  deploy-staging:
+  deploy-production:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,26 +35,26 @@ jobs:
         env:
           IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }}
         run: |
-          docker build -f backend/Dockerfile -t $IMAGE -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:staging backend/
+          docker build -f backend/Dockerfile -t $IMAGE -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:latest backend/
 
       - name: Push image
         run: |
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }}
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:staging
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:latest
 
-      - name: Deploy to Cloud Run (staging)
+      - name: Deploy to Cloud Run (production)
         run: |
-          gcloud run deploy roam-api-staging \
+          gcloud run deploy roam-api \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/roam/backend:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --update-env-vars "ENVIRONMENT=staging,GCS_REEL_BUCKET_NAME=roam-reel-ingestion-staging" \
+            --update-env-vars "ENVIRONMENT=prod,GCS_REEL_BUCKET_NAME=roam-reel-ingestion" \
             --update-secrets "\
-          FIREBASE_SERVICE_ACCOUNT_JSON=firebase-service-account-staging:latest,\
-          GCS_SERVICE_ACCOUNT_JSON=gcs-storage-service-staging:latest,\
-          DATABASE_URL=database-url-staging:latest,\
-          GEMINI_API_KEY=gemini-api-key-staging:latest,\
+          FIREBASE_SERVICE_ACCOUNT_JSON=firebase-service-account:latest,\
+          GCS_SERVICE_ACCOUNT_JSON=gcs-storage-service:latest,\
+          DATABASE_URL=database-url:latest,\
+          GEMINI_API_KEY=gemini-api-key:latest,\
           GOOGLE_MAPS_API_KEY=google-maps-api-key:latest,\
           GOOGLE_CLIENT_ID=google-client-id:latest,\
           GOOGLE_CLIENT_SECRET=google-client-secret:latest"

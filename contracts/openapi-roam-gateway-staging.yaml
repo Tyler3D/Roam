@@ -1,0 +1,123 @@
+# Staging API Gateway -> Cloud Run (roam-api-staging).
+# Identical routing to production gateway; only the backend address differs.
+# After creating roam-api-staging on Cloud Run, replace the address below with its URL.
+swagger: '2.0'
+info:
+  title: roam-api-gateway-staging
+  description: Staging API Gateway in front of roam-api-staging Cloud Run
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+x-google-allow: all
+x-google-backend:
+  address: https://roam-api-staging-988276816158.us-east1.run.app
+  path_translation: APPEND_PATH_TO_ADDRESS
+paths:
+  /:
+    get:
+      summary: Root (proxied)
+      operationId: root
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: rootOptions
+      responses:
+        '200':
+          description: OK
+  /health:
+    get:
+      summary: Health (proxied)
+      operationId: health
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: healthOptions
+      responses:
+        '200':
+          description: OK
+  /api:
+    get:
+      summary: API (proxied)
+      operationId: apiGet
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: API (proxied)
+      operationId: apiPost
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: apiOptions
+      responses:
+        '200':
+          description: OK
+  /api/{proxy=**}:
+    get:
+      summary: API path (proxied)
+      operationId: apiPathGet
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: API path (proxied)
+      operationId: apiPathPost
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    put:
+      summary: API path (proxied)
+      operationId: apiPathPut
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: API path (proxied)
+      operationId: apiPathDelete
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK
+    options:
+      summary: CORS preflight
+      operationId: apiPathOptions
+      parameters:
+        - name: proxy
+          in: path
+          type: string
+          required: true
+          description: Path under /api
+      responses:
+        '200':
+          description: OK

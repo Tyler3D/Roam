@@ -25,6 +25,8 @@
 	</array>
 	<key>ROAM_LOCAL_BASE_URL</key>
 	<string>http://localhost:8000</string>
+	<key>ROAM_STAGING_BASE_URL</key>
+	<string>https://roam-gateway-staging-cm0ahzq6.ue.gateway.dev</string>
 	<key>ROAM_PRODUCTION_BASE_URL</key>
 	<string>https://roam-gateway-cm0ahzq6.ue.gateway.dev</string>
 	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>

@@ -3,12 +3,14 @@ name: OpenAPI contract
 # Fails when backend routes/models change but contracts/openapi.json was not regenerated.
 on:
   push:
+    branches: [staging, main]
     paths:
       - "backend/**"
       - "contracts/openapi.json"
       - "scripts/verify_openapi_contract.py"
       - ".github/workflows/openapi-contract.yml"
   pull_request:
+    branches: [staging, main]
     paths:
       - "backend/**"
       - "contracts/openapi.json"
