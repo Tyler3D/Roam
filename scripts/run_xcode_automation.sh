@@ -274,9 +274,9 @@ EOF
 run_mac() {
   local destination
   if [[ -n "${MAC_DESTINATION_ID}" ]]; then
-    destination="platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone],id=${MAC_DESTINATION_ID}"
+    destination="id=${MAC_DESTINATION_ID}"
   else
-    destination="platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone]"
+    destination="platform=macOS,name=My Mac"
   fi
 
   echo "mac_destination=${destination}" >>"${RUN_DIR}/summary.txt"
