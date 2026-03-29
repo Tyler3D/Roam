@@ -4,7 +4,8 @@ import SwiftUI
 @main
 struct RoamApp: App {
     init() {
-        FirebaseApp.configure()
+        let env = AppConfig().networkEnv
+        FirebaseEnvironment.configure(for: env)
         GoogleMapsBootstrap.configureIfPossible()
     }
 
@@ -41,6 +42,14 @@ private struct RootView: View {
                     SharedStore.markPendingShareHandoff()
                     shareIngress.prioritizeReelsTabForShareHandoff()
                 }
+            }
+            .onChange(of: appConfig.pendingEnvironmentSwitch) { _, isPending in
+                guard isPending else { return }
+                appConfig.pendingEnvironmentSwitch = false
+
+                // Reconfigure Firebase for the new environment and sign out
+                FirebaseEnvironment.reconfigure(to: appConfig.networkEnv)
+                authManager.forceSignOut()
             }
     }
 }
