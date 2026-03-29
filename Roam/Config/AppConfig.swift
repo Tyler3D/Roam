@@ -57,8 +57,15 @@ final class AppConfig {
     var networkEnv: NetworkEnv {
         didSet {
             UserDefaults.standard.set(networkEnv.rawValue, forKey: networkEnvKey)
+            if oldValue != networkEnv {
+                pendingEnvironmentSwitch = true
+            }
         }
     }
+
+    /// Set to `true` when `networkEnv` changes. Consumers (e.g. RootView) observe this
+    /// to trigger Firebase reconfiguration, sign-out, and UI reset.
+    var pendingEnvironmentSwitch = false
 
     /// Optional override for staging base URL (stored in UserDefaults). If nil, uses default from Info.plist or constant.
     var stagingBaseURLOverride: String? {

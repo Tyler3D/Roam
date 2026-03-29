@@ -5,6 +5,8 @@ struct DebugMenuView: View {
     @Environment(AppConfig.self) private var appConfig
     @Environment(\.dismiss) private var dismiss
     @State private var stagingURLText: String = ""
+    @State private var pendingEnv: NetworkEnv?
+    @State private var showEnvSwitchAlert = false
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,12 @@ struct DebugMenuView: View {
                 Section {
                     Picker("App Network Env", selection: Binding(
                         get: { appConfig.networkEnv },
-                        set: { appConfig.networkEnv = $0 }
+                        set: { newEnv in
+                            if newEnv != appConfig.networkEnv {
+                                pendingEnv = newEnv
+                                showEnvSwitchAlert = true
+                            }
+                        }
                     )) {
                         ForEach(NetworkEnv.allCases) { env in
                             Text(env.displayName).tag(env)
@@ -38,7 +45,7 @@ struct DebugMenuView: View {
                 } header: {
                     Text("App Network Env")
                 } footer: {
-                    Text("Local, staging, and production point at different API base URLs (see Effective URL).")
+                    Text("Switching environments will sign you out and reconfigure Firebase. Local and production share the production Firebase project; staging uses a separate project.")
                 }
 
                 Section {
@@ -82,6 +89,22 @@ struct DebugMenuView: View {
             }
             .onAppear {
                 stagingURLText = appConfig.stagingBaseURLOverride ?? ""
+            }
+            .alert("Switch environment?", isPresented: $showEnvSwitchAlert) {
+                Button("Switch", role: .destructive) {
+                    if let env = pendingEnv {
+                        appConfig.networkEnv = env
+                        dismiss()
+                    }
+                    pendingEnv = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingEnv = nil
+                }
+            } message: {
+                if let env = pendingEnv {
+                    Text("You will be signed out and switched to \(env.displayName). You'll need to sign in again with credentials for that environment.")
+                }
             }
         }
     }

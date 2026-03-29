@@ -101,6 +101,17 @@ final class AuthManager {
         }
     }
 
+    /// Called when switching Firebase environments. Clears local state without
+    /// relying on the (possibly deleted) FirebaseApp.
+    @MainActor
+    func forceSignOut() {
+        errorMessage = nil
+        user = nil
+        ReelThumbnailDiskCache.clearAll()
+        SavedReelsListDiskCache.clearAll()
+        ReelsGridPreviewSnapshot.clear()
+    }
+
     // MARK: - Token
 
     @MainActor
