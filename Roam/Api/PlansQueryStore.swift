@@ -59,4 +59,12 @@ final class PlansQueryStore {
                 return a > b
             }
     }
+
+    func upsert(_ plan: Plan) {
+        if let idx = plans.firstIndex(where: { $0.id == plan.id }) {
+            plans[idx] = plan
+        } else {
+            plans.append(plan)
+        }
+    }
 }

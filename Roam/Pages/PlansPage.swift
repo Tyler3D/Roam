@@ -77,11 +77,8 @@ struct PlansPage: View {
                     subtitle: "promote an idea to create your first plan"
                 )
             } else if segment == .calendar {
-                RoamEmptyState(
-                    icon: "📅",
-                    title: "calendar",
-                    subtitle: "coming soon — use the web app for calendar view"
-                )
+                PlanCalendarGridView(plans: stores.plans.upcomingConfirmed() + stores.plans.pastConfirmed())
+                    .padding(.top, 4)
             } else if list.isEmpty {
                 RoamEmptyState(
                     icon: "◎",
@@ -92,7 +89,7 @@ struct PlansPage: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(list) { plan in
-                            NavigationLink(value: plan.id) {
+                            NavigationLink(value: plan.id.uuidString.lowercased()) {
                                 PlanCardView(plan: plan)
                             }
                             .buttonStyle(.plain)

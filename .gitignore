@@ -27,3 +27,4 @@ build/
 .cursor/
 scripts/nuke_db.py
 scripts/migrate_db.py
+.artifacts/

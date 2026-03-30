@@ -48,3 +48,91 @@ SPECIFIC DATETIME: Parse explicit and relative dates relative to the current tim
 Examples: "friday 7pm", "tomorrow at noon", "next saturday 3pm", "@ 6pm on 3/14". Return ISO 8601. null if none.
 
 REFINED TITLE: Clean, concise version of the idea. Strip @mentions, dates, and times from the title.
+
+---
+
+## Examples
+
+**Input:** `coffee tmrw morning with @Tyler`
+```json
+{
+  "refinedTitle": "Coffee with Tyler",
+  "searchQuery": "cozy specialty coffee shop",
+  "category": "cafe",
+  "preference": "morning",
+  "estimatedMinutes": 60,
+  "invitees": ["Tyler"],
+  "specificDatetime": null,
+  "taskAssignments": null
+}
+```
+
+**Input:** `dinner at that new omakase place in the East Village friday 8pm with @Diya @Marcus`
+```json
+{
+  "refinedTitle": "Omakase Dinner",
+  "searchQuery": "omakase restaurant East Village NYC",
+  "category": "restaurant",
+  "preference": "evening",
+  "estimatedMinutes": 120,
+  "invitees": ["Diya", "Marcus"],
+  "specificDatetime": "2026-04-04T20:00:00",
+  "taskAssignments": null
+}
+```
+
+**Input:** `rooftop drinks after work thursday`
+```json
+{
+  "refinedTitle": "Rooftop Drinks",
+  "searchQuery": "rooftop bar Manhattan",
+  "category": "bar",
+  "preference": "evening",
+  "estimatedMinutes": 120,
+  "invitees": [],
+  "specificDatetime": null,
+  "taskAssignments": null
+}
+```
+
+**Input:** `check out that natural wine bar in the West Village @Sofia bring the good glasses`
+```json
+{
+  "refinedTitle": "Natural Wine Bar",
+  "searchQuery": "natural wine bar West Village NYC",
+  "category": "bar",
+  "preference": "evening",
+  "estimatedMinutes": 120,
+  "invitees": ["Sofia"],
+  "specificDatetime": null,
+  "taskAssignments": "Sofia: bring the good glasses"
+}
+```
+
+**Input:** `pottery class this weekend`
+```json
+{
+  "refinedTitle": "Pottery Class",
+  "searchQuery": "pottery class studio Brooklyn",
+  "category": "learning",
+  "preference": "weekend",
+  "estimatedMinutes": 120,
+  "invitees": [],
+  "specificDatetime": null,
+  "taskAssignments": null
+}
+```
+
+**Input:** `jazz night`
+```json
+{
+  "refinedTitle": "Jazz Night",
+  "searchQuery": "jazz bar live music NYC",
+  "category": "arts-culture",
+  "preference": "evening",
+  "estimatedMinutes": 120,
+  "invitees": [],
+  "specificDatetime": null,
+  "taskAssignments": null
+}
+```

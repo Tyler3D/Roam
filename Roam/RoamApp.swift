@@ -1,10 +1,19 @@
 import FirebaseCore
 import SwiftUI
+import UIKit
 
 @main
 struct RoamApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
-        FirebaseApp.configure()
+        // Enable verbose Firebase logging in debug to diagnose token issues
+        #if DEBUG
+        FirebaseConfiguration.shared.setLoggerLevel(.debug)
+        #endif
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         GoogleMapsBootstrap.configureIfPossible()
     }
 
@@ -20,6 +29,7 @@ private struct RootView: View {
     @State private var appConfig: AppConfig
     @State private var authManager: AuthManager
     @State private var apiClient: APIClient
+    @State private var eventKitService = EventKitService()
     @StateObject private var shareIngress = ShareIngressCoordinator()
 
     init() {
@@ -35,6 +45,7 @@ private struct RootView: View {
             .environment(appConfig)
             .environment(authManager)
             .environment(\.apiClient, apiClient)
+            .environment(\.eventKitService, eventKitService)
             .environmentObject(shareIngress)
             .onOpenURL { url in
                 if url.scheme?.lowercased() == "roam", url.host?.lowercased() == "share" {
@@ -44,3 +55,4 @@ private struct RootView: View {
             }
     }
 }
+

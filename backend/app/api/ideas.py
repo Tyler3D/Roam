@@ -1,8 +1,11 @@
+import asyncio
 import base64
+import functools
 import json
 import logging
 import secrets
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -380,7 +383,7 @@ def updateIdea(
             raise BadRequest("Invalid placeId")
     for key, value in updateData.items():
         setattr(idea, key, value)
-    idea.updatedAt = datetime.utcnow()
+    idea.updatedAt = datetime.now(timezone.utc)
 
     session.add(idea)
     commitAndRefresh(session, idea)
@@ -430,8 +433,11 @@ def _autoSelectPlace(
             return
 
 
+_interpret_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gemini-interpret")
+
+
 @ideasRouter.post("/ideas/{ideaId}/interpret", response_model=IdeaRead)
-def interpretIdea(
+async def interpretIdea(
     ideaId: UUID,
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
@@ -442,12 +448,25 @@ def interpretIdea(
     if idea.userId != user.id:
         raise Forbidden("Not your idea")
 
+    # Idempotency guard: skip re-running Gemini if enriched within the last 60 seconds.
+    recent = _getLatestPipelineResult(session, idea.id)
+    if recent and (datetime.now(timezone.utc) - recent.createdAt).total_seconds() < 60:
+        viewRow = session.exec(
+            select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.id == idea.id)
+        ).first()
+        return _ideaReadWithExtras(session, viewRow if viewRow else idea, viewer_user_id=user.id)
+
     idea.status = IdeaStatus.suggesting
-    idea.updatedAt = datetime.utcnow()
+    idea.updatedAt = datetime.now(timezone.utc)
     session.add(idea)
     session.flush()
 
-    resultDict = interpret_idea(idea.title)
+    # Run Gemini in a thread pool so we don't block the async event loop.
+    loop = asyncio.get_event_loop()
+    resultDict = await loop.run_in_executor(
+        _interpret_executor,
+        functools.partial(interpret_idea, idea.title),
+    )
 
     pipelineResult = PipelineResultModel(
         ideaId=idea.id,
@@ -485,7 +504,10 @@ def interpretIdea(
 
     # specificDatetime from AI stays in rawOutput; surfaced as slot option in PlanOverview
     idea.status = IdeaStatus.ready
-    idea.updatedAt = datetime.utcnow()
+    idea.updatedAt = datetime.now(timezone.utc)
+    # Propagate refined title so IdeaCard shows clean AI title, not raw user input.
+    if pipelineResult.refinedTitle:
+        idea.displayName = pipelineResult.refinedTitle
     session.add(idea)
     commitAndRefresh(session, idea, pipelineResult)
 
@@ -534,7 +556,7 @@ def selectPlaceSuggestion(
         session.add(s)
 
     idea.placeId = suggestion.placeId
-    idea.updatedAt = datetime.utcnow()
+    idea.updatedAt = datetime.now(timezone.utc)
     session.add(idea)
     commitAndRefresh(session, idea)
 
@@ -736,16 +758,6 @@ def _resolveInvitees(
             ).all()
             if friends:
                 found = friends[0]
-
-        if not found:
-            allMatches = session.exec(
-                select(UserModel).where(
-                    col(UserModel.firstName).ilike(f"%{nameLower}%")
-                    | col(UserModel.lastName).ilike(f"%{nameLower}%")
-                ).limit(1)
-            ).all()
-            if allMatches:
-                found = allMatches[0]
 
         if found:
             resolved.append({

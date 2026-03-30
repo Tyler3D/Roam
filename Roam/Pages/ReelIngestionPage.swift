@@ -10,6 +10,8 @@ struct ReelsPage: View {
     @State private var localItems: [SharedItem] = []
     @State private var ingestError: String?
     @State private var ingestingId: UUID?
+    @State private var showPasteSheet = false
+    @State private var pastedURL = ""
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -60,6 +62,16 @@ struct ReelsPage: View {
                         .font(RoamFont.mono(15, weight: .bold))
                         .foregroundStyle(RoamColors.text)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        pastedURL = UIPasteboard.general.string ?? ""
+                        showPasteSheet = true
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 16))
+                    }
+                    .tint(RoamColors.loganDeep)
+                }
                 if !localItems.isEmpty {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Menu {
@@ -73,6 +85,9 @@ struct ReelsPage: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $showPasteSheet) {
+                pasteURLSheet
             }
             .refreshable {
                 await shareIngress.flushShareQueue(apiClient: apiClient, stores: stores)
@@ -360,6 +375,94 @@ struct ReelsPage: View {
         case "failed": return "err"
         default: return status
         }
+    }
+
+    private var pasteURLSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Paste a link from Instagram or TikTok and we'll extract the places.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(RoamColors.textMid)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    TextField("https://www.instagram.com/reel/…", text: $pastedURL)
+                        .textContentType(.URL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(RoamFont.mono(13))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .background(RoamColors.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(RoamColors.reviewBorder, lineWidth: 1.5)
+                        )
+
+                    Button {
+                        pastedURL = UIPasteboard.general.string ?? ""
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 16))
+                            .padding(12)
+                            .background(RoamColors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(RoamColors.reviewBorder, lineWidth: 1.5)
+                            )
+                    }
+                    .tint(RoamColors.loganDeep)
+                }
+
+                Button {
+                    let trimmed = pastedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty,
+                          let url = URL(string: trimmed),
+                          url.scheme == "http" || url.scheme == "https" else { return }
+                    let item = SharedItem(id: UUID(), url: trimmed, text: nil, dateShared: Date(), attachmentTypeIdentifiers: ["public.url"])
+                    SharedStore.save(item)
+                    reloadLocal()
+                    showPasteSheet = false
+                    pastedURL = ""
+                } label: {
+                    Text("Add to inbox")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .background(RoamColors.reviewAccent)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .disabled({
+                    let t = pastedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let u = URL(string: t) else { return true }
+                    return u.scheme != "http" && u.scheme != "https"
+                }())
+                .opacity({
+                    let t = pastedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let u = URL(string: t), u.scheme == "http" || u.scheme == "https" else { return 0.4 }
+                    return 1.0
+                }())
+
+                Spacer()
+            }
+            .padding(24)
+            .background(RoamColors.background)
+            .navigationTitle("Paste a link")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showPasteSheet = false
+                        pastedURL = ""
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     private func reloadLocal() {

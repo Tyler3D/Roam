@@ -6,7 +6,17 @@ private func parseRoamISO8601(_ str: String) -> Date? {
     if let d = withFrac.date(from: str) { return d }
     let plain = ISO8601DateFormatter()
     plain.formatOptions = [.withInternetDateTime]
-    return plain.date(from: str)
+    if let d = plain.date(from: str) { return d }
+    // Handle naive datetimes (no timezone suffix) from backend — treat as UTC
+    let naive = ISO8601DateFormatter()
+    naive.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
+    naive.timeZone = TimeZone(identifier: "UTC")
+    if let d = naive.date(from: str) { return d }
+    // Naive with fractional seconds
+    let naiveFrac = ISO8601DateFormatter()
+    naiveFrac.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime, .withFractionalSeconds]
+    naiveFrac.timeZone = TimeZone(identifier: "UTC")
+    return naiveFrac.date(from: str)
 }
 
 extension JSONDecoder {

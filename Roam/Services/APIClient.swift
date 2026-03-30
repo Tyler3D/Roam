@@ -54,38 +54,48 @@ final class APIClient {
         allowEmptyBody: Bool = false
     ) async throws -> Data {
         let baseURL = appConfig.baseURL
-        let token = try await authManager.getIdToken()
-
         guard let url = URL(string: "\(baseURL)\(path)") else {
             throw APIError.invalidURL
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        let bearer = "Bearer \(token)"
-        request.setValue(bearer, forHTTPHeaderField: "Authorization")
-        // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
-        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
-        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        if let body {
-            request.httpBody = body
-        }
+        for attempt in 0..<2 {
+            let token = try await authManager.getIdToken(forcingRefresh: attempt == 1)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            let bearer = "Bearer \(token)"
+            request.setValue(bearer, forHTTPHeaderField: "Authorization")
+            // API Gateway may replace Authorization with a Cloud Run invoker JWT; backend reads Firebase from here.
+            request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            if let body {
+                request.httpBody = body
+            }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
 
-        guard (200...299).contains(httpResponse.statusCode) else {
+            if (200...299).contains(httpResponse.statusCode) {
+                if allowEmptyBody, data.isEmpty {
+                    return Data()
+                }
+                return data
+            }
+
+            if (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) && attempt == 0 {
+                #if DEBUG
+                print("apiData: auth failed with status \(httpResponse.statusCode) for path=\(path); retrying with refreshed ID token…")
+                #endif
+                continue
+            }
+
             let detail = try? JSONDecoder().decode(ErrorDetail.self, from: data)
             throw APIError.httpError(status: httpResponse.statusCode, message: detail?.detail ?? "Request failed")
         }
 
-        if allowEmptyBody, data.isEmpty {
-            return Data()
-        }
-        return data
+        throw APIError.invalidResponse
     }
 
     // MARK: - User / auth sync
@@ -200,6 +210,47 @@ final class APIClient {
         try await apiFetch(path: "/api/plans/\(id.lowercased())")
     }
 
+    // MARK: - Plans (scheduling + calendar)
+
+    struct SlotSuggestion: Decodable, Identifiable {
+        let start: Date
+        let end: Date
+        let label: String
+        let score: Double
+        var id: Date { start }
+    }
+
+    struct CalendarEventResponse: Decodable {
+        let flow: String
+        let eventLink: String?
+        let eventId: String?
+        let gcalLink: String?
+        let scheduleUrl: String?
+    }
+
+    struct PlanUpdatePayload: Encodable {
+        var title: String?
+        var scheduledAt: Date?
+        var status: String?
+        var estimatedMinutes: Int?
+        var partySize: Int?
+        var taskNotes: String?
+    }
+
+    func updatePlan(id: String, payload: PlanUpdatePayload) async throws -> Plan {
+        let body = try JSONEncoder.roam.encode(payload)
+        return try await apiFetch(path: "/api/plans/\(id.lowercased())", method: "PATCH", body: body)
+    }
+
+    func suggestSlots(planId: String) async throws -> [SlotSuggestion] {
+        try await apiFetch(path: "/api/plans/\(planId.lowercased())/suggest-slots", method: "POST")
+    }
+
+    func createGCalEvent(planId: String) async throws -> CalendarEventResponse {
+        let tz = TimeZone.current.identifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "UTC"
+        return try await apiFetch(path: "/api/plans/\(planId.lowercased())/calendar?timezone=\(tz)", method: "POST")
+    }
+
     // MARK: - Notifications
 
     func listNotifications() async throws -> [RoamNotification] {
@@ -293,21 +344,16 @@ final class APIClient {
         ogDescription: String? = nil,
         ogKeywords: String? = nil,
         thumbnailJPEG: Data? = nil,
-        frameJPEGs: [Data] = []
+        frameJPEGs: [Data] = [],
+        userLatitude: Double? = nil,
+        userLongitude: Double? = nil
     ) async throws -> IngestCreateResponse {
         let baseURL = appConfig.baseURL
-        let token = try await authManager.getIdToken()
         guard let url = URL(string: "\(baseURL)/api/ingest") else {
             throw APIError.invalidURL
         }
 
         let boundary = "Boundary-\(UUID().uuidString)"
-        let bearer = "Bearer \(token)"
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(bearer, forHTTPHeaderField: "Authorization")
-        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
         func appendField(name: String, value: String) {
@@ -341,6 +387,12 @@ final class APIClient {
         if let ogKeywords, !ogKeywords.isEmpty {
             appendField(name: "ogKeywords", value: ogKeywords)
         }
+        if let userLatitude {
+            appendField(name: "userLatitude", value: "\(userLatitude)")
+        }
+        if let userLongitude {
+            appendField(name: "userLongitude", value: "\(userLongitude)")
+        }
         if let thumbnailJPEG, !thumbnailJPEG.isEmpty {
             appendFile(name: "thumbnail", filename: "thumb.jpg", mimeType: "image/jpeg", data: thumbnailJPEG)
         }
@@ -349,17 +401,35 @@ final class APIClient {
         }
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        guard (200...299).contains(httpResponse.statusCode) else {
+        // Attempt the authorized request, retrying once with a refreshed token on 401/403
+        for attempt in 0..<2 {
+            let token = try await authManager.getIdToken(forcingRefresh: attempt == 1)
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            let bearer = "Bearer \(token)"
+            request.setValue(bearer, forHTTPHeaderField: "Authorization")
+            request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            if (200...299).contains(httpResponse.statusCode) {
+                return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
+            }
+            if (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) && attempt == 0 {
+                #if DEBUG
+                print("submitIngest: auth failed with status \(httpResponse.statusCode); retrying with refreshed ID token…")
+                #endif
+                continue
+            }
             let detail = try? JSONDecoder().decode(ErrorDetail.self, from: data)
             throw APIError.httpError(status: httpResponse.statusCode, message: detail?.detail ?? "Ingest failed")
         }
-        return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
+        throw APIError.invalidResponse
     }
 
     /// Re-run ingest for a saved reel whose server job is `failed` (same multipart shape as `submitIngest`, without `reelUrl`).
@@ -373,19 +443,12 @@ final class APIClient {
         frameJPEGs: [Data] = []
     ) async throws -> IngestCreateResponse {
         let baseURL = appConfig.baseURL
-        let token = try await authManager.getIdToken()
         let rid = reelId.lowercased()
         guard let url = URL(string: "\(baseURL)/api/reels/\(rid)/retry-ingest") else {
             throw APIError.invalidURL
         }
 
         let boundary = "Boundary-\(UUID().uuidString)"
-        let bearer = "Bearer \(token)"
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(bearer, forHTTPHeaderField: "Authorization")
-        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
         func appendField(name: String, value: String) {
@@ -426,17 +489,35 @@ final class APIClient {
         }
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        guard (200...299).contains(httpResponse.statusCode) else {
+        // Attempt the authorized request, retrying once with a refreshed token on 401/403
+        for attempt in 0..<2 {
+            let token = try await authManager.getIdToken(forcingRefresh: attempt == 1)
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            let bearer = "Bearer \(token)"
+            request.setValue(bearer, forHTTPHeaderField: "Authorization")
+            request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            if (200...299).contains(httpResponse.statusCode) {
+                return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
+            }
+            if (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) && attempt == 0 {
+                #if DEBUG
+                print("retryFailedReelIngest: auth failed with status \(httpResponse.statusCode); retrying with refreshed ID token…")
+                #endif
+                continue
+            }
             let detail = try? JSONDecoder().decode(ErrorDetail.self, from: data)
             throw APIError.httpError(status: httpResponse.statusCode, message: detail?.detail ?? "Retry failed")
         }
-        return try JSONDecoder.roam.decode(IngestCreateResponse.self, from: data)
+        throw APIError.invalidResponse
     }
 
     // MARK: - Reels (saved reels + promote)
@@ -840,6 +921,86 @@ final class APIClient {
         )
     }
 
+    // MARK: - Environment auto-alignment (no plist changes)
+
+    /// Probes the current backend with a fresh ID token; if the token is rejected (401),
+    /// tries the alternate environment (staging <-> production). If the alternate accepts
+    /// the token (2xx, 403, or 404), switches `appConfig.networkEnv` accordingly.
+    /// This avoids modifying GoogleService-Info.plist: we align the backend to the app's Firebase project instead.
+    func autoAlignEnvironmentIfNeeded() async {
+        guard isUserSignedIn else { return }
+        if appConfig.networkEnv == .staging,
+           appConfig.baseURL.contains("your-staging-url.run.app") {
+            appConfig.networkEnv = .production
+            return
+        }
+        // Force-refresh the token to avoid false negatives.
+        let token: String
+        do {
+            token = try await authManager.getIdToken(forcingRefresh: true)
+        } catch {
+            return
+        }
+
+        let path = "/api/me"
+        let currentBase = appConfig.baseURL
+        if let status = await probeAuthStatus(baseURL: currentBase, path: path, token: token),
+           isAcceptableAuthStatus(status) {
+            return
+        }
+
+        // Decide alternate environment to try.
+        let currentEnv = appConfig.networkEnv
+        let altEnv: NetworkEnv = {
+            switch currentEnv {
+            case .production: return .staging
+            case .staging: return .production
+            case .local: return .production
+            }
+        }()
+
+        // Compute alternate base URL without permanently switching yet.
+        let originalEnv = appConfig.networkEnv
+        appConfig.networkEnv = altEnv
+        let altBase = appConfig.baseURL
+        appConfig.networkEnv = originalEnv
+
+        if let status = await probeAuthStatus(baseURL: altBase, path: path, token: token),
+           isAcceptableAuthStatus(status) {
+            #if DEBUG
+            print("autoAlignEnvironmentIfNeeded: switching network env \(originalEnv.rawValue) -> \(altEnv.rawValue)")
+            #endif
+            appConfig.networkEnv = altEnv
+        }
+    }
+
+    private func probeAuthStatus(baseURL: String, path: String, token: String) async -> Int? {
+        if baseURL.contains("your-staging-url.run.app") {
+            return nil
+        }
+        guard let url = URL(string: "\(baseURL)\(path)") else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let bearer = "Bearer \(token)"
+        request.setValue(bearer, forHTTPHeaderField: "Authorization")
+        request.setValue(bearer, forHTTPHeaderField: "X-Roam-Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode
+        } catch {
+            return nil
+        }
+    }
+
+    /// Treat success (2xx), 403 (valid user but unverified), and 404 (no backend user yet) as acceptable for alignment.
+    private func isAcceptableAuthStatus(_ status: Int) -> Bool {
+        if (200...299).contains(status) { return true }
+        if status == 403 { return true }
+        if status == 404 { return true }
+        return false
+    }
+
     // MARK: - Feature Flags
 
     struct FeatureFlagDTO: Decodable {
@@ -879,3 +1040,4 @@ enum APIError: LocalizedError {
         }
     }
 }
+

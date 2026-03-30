@@ -77,7 +77,12 @@ One concise sentence: what in the **frames** (signage, logo, architecture, dish,
 
 ## Display description (`displayDescription`)
 
-**1–2 short sentences**, playful and user-facing, for cards in the Roam app (why this place is exciting, date-night energy, “hidden gem” vibe). Marketing tone is fine; **do not** claim legal proof or verbatim quotes from the reel. This is **not** a substitute for safety review; keep factual support in `evidence`. Use an empty string only if you truly have nothing to say beyond `evidence`.
+**1–2 short sentences**, playful and user-facing, for cards in the Roam app (why this place is exciting, date-night energy, “hidden gem” vibe). Marketing tone is fine; **do not** claim legal proof or verbatim quotes from the reel. This is **not** a substitute for safety review; keep factual support in `evidence`.
+
+**Hard rules — the field will be discarded if broken:**
+- Never start with “Based on”, “I can see”, “The frames show”, “This appears”, “It looks like”, “From the”, “Given the”, “Analyzing”, “Looking at”, “In the video”, or any phrase that reveals you are describing frames or reasoning.
+- Never include internal commentary, extraction logic, or AI reasoning of any kind.
+- If you have nothing compelling to add beyond `evidence`, return an **empty string** — do not pad with generic filler.
 
 ---
 

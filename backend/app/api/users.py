@@ -8,6 +8,7 @@ from sqlmodel import Session, select, col, or_
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser
 from app.common.backendErrors import BadRequest, InternalServerError, NotFound
+from app.common.config import IS_DEV, allowUnverifiedFirebaseTokensInDev
 from app.common.db import commitAndRefresh, getSession
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
 from app.services.collectionLinks import ensurePersonalDefaultCollection
@@ -37,6 +38,8 @@ def _ensureFirebaseUserOrRaise(
     firstName: str | None,
     photoUrl: str | None,
 ) -> None:
+    if IS_DEV() and allowUnverifiedFirebaseTokensInDev():
+        return
     try:
         displayName = firstName or ""
         ensureFirebaseUser(firebaseUid, email, displayName, photoUrl)
@@ -100,7 +103,7 @@ def createUser(
     decodedToken = auth.decodedToken
     firebaseUid = decodedToken.get("uid")
     tokenEmail = decodedToken.get("email")
-    tokenEmailVerified = bool(decodedToken.get("email_verified"))
+    tokenEmailVerified = bool(decodedToken.get("email_verified")) or (IS_DEV() and allowUnverifiedFirebaseTokensInDev())
     email = tokenEmail or request.email
     if not email:
         raise BadRequest("Email is required")

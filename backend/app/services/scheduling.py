@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger("roam.scheduling")
@@ -15,7 +15,7 @@ def suggest_time_slots(
 
     Returns a list of slot dicts: {start: ISO string, end: ISO string, label: str, score: float}
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     slots: list[dict[str, Any]] = []
 
     preference_hours = {
@@ -45,8 +45,8 @@ def suggest_time_slots(
             time_label = start.strftime("%-I:%M %p").lstrip("0")
 
             slots.append({
-                "start": start.isoformat(),
-                "end": end.isoformat(),
+                "start": start.isoformat() + "Z",
+                "end": end.isoformat() + "Z",
                 "label": f"{day_label} at {time_label}",
                 "score": _score_slot(start, preference),
             })
@@ -80,7 +80,7 @@ def _score_slot(dt: datetime, preference: str) -> float:
     elif preference == "weekend" and dt.weekday() >= 5:
         score += 2.0
 
-    days_out = (dt - datetime.utcnow()).days
+    days_out = (dt - datetime.now(timezone.utc)).days
     if 1 <= days_out <= 3:
         score += 1.0
     elif 4 <= days_out <= 5:

@@ -13,6 +13,7 @@ typealias MemberRole = Components.Schemas.MemberRole
 typealias RsvpStatus = Components.Schemas.RsvpStatus
 typealias NotificationType = Components.Schemas.NotificationType
 typealias IdeaCreatePayload = Components.Schemas.IdeaCreate
+typealias PipelineResult = Components.Schemas.PipelineResultRead
 
 extension Components.Schemas.UserRead {
     var displayName: String {

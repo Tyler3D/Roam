@@ -1,7 +1,7 @@
 """OAuth token storage with encryption at rest and refresh logic."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -110,7 +110,7 @@ def upsert_token(
         row.encryptedAccessToken = enc_access
         row.encryptedRefreshToken = enc_refresh
         row.expiresAt = expires_at
-        row.updatedAt = datetime.utcnow()
+        row.updatedAt = datetime.now(timezone.utc)
         session.add(row)
     else:
         row = UserOAuthTokenModel(

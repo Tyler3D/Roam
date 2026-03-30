@@ -1,7 +1,7 @@
 """Task API — plan-scoped tasks."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -107,7 +107,7 @@ def updateTask(
     if not is_organizer and not is_assignee:
         raise Forbidden("Only organizer or assignee can update this task")
     task.isCompleted = body.isCompleted
-    task.completedAt = datetime.utcnow() if body.isCompleted else None
+    task.completedAt = datetime.now(timezone.utc) if body.isCompleted else None
     session.add(task)
     commitAndRefresh(session, task)
     return _build_task_read(session, task)

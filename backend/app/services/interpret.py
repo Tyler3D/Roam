@@ -2,7 +2,7 @@ import hashlib
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -39,37 +39,55 @@ class ScribbleInterpretOutput(BaseModel):
     taskAssignments: Optional[str] = None
 
 
-def interpret_idea(raw_input: str, current_time: str | None = None) -> dict[str, Any]:
-    """Interpret user idea using Gemini. Kept name for API compatibility."""
+_TRANSIENT_KEYWORDS = ("rate", "503", "timeout", "overloaded", "quota", "resource exhausted")
+
+
+def interpret_idea(raw_input: str, current_time: str | None = None, _retries: int = 2) -> dict[str, Any]:
+    """Interpret user idea using Gemini with retry on transient errors."""
+    import time as _time
     client = genai.Client(api_key=getGeminiApiKey())
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-    now_str = current_time or datetime.utcnow().isoformat()
+    now_str = current_time or datetime.now(timezone.utc).isoformat()
     user_message = f"Current time: {now_str}\n\nUser input: {raw_input}"
 
-    try:
-        response = client.models.generate_content(
-            model=model,
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=SCRIBBLE_SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=ScribbleInterpretOutput,
-                temperature=0.2,
-                max_output_tokens=512,
-            ),
-        )
+    for attempt in range(_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=user_message,
+                config=types.GenerateContentConfig(
+                    system_instruction=SCRIBBLE_SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=ScribbleInterpretOutput,
+                    temperature=0.2,
+                    max_output_tokens=512,
+                ),
+            )
 
-        parsed = ScribbleInterpretOutput.model_validate_json(response.text)
-        result = parsed.model_dump()
-        result["category"] = normalize_category(result.get("category"))
-        result["aiEnriched"] = True
-        result["modelName"] = model
-        return result
+            parsed = ScribbleInterpretOutput.model_validate_json(response.text)
+            result = parsed.model_dump()
+            result["category"] = normalize_category(result.get("category"))
+            # Validate outputs are within sane ranges; correct silently if not.
+            if result.get("preference") not in PREFERENCES:
+                result["preference"] = "any"
+            est = result.get("estimatedMinutes", 0)
+            if not isinstance(est, int) or not (15 <= est <= 480):
+                result["estimatedMinutes"] = _infer_duration(raw_input, result.get("category", "social"))
+            result["aiEnriched"] = True
+            result["modelName"] = model
+            return result
 
-    except Exception:
-        logger.exception("Gemini interpretation failed, falling back to keyword parser")
-        return interpret_fallback(raw_input)
+        except Exception as e:
+            is_transient = any(kw in str(e).lower() for kw in _TRANSIENT_KEYWORDS)
+            if attempt < _retries and is_transient:
+                _time.sleep(1.5 ** attempt)
+                logger.warning("Gemini transient error on attempt %d, retrying: %s", attempt + 1, e)
+                continue
+            logger.exception("Gemini interpretation failed on attempt %d, falling back", attempt + 1)
+            break
+
+    return interpret_fallback(raw_input)
 
 
 def interpret_fallback(raw_input: str) -> dict[str, Any]:
@@ -131,7 +149,7 @@ def _extract_task_assignments(raw: str, invitees: list[str]) -> str | None:
 
 
 def extract_specific_datetime(raw: str) -> str | None:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     lower = raw.lower()
 
     weekday_match = re.search(

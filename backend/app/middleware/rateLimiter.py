@@ -17,7 +17,11 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from starlette.responses import Response
 
 from app.auth.auth import getFirebaseBearerToken, verifyFirebaseTokenString
-from app.common.config import getCorsAllowOrigins, getTrustedAuthProviders
+from app.common.config import (
+    getCorsAllowOrigins,
+    getTrustedAuthProviders,
+    isAuthFailureLockoutEnabled,
+)
 
 from .policy import enforceEmailVerifiedIfRequired, isAuthExemptPath
 from .utils import addCorsHeaders, addSecurityHeaders, buildJsonErrorResponse
@@ -37,6 +41,7 @@ authFailureMaxAttempts = 5
 authLockoutSeconds = 900
 authFailureStore: dict[str, list[float]] = {}
 authLockoutUntil: dict[str, float] = {}
+authFailureLockoutEnabled = isAuthFailureLockoutEnabled()
 
 
 def _getClientIdentity(request: Request) -> str:
@@ -92,15 +97,16 @@ async def rateLimiterMiddleware(
 
     clientId = _getClientIdentity(request)
     authKey = f"client:{clientId}"
-    lockoutUntil = authLockoutUntil.get(authKey)
-    if lockoutUntil and now < lockoutUntil:
-        return _middlewareError(
-            request,
-            requestId=requestId,
-            origin=origin,
-            statusCode=429,
-            detail="Too many failed auth attempts",
-        )
+    if authFailureLockoutEnabled:
+        lockoutUntil = authLockoutUntil.get(authKey)
+        if lockoutUntil and now < lockoutUntil:
+            return _middlewareError(
+                request,
+                requestId=requestId,
+                origin=origin,
+                statusCode=429,
+                detail="Too many failed auth attempts",
+            )
 
     if not isAuthExemptPath(path):
         try:
@@ -129,13 +135,14 @@ async def rateLimiterMiddleware(
             if exc.status_code != 401:
                 raise
             detailStr = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-            failureTimestamps = authFailureStore.get(authKey, [])
-            failureWindowStart = now - authFailureWindowSeconds
-            failureTimestamps = [ts for ts in failureTimestamps if ts >= failureWindowStart]
-            failureTimestamps.append(now)
-            authFailureStore[authKey] = failureTimestamps
-            if len(failureTimestamps) >= authFailureMaxAttempts:
-                authLockoutUntil[authKey] = now + authLockoutSeconds
+            if authFailureLockoutEnabled:
+                failureTimestamps = authFailureStore.get(authKey, [])
+                failureWindowStart = now - authFailureWindowSeconds
+                failureTimestamps = [ts for ts in failureTimestamps if ts >= failureWindowStart]
+                failureTimestamps.append(now)
+                authFailureStore[authKey] = failureTimestamps
+                if len(failureTimestamps) >= authFailureMaxAttempts:
+                    authLockoutUntil[authKey] = now + authLockoutSeconds
             return _middlewareError(
                 request,
                 requestId=requestId,

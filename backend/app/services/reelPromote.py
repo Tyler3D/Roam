@@ -1,7 +1,7 @@
 """Promote staged reel candidates into ideas (user-initiated)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -198,7 +198,7 @@ def promoteSavedReel(
                 existing_up.longitude = plng
                 existing_up.maps_query = pmq
             existing_up.source = "user"
-            existing_up.confirmed_at = datetime.utcnow()
+            existing_up.confirmed_at = datetime.now(timezone.utc)
             session.add(existing_up)
         else:
             user_place = ReelCandidateUserPlaceModel(
@@ -225,7 +225,7 @@ def promoteSavedReel(
         raise BadRequest("No candidates could be promoted")
 
     saved.status = SavedReelStatus.promoted
-    saved.updatedAt = datetime.utcnow()
+    saved.updatedAt = datetime.now(timezone.utc)
     session.add(saved)
     session.commit()
 

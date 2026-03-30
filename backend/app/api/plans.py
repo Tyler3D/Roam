@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -149,7 +149,7 @@ def updatePlan(
 
     for key, value in update_data.items():
         setattr(plan, key, value)
-    plan.updatedAt = datetime.utcnow()
+    plan.updatedAt = datetime.now(timezone.utc)
 
     session.add(plan)
     commitAndRefresh(session, plan)

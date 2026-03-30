@@ -1,4 +1,5 @@
 import Combine
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -58,6 +59,7 @@ final class ShareIngressCoordinator: ObservableObject {
             do {
                 let thumb = ShareQueueStore.loadThumbnailData(for: item)
                 let frames = ShareQueueStore.loadFrameData(for: item)
+                let userLocation = CLLocationManager().location
                 let resp = try await apiClient.submitIngest(
                     reelUrl: item.reelUrl,
                     shareText: item.shareText,
@@ -65,7 +67,9 @@ final class ShareIngressCoordinator: ObservableObject {
                     ogDescription: item.ogDescription,
                     ogKeywords: item.ogKeywords,
                     thumbnailJPEG: thumb,
-                    frameJPEGs: frames
+                    frameJPEGs: frames,
+                    userLatitude: userLocation?.coordinate.latitude,
+                    userLongitude: userLocation?.coordinate.longitude
                 )
                 ReelThumbnailDiskCache.saveAfterIngest(reelIdString: resp.reelId, jpegData: thumb)
                 ShareQueueStore.remove(id: item.id)
@@ -101,6 +105,7 @@ final class ShareIngressCoordinator: ObservableObject {
 
         do {
             let pack = await ReelMetadataService.extract(url: url, shareText: item.text)
+            let userLocation = CLLocationManager().location
             let resp = try await apiClient.submitIngest(
                 reelUrl: urlString,
                 shareText: item.text,
@@ -108,7 +113,9 @@ final class ShareIngressCoordinator: ObservableObject {
                 ogDescription: pack.ingestOgDescription,
                 ogKeywords: pack.ingestOgKeywords,
                 thumbnailJPEG: pack.thumbnailJPEG,
-                frameJPEGs: pack.frameJPEGs
+                frameJPEGs: pack.frameJPEGs,
+                userLatitude: userLocation?.coordinate.latitude,
+                userLongitude: userLocation?.coordinate.longitude
             )
             ReelThumbnailDiskCache.saveAfterIngest(reelIdString: resp.reelId, jpegData: pack.thumbnailJPEG)
             SharedStore.remove(id: item.id)

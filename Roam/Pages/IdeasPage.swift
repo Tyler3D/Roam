@@ -88,12 +88,6 @@ struct IdeasPage: View {
                     )
                 }
 
-                if let submitError {
-                    Text(submitError)
-                        .font(RoamFont.mono(10))
-                        .foregroundStyle(RoamColors.error)
-                }
-
                 ForEach(Array(stores.ideas.ideas.enumerated()), id: \.element.id) { index, idea in
                     NavigationLink(value: idea.id) {
                         ZStack {
@@ -177,6 +171,12 @@ struct IdeasPage: View {
 
     private func commandBar(stores: RoamStores) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let submitError {
+                Text(submitError)
+                    .font(RoamFont.mono(10))
+                    .foregroundStyle(RoamColors.error)
+                    .padding(.horizontal, 4)
+            }
             Text("◌ plan something")
                 .font(RoamFont.mono(8, weight: .medium))
                 .foregroundStyle(RoamColors.textMuted)

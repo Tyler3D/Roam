@@ -101,6 +101,8 @@ async def createIngestionJob(
     reelTitle: Optional[str] = Form(None),
     ogDescription: Optional[str] = Form(None),
     ogKeywords: Optional[str] = Form(None),
+    userLatitude: Optional[float] = Form(None),
+    userLongitude: Optional[float] = Form(None),
     thumbnail: Optional[UploadFile] = File(None),
     frames: list[UploadFile] = File(default=[]),
     session: Session = Depends(getSession),
@@ -213,6 +215,8 @@ async def createIngestionJob(
         "reelTitle": reelTitle,
         "ogDescription": ogDescription,
         "ogKeywords": ogKeywords,
+        "userLatitude": userLatitude,
+        "userLongitude": userLongitude,
     }
 
     backgroundTasks.add_task(processIngestionJob, str(job.id), framesData, thumbnailData, metadata)

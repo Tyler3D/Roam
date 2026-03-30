@@ -13,6 +13,7 @@ DEVICE_ID=""
 KEEP_SIMULATOR_BOOTED="false"
 MIN_FREE_MB=12000
 MAC_DESTINATION_ID=""
+BACKEND_BASE_URL="${BACKEND_BASE_URL:-http://127.0.0.1:8000}"
 
 ARTIFACTS_ROOT="${ROOT}/.artifacts/xcode"
 TIMESTAMP="$(date +"%Y%m%d-%H%M%S")"
@@ -34,6 +35,8 @@ Options:
   --simulator <name>           Simulator device name (default: iPhone 16)
   --simulator-os <version>     Simulator OS version (default: latest)
   --mac-destination-id <id>    Optional My Mac destination id for mac mode
+  --backend-base-url <url>     Backend base URL injected into simulator app defaults
+                               (default: http://127.0.0.1:8000)
   --artifacts-dir <path>       Output root directory (default: .artifacts/xcode)
   --min-free-mb <mb>           Minimum free disk space required (default: 12000)
   --keep-booted                Keep simulator booted after run
@@ -73,6 +76,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mac-destination-id)
       MAC_DESTINATION_ID="$2"
+      shift 2
+      ;;
+    --backend-base-url)
+      BACKEND_BASE_URL="$2"
       shift 2
       ;;
     --artifacts-dir)
@@ -143,10 +150,9 @@ if grep -qE 'com.apple.product-type.bundle.(unit-test|ui-testing)' "${PBXPROJ_PA
   HAS_TEST_TARGETS="true"
 fi
 
-APP_INFO_PLIST="${ROOT}/Roam/Info.plist"
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_INFO_PLIST}" 2>/dev/null || true)"
+BUNDLE_ID="$(xcodebuild -project "${PROJECT_PATH}" -scheme "${SCHEME}" -configuration "${CONFIGURATION}" -showBuildSettings 2>/dev/null | awk -F ' = ' '/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER[[:space:]]*=/ { print $2; exit }')"
 if [[ -z "${BUNDLE_ID}" ]]; then
-  BUNDLE_ID="roam.app"
+  BUNDLE_ID="com.columbiastartupstudio.Roam"
 fi
 
 echo "mode=${MODE}" >"${RUN_DIR}/summary.txt"
@@ -155,6 +161,7 @@ echo "configuration=${CONFIGURATION}" >>"${RUN_DIR}/summary.txt"
 echo "bundle_id=${BUNDLE_ID}" >>"${RUN_DIR}/summary.txt"
 echo "has_test_targets=${HAS_TEST_TARGETS}" >>"${RUN_DIR}/summary.txt"
 echo "free_mb=${FREE_MB}" >>"${RUN_DIR}/summary.txt"
+echo "backend_base_url=${BACKEND_BASE_URL}" >>"${RUN_DIR}/summary.txt"
 
 build_common_args=(
   -project "${PROJECT_PATH}"
@@ -166,7 +173,7 @@ build_common_args=(
 
 run_simulator() {
   local sim_udid
-  sim_udid="$(xcrun simctl list devices available | awk -v n="${SIMULATOR_NAME}" 'index($0, n) { if (match($0, /\(([0-9A-F-]+)\)/, m)) { print m[1]; exit } }')"
+  sim_udid="$(xcrun simctl list devices available | grep -m1 "${SIMULATOR_NAME}" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/')"
   if [[ -z "${sim_udid}" ]]; then
     echo "Could not find available simulator named '${SIMULATOR_NAME}'." >&2
     echo "Tip: list devices with: xcrun simctl list devices available" >&2
@@ -187,12 +194,34 @@ run_simulator() {
     exit 4
   fi
 
+  local built_bundle_id
+  built_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${app_path}/Info.plist" 2>/dev/null || true)"
+  if [[ -n "${built_bundle_id}" ]]; then
+    BUNDLE_ID="${built_bundle_id}"
+  fi
+  echo "effective_bundle_id=${BUNDLE_ID}" >>"${RUN_DIR}/summary.txt"
+
   xcrun simctl boot "${sim_udid}" >/dev/null 2>&1 || true
   xcrun simctl bootstatus "${sim_udid}" -b
 
-  xcrun simctl install "${sim_udid}" "${app_path}" | tee "${RUN_DIR}/install.log"
+  xcrun simctl install "${sim_udid}" "${app_path}" 2>&1 | tee "${RUN_DIR}/install.log"
+
+  normalized_backend_base_url="${BACKEND_BASE_URL%/}"
+  if [[ "${normalized_backend_base_url}" == "http://127.0.0.1:8000" || "${normalized_backend_base_url}" == "http://localhost:8000" ]]; then
+    # Option A: local backend mode.
+    xcrun simctl spawn "${sim_udid}" defaults write "${BUNDLE_ID}" roam_network_env local
+    xcrun simctl spawn "${sim_udid}" defaults delete "${BUNDLE_ID}" roam_staging_base_url >/dev/null 2>&1 || true
+    echo "network_env_injected=local" >>"${RUN_DIR}/summary.txt"
+  else
+    # Non-default backend URL: use staging mode + override URL.
+    xcrun simctl spawn "${sim_udid}" defaults write "${BUNDLE_ID}" roam_network_env staging
+    xcrun simctl spawn "${sim_udid}" defaults write "${BUNDLE_ID}" roam_staging_base_url "${normalized_backend_base_url}"
+    echo "network_env_injected=staging" >>"${RUN_DIR}/summary.txt"
+    echo "staging_base_url_injected=${normalized_backend_base_url}" >>"${RUN_DIR}/summary.txt"
+  fi
+
   xcrun simctl terminate "${sim_udid}" "${BUNDLE_ID}" >/dev/null 2>&1 || true
-  xcrun simctl launch "${sim_udid}" "${BUNDLE_ID}" | tee "${RUN_DIR}/launch.log"
+  xcrun simctl launch "${sim_udid}" "${BUNDLE_ID}" 2>&1 | tee "${RUN_DIR}/launch.log"
 
   sleep 8
   xcrun simctl spawn "${sim_udid}" log show --style compact --last 3m --predicate "process == \"Roam\"" >"${RUN_DIR}/runtime.log" || true
@@ -255,7 +284,7 @@ run_wireless() {
   fi
 
   local discovered_device_id
-  discovered_device_id="$(xcrun xctrace list devices | sed -n '1,80p' | awk '/iPhone/ && $0 !~ /Simulator/ { if (match($0, /\(([0-9A-F-]+)\)$/, m)) { print m[1]; exit } }')"
+  discovered_device_id="$(xcrun xctrace list devices | sed -n '1,80p' | grep -m1 -E 'iPhone.*\([0-9A-F-]+\)$' | sed -E 's/.*\(([0-9A-F-]+)\)$/\1/')"
 
   if [[ -z "${discovered_device_id}" ]]; then
     cat >&2 <<EOF

@@ -17,6 +17,26 @@ def getFirebaseServiceAccountJson() -> str:
     return getEnv("FIREBASE_SERVICE_ACCOUNT_JSON")
 
 
+def getFirebaseIosProjectId() -> str | None:
+    """Optional iOS Firebase project id from GoogleService-Info.plist (for mismatch warnings)."""
+    value = os.getenv("FIREBASE_IOS_PROJECT_ID")
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed if trimmed else None
+
+
+def allowUnverifiedFirebaseTokensInDev() -> bool:
+    """
+    Dev-only escape hatch for local testing when Firebase projects are intentionally mismatched.
+    Never enable this in production.
+    """
+    raw = os.getenv("FIREBASE_DEV_ALLOW_UNVERIFIED_TOKENS")
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def IS_DEV() -> bool:
     environment = getEnv("ENVIRONMENT")
     if environment not in {"dev", "prod"}:
@@ -39,6 +59,17 @@ def getTrustedAuthProviders() -> set[str]:
     rawProviders = os.getenv("TRUSTED_AUTH_PROVIDERS") or "google.com,password"
     providers = {value.strip() for value in rawProviders.split(",") if value.strip()}
     return providers
+
+
+def isAuthFailureLockoutEnabled() -> bool:
+    """
+    Controls temporary lockouts after repeated auth failures.
+    Defaults: disabled in dev, enabled in prod.
+    """
+    raw = os.getenv("AUTH_FAILURE_LOCKOUT_ENABLED")
+    if raw is None:
+        return not IS_DEV()
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def getDatabaseUrl() -> str:

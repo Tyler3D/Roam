@@ -1,19 +1,31 @@
 import json
+import logging
 
 import firebase_admin
 from firebase_admin import auth as firebaseAuth
 from firebase_admin import credentials
 
-from app.common.config import getFirebaseServiceAccountJson
+from app.common.config import getFirebaseIosProjectId, getFirebaseServiceAccountJson
 
 
 firebaseApp: firebase_admin.App | None = None
+logger = logging.getLogger("roam.auth")
 
 
 def getFirebaseApp() -> firebase_admin.App:
     global firebaseApp
     if firebaseApp is None:
         info = json.loads(getFirebaseServiceAccountJson())
+        serviceAccountProjectId = str(info.get("project_id") or "").strip() or None
+        iosProjectId = getFirebaseIosProjectId()
+        if iosProjectId and serviceAccountProjectId and iosProjectId != serviceAccountProjectId:
+            logger.warning(
+                "firebase_project_mismatch",
+                extra={
+                    "iosProjectId": iosProjectId,
+                    "serviceAccountProjectId": serviceAccountProjectId,
+                },
+            )
         if "private_key" in info:
             info["private_key"] = info["private_key"].replace("\\n", "\n")
         cred = credentials.Certificate(info)

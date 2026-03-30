@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -55,6 +55,24 @@ logger = logging.getLogger("roam.reels")
 MAX_INGEST_RETRIES_PER_REEL = 5
 
 reelsRouter = APIRouter()
+
+
+_BAD_DESC_PREFIXES = (
+    "based on", "i can see", "the frames show", "this appears",
+    "it looks like", "from the", "given the", "analyzing",
+    "looking at", "in the video", "the video shows", "in this video",
+    "the clip shows", "this reel",
+)
+
+
+def _sanitise_display_description(raw: str) -> str:
+    """Strip LLM reasoning artifacts from displayDescription before sending to client."""
+    if not raw:
+        return ""
+    cleaned = raw.strip().strip("`").strip()
+    if cleaned.lower().startswith(_BAD_DESC_PREFIXES):
+        return ""
+    return cleaned[:300]
 
 
 def _candidate_payload_confidence(cand_payload: object) -> float | None:
@@ -262,11 +280,10 @@ def getReel(
                 placeLat = pl.latitude
                 placeLng = pl.longitude
                 paddr = (pl.address or "").strip()
-                pname = (pl.name or "").strip()
+                # Only use the address as a "detected in" hint; using the place
+                # name here would duplicate the card title.
                 if paddr:
                     pipeline_detected_in_label = paddr[:500]
-                elif pname:
-                    pipeline_detected_in_label = pname[:500]
 
         # --- User-confirmed place (takes priority) ---
         up = user_places.get(c.id)
@@ -292,11 +309,11 @@ def getReel(
         else:
             candPayload = raw.get("candidate")
             previewTitle = (candPayload.get("title") if isinstance(candPayload, dict) else None) or ""
-            preview_desc = (
+            preview_desc = _sanitise_display_description(
                 (candPayload.get("displayDescription") or candPayload.get("display_description") or "")
                 if isinstance(candPayload, dict)
                 else ""
-            ) or ""
+            )
             raw_cat = (
                 (candPayload.get("category") or "")
                 if isinstance(candPayload, dict)
@@ -310,17 +327,16 @@ def getReel(
             conf = _candidate_payload_confidence(candPayload)
 
         # LLM-only vague line (column, then JSON); never user overrides.
+        # Only use placeAddress — never mapsQuery, which starts with the place
+        # name and causes it to appear twice on the card.
         llm_vague: str | None = None
         stored = (c.llmDetectedInLabel or "").strip() if c.llmDetectedInLabel else ""
         if stored:
             llm_vague = stored[:500]
         elif not isSynthetic:
             pa = (str(place_addr).strip() if place_addr is not None else "") or ""
-            mq = (str(maps_q).strip() if maps_q is not None else "") or ""
             if pa:
                 llm_vague = pa
-            elif mq:
-                llm_vague = mq
 
         detected_in_label = llm_vague or pipeline_detected_in_label
 
@@ -449,11 +465,11 @@ async def retryReelIngest(
         job.ogKeywords = ogKeywords
     job.status = JobStatus.processing
     job.error = None
-    job.updatedAt = datetime.utcnow()
+    job.updatedAt = datetime.now(timezone.utc)
     session.add(job)
 
     r.status = SavedReelStatus.processing
-    r.updatedAt = datetime.utcnow()
+    r.updatedAt = datetime.now(timezone.utc)
     r.ingestRetryCount += 1
     session.add(r)
 
@@ -612,7 +628,7 @@ def updateCandidatePlace(
         existing.longitude = resolved.longitude
         existing.maps_query = pmq
         existing.source = "user"
-        existing.confirmed_at = datetime.utcnow()
+        existing.confirmed_at = datetime.now(timezone.utc)
         session.add(existing)
     else:
         existing = ReelCandidateUserPlaceModel(

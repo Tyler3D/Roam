@@ -1,5 +1,5 @@
 """Feature flag endpoints — per-user flag CRUD."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -50,7 +50,7 @@ def upsertFeatureFlag(
 
     if existing:
         existing.enabled = body.enabled
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = datetime.now(timezone.utc)
         session.add(existing)
     else:
         existing = UserFeatureFlagModel(

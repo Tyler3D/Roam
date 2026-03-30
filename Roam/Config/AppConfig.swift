@@ -4,6 +4,7 @@ import Observation
 private let networkEnvKey = "roam_network_env"
 private let appModeKey = "roam_app_mode"
 private let stagingURLKey = "roam_staging_base_url"
+private let defaultStagingPlaceholderHost = "your-staging-url.run.app"
 
 // MARK: - App Mode (feature selection)
 
@@ -73,7 +74,12 @@ final class AppConfig {
         case .local:
             return Self.defaultLocalBaseURL
         case .staging:
-            return Self.normalizedBaseURL(stagingBaseURLOverride ?? Self.defaultStagingBaseURL)
+            let candidate = Self.normalizedBaseURL(stagingBaseURLOverride ?? Self.defaultStagingBaseURL)
+            // Avoid shipping placeholder staging URL into runtime network calls.
+            if Self.isPlaceholderStagingURL(candidate) {
+                return Self.normalizedBaseURL(Self.defaultProductionBaseURL)
+            }
+            return candidate
         case .production:
             return Self.normalizedBaseURL(Self.defaultProductionBaseURL)
         }
@@ -110,23 +116,58 @@ final class AppConfig {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
+    private static func isPlaceholderStagingURL(_ raw: String) -> Bool {
+        guard let url = URL(string: raw), let host = url.host?.lowercased() else {
+            return raw.contains(defaultStagingPlaceholderHost)
+        }
+        return host == defaultStagingPlaceholderHost
+    }
+
     init() {
         Self.migrateOffMockNetworkPreference()
 
-        // Migrate: old roam_app_mode held local/staging/production (network env)
+        // Read persisted values
         let networkEnvRaw = UserDefaults.standard.string(forKey: networkEnvKey)
         let legacyRaw = UserDefaults.standard.string(forKey: "roam_app_mode")
 
+        // Migrate legacy values into network env if needed
         if networkEnvRaw == nil, let legacy = legacyRaw, NetworkEnv(rawValue: legacy) != nil {
             UserDefaults.standard.set(legacy, forKey: networkEnvKey)
             UserDefaults.standard.set(AppMode.mainRoam.rawValue, forKey: appModeKey)
         }
 
-        let envRaw = UserDefaults.standard.string(forKey: networkEnvKey) ?? NetworkEnv.production.rawValue
+        // Prepare locals for all stored properties without reading from self
+        #if DEBUG
+        let defaultNetworkEnvRaw = NetworkEnv.local.rawValue
+        #else
+        let defaultNetworkEnvRaw = NetworkEnv.production.rawValue
+        #endif
+
+        let envRaw = UserDefaults.standard.string(forKey: networkEnvKey) ?? defaultNetworkEnvRaw
         let modeRaw = UserDefaults.standard.string(forKey: appModeKey) ?? AppMode.mainRoam.rawValue
-        self.networkEnv = NetworkEnv(rawValue: envRaw) ?? .production
-        self.appMode = AppMode(rawValue: modeRaw) ?? .mainRoam
-        self.stagingBaseURLOverride = UserDefaults.standard.string(forKey: stagingURLKey)
+
+        var localNetworkEnv = NetworkEnv(rawValue: envRaw) ?? .production
+        let localAppMode = AppMode(rawValue: modeRaw) ?? .mainRoam
+
+        let storedOverride = UserDefaults.standard.string(forKey: stagingURLKey)
+        let cleanedOverride: String?
+        if let storedOverride, Self.isPlaceholderStagingURL(Self.normalizedBaseURL(storedOverride)) {
+            cleanedOverride = nil
+            UserDefaults.standard.removeObject(forKey: stagingURLKey)
+        } else {
+            cleanedOverride = storedOverride
+        }
+
+        // If staging points at placeholder, default to production (still using locals)
+        if localNetworkEnv == .staging,
+           Self.isPlaceholderStagingURL(Self.normalizedBaseURL(cleanedOverride ?? Self.defaultStagingBaseURL)) {
+            localNetworkEnv = .production
+        }
+
+        // Assign to self only after all local values are finalized
+        self.networkEnv = localNetworkEnv
+        self.appMode = localAppMode
+        self.stagingBaseURLOverride = cleanedOverride
         self.showShareExtensionConfirmationUI = SharedStore.shareExtensionShowsConfirmationUI
     }
 

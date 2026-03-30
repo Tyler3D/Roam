@@ -9,7 +9,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
+				<string>com.googleusercontent.apps.435713755234-c09m71qrava4iun9bp077n03sablo96d</string>
 			</array>
 		</dict>
 		<dict>
@@ -30,8 +30,10 @@
 	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>
 	<string>google.com,password</string>
 	<key>GOOGLE_MAPS_IOS_API_KEY</key>
-	<string></string>
+	<string>AIzaSyCt75GzejId2L-05v1VDE2KDhJ92UxaA-g</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Roam uses your location to show where you are on the collection map.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Roam adds your confirmed plans to your calendar so you never miss a hangout.</string>
 </dict>
 </plist>

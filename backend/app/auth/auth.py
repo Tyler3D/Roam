@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 from typing import Any, Dict
 
@@ -6,6 +8,7 @@ from firebase_admin import auth
 from sqlmodel import Session, select
 
 from app.auth.firebase import getFirebaseApp
+from app.common.config import IS_DEV, allowUnverifiedFirebaseTokensInDev
 from app.common.backendErrors import NotFound, Unauthorized
 from app.common.db import getSession
 from app.models.users import UserModel
@@ -41,6 +44,26 @@ def getDecodedTokenFromRequest(request: Request) -> Dict[str, Any]:
 
 
 logger = logging.getLogger("roam.auth")
+
+
+def decodeJwtPayloadWithoutVerification(token: str) -> Dict[str, Any]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise Unauthorized("Invalid Firebase token")
+
+    payloadB64 = parts[1]
+    payloadB64 += "=" * (-len(payloadB64) % 4)
+    try:
+        payloadBytes = base64.urlsafe_b64decode(payloadB64.encode("utf-8"))
+        payload = json.loads(payloadBytes.decode("utf-8"))
+    except Exception as exc:
+        raise Unauthorized("Invalid Firebase token") from exc
+
+    uid = payload.get("uid") or payload.get("user_id") or payload.get("sub")
+    if not uid:
+        raise Unauthorized("Invalid Firebase token")
+    payload["uid"] = uid
+    return payload
 
 
 def getCurrentAuth(
@@ -113,6 +136,17 @@ def verifyFirebaseTokenString(token: str) -> Dict[str, Any]:
     try:
         decoded = auth.verify_id_token(token, check_revoked=True)
     except Exception as exc:  # firebase_admin raises several types
+        if IS_DEV() and allowUnverifiedFirebaseTokensInDev():
+            decoded = decodeJwtPayloadWithoutVerification(token)
+            logger.warning(
+                "firebase_token_unverified_dev_fallback",
+                extra={
+                    "uid": decoded.get("uid"),
+                    "aud": decoded.get("aud"),
+                    "iss": decoded.get("iss"),
+                },
+            )
+            return decoded
         # Response stays generic; logs carry the real reason (wrong project, bad key, etc.).
         logger.warning(
             "firebase_token_verify_failed",

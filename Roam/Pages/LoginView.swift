@@ -4,6 +4,10 @@ import GoogleSignInSwift
 struct LoginView: View {
     @Environment(AuthManager.self) private var authManager
     @State private var isLoading = false
+    @State private var email = ""
+    @State private var password = ""
+    @State private var showSignup = false
+    @State private var showResetPassword = false
     #if DEBUG
     @State private var showDebugMenu = false
     #endif
@@ -15,8 +19,11 @@ struct LoginView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     logoBlock
+                    emailSection
+                    authLinksSection
+                    dividerWithLabel("or continue with")
                     googleSection
-                    dividerSection
+                    dividerWithLabel("how it works")
                     featuresSection
                 }
                 .padding(.horizontal, 32)
@@ -24,6 +31,12 @@ struct LoginView: View {
                 .padding(.bottom, 40)
             }
             .background(outerBackground)
+            .sheet(isPresented: $showSignup) {
+                SignupView()
+            }
+            .sheet(isPresented: $showResetPassword) {
+                ResetPasswordView()
+            }
             .alert("Error", isPresented: .constant(authManager.errorMessage != nil)) {
                 Button("OK") { authManager.errorMessage = nil }
             } message: {
@@ -100,18 +113,122 @@ struct LoginView: View {
         }
     }
 
-    private var dividerSection: some View {
+    private var emailSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Email")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(RoamColors.text)
+
+            TextField("you@example.com", text: $email)
+                .keyboardType(.emailAddress)
+                .textContentType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .submitLabel(.next)
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(RoamColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(RoamColors.reviewBorder, lineWidth: 1)
+                )
+
+            if let emailMessage = emailValidationMessage {
+                Text(emailMessage)
+                    .font(.caption)
+                    .foregroundStyle(RoamColors.error)
+            }
+
+            Text("Password")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(RoamColors.text)
+
+            SecureField("Enter your password", text: $password)
+                .textContentType(.password)
+                .submitLabel(.go)
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(RoamColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(RoamColors.reviewBorder, lineWidth: 1)
+                )
+                .onSubmit {
+                    guard canSubmitEmailPassword, !isLoading else { return }
+                    Task { await signInWithEmailPassword() }
+                }
+
+            if let passwordMessage = passwordValidationMessage {
+                Text(passwordMessage)
+                    .font(.caption)
+                    .foregroundStyle(RoamColors.error)
+            }
+
+            Button {
+                Task { await signInWithEmailPassword() }
+            } label: {
+                Group {
+                    if isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Sign in")
+                            .fontWeight(.semibold)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(RoamColors.reviewAccent)
+            .disabled(isLoading || !canSubmitEmailPassword)
+
+            if let message = formValidationMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(RoamColors.textMid)
+            }
+        }
+        .padding(.bottom, 10)
+    }
+
+    private var authLinksSection: some View {
+        HStack {
+            Button("Create account") {
+                showSignup = true
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(RoamColors.reviewAccent)
+
+            Spacer()
+
+            Button("Forgot password?") {
+                showResetPassword = true
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(RoamColors.textMid)
+        }
+        .padding(.bottom, 10)
+    }
+
+    private func dividerWithLabel(_ label: String) -> some View {
         HStack(spacing: 14) {
             Rectangle()
                 .fill(RoamColors.reviewBorder)
                 .frame(height: 1)
-            Text("how it works")
-                .font(RoamFont.mono(11, weight: .medium))
-                .foregroundStyle(RoamColors.textMuted)
-                .textCase(.uppercase)
             Rectangle()
                 .fill(RoamColors.reviewBorder)
                 .frame(height: 1)
+        }
+        .overlay(alignment: .center) {
+            Text(label)
+                .font(RoamFont.mono(11, weight: .medium))
+                .foregroundStyle(RoamColors.textMuted)
+                .textCase(.uppercase)
+                .padding(.horizontal, 8)
+                .background(outerBackground)
         }
         .padding(.top, 24)
         .padding(.bottom, 8)
@@ -163,6 +280,53 @@ struct LoginView: View {
             try await authManager.signInWithGoogle()
         } catch {
             logError("Google sign in failed", error)
+            authManager.errorMessage = errorMessage(for: error)
+        }
+    }
+
+    private var canSubmitEmailPassword: Bool {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isValidEmail(normalizedEmail) && password.count >= 6
+    }
+
+    private var emailValidationMessage: String? {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedEmail.isEmpty else { return nil }
+        return isValidEmail(normalizedEmail) ? nil : "Enter a valid email address."
+    }
+
+    private var passwordValidationMessage: String? {
+        guard !password.isEmpty else { return nil }
+        return password.count >= 6 ? nil : "Password must be at least 6 characters."
+    }
+
+    private var formValidationMessage: String? {
+        guard !canSubmitEmailPassword else { return nil }
+        if email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty {
+            return "Enter your email and password to continue."
+        }
+        return nil
+    }
+
+    private func isValidEmail(_ value: String) -> Bool {
+        let parts = value.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        let localPart = parts[0]
+        let domainPart = parts[1]
+        guard !localPart.isEmpty, !domainPart.isEmpty else { return false }
+        return domainPart.contains(".")
+    }
+
+    private func signInWithEmailPassword() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await authManager.signIn(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            )
+        } catch {
+            logError("Email/password sign in failed", error)
             authManager.errorMessage = errorMessage(for: error)
         }
     }

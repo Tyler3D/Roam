@@ -60,6 +60,8 @@ struct AuthGateView<MainContent: View>: View {
     }
 
     private func sync() async {
+        // Align backend environment to the app's Firebase project without touching GoogleService-Info.plist
+        await apiClient.autoAlignEnvironmentIfNeeded()
         do {
             hasBackendUser = try await apiClient.syncBackendUser()
             syncCompleted = true

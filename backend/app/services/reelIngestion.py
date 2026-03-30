@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
@@ -63,14 +63,12 @@ class ReelInterpretOutput(BaseModel):
 
 
 def _llmDetectedInLabelFromCandidate(c: ReelCandidate) -> str | None:
-    """Stable vague location for UI; prefer LLM placeAddress, else mapsQuery."""
+    """Return vague location for UI (city / neighbourhood).
+    Only surface placeAddress — never mapsQuery, which almost always starts
+    with the place name itself and causes the name to appear twice in the card.
+    """
     pa = (c.placeAddress or "").strip()
-    if pa:
-        return pa[:500]
-    mq = (c.mapsQuery or "").strip()
-    if mq:
-        return mq[:500]
-    return None
+    return pa[:500] if pa else None
 
 
 class ProviderRateLimitError(Exception):
@@ -256,7 +254,13 @@ def _shouldResolveMaps(c: ReelCandidate) -> bool:
     return bool(c.mapsQuery and c.mapsQuery.strip())
 
 
-def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
+def _resolveGoogleMaps(
+    placeName: str,
+    placeAddress: str | None,
+    *,
+    user_lat: float | None = None,
+    user_lng: float | None = None,
+) -> dict | None:
     apiKey = getGoogleMapsApiKey()
     if not apiKey:
         return None
@@ -265,11 +269,19 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
     if placeAddress:
         query = f"{placeName} {placeAddress}"
 
+    params: dict = {"query": query, "key": apiKey}
+    if user_lat is not None and user_lng is not None:
+        # Bias results toward the user's actual location (50 km radius).
+        # This biases but does not restrict — distant results still appear if
+        # the query is specific enough (e.g. a named venue in another city).
+        params["location"] = f"{user_lat},{user_lng}"
+        params["radius"] = 50000
+
     try:
         with httpx.Client(timeout=10) as client:
             resp = client.get(
                 "https://maps.googleapis.com/maps/api/place/textsearch/json",
-                params={"query": query, "key": apiKey},
+                params=params,
             )
             if resp.status_code == 429:
                 raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
@@ -436,6 +448,8 @@ def createIdeaPipelineFromCandidate(
     raw_output: dict,
     saved_reel_id: UUID | None = None,
     override_place_id: UUID | None = None,
+    user_lat: float | None = None,
+    user_lng: float | None = None,
 ) -> UUID:
     """Create idea + pipeline_result + optional place suggestion; return new idea id.
 
@@ -494,7 +508,10 @@ def createIdeaPipelineFromCandidate(
     elif _shouldResolveMaps(candidate):
         query_key = (candidate.mapsQuery or candidate.title or "").strip()
         if query_key:
-            resolved = _resolveGoogleMaps(query_key, candidate.placeAddress) or {}
+            resolved = _resolveGoogleMaps(
+                query_key, candidate.placeAddress,
+                user_lat=user_lat, user_lng=user_lng,
+            ) or {}
             place = _createOrGetPlace(
                 session,
                 place_name=candidate.title or query_key,
@@ -517,7 +534,7 @@ def createIdeaPipelineFromCandidate(
 
     _autoSelectPlace(session, idea, suggestions)
     idea.status = IdeaStatus.ready
-    idea.updatedAt = datetime.utcnow()
+    idea.updatedAt = datetime.now(timezone.utc)
     session.add(idea)
     return idea.id
 
@@ -562,13 +579,19 @@ def _isAutoPromoteEnabled(session: Session, user_id: UUID) -> bool:
     return row.enabled
 
 
-def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | None:
+def _resolvedPlaceForCandidate(
+    session: Session,
+    c: ReelCandidate,
+    *,
+    user_lat: float | None = None,
+    user_lng: float | None = None,
+) -> UUID | None:
     if not _shouldResolveMaps(c):
         return None
     q = (c.mapsQuery or c.title or "").strip()
     if not q:
         return None
-    resolved = _resolveGoogleMaps(q, c.placeAddress) or {}
+    resolved = _resolveGoogleMaps(q, c.placeAddress, user_lat=user_lat, user_lng=user_lng) or {}
     place = _createOrGetPlace(
         session,
         place_name=c.title or q,
@@ -604,13 +627,15 @@ def processIngestionJob(
             return
 
         title = metadata.get("reelTitle") or metadata.get("shareText") or "Untitled reel"
+        user_lat: float | None = metadata.get("userLatitude")
+        user_lng: float | None = metadata.get("userLongitude")
 
         parsed = _callVisionReel(framesData, thumbnailData, metadata)
         filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
         filtered_ordered = sorted(filtered, key=lambda c: c.confidence, reverse=True)
         reel_url = metadata.get("reelUrl")
 
-        saved.updatedAt = datetime.utcnow()
+        saved.updatedAt = datetime.now(timezone.utc)
         if (metadata.get("reelTitle") or "").strip():
             saved.title = title[:500]
         session.add(saved)
@@ -635,6 +660,8 @@ def processIngestionJob(
                 candidate=c,
                 raw_output=raw_output,
                 saved_reel_id=saved.id,
+                user_lat=user_lat,
+                user_lng=user_lng,
             )
             linkIdeaToPersonalAndShared(
                 session,
@@ -663,7 +690,7 @@ def processIngestionJob(
             else:
                 for idx, c in enumerate(filtered_ordered):
                     c = _candidate_with_normalized_category(c)
-                    rp = _resolvedPlaceForCandidate(session, c)
+                    rp = _resolvedPlaceForCandidate(session, c, user_lat=user_lat, user_lng=user_lng)
                     llm_raw = {
                         "candidate": c.model_dump(),
                         "fullStructured": parsed.model_dump(),
@@ -680,11 +707,11 @@ def processIngestionJob(
                     )
             saved.status = SavedReelStatus.needs_review
 
-        saved.updatedAt = datetime.utcnow()
+        saved.updatedAt = datetime.now(timezone.utc)
         session.add(saved)
 
         job.status = JobStatus.done
-        job.updatedAt = datetime.utcnow()
+        job.updatedAt = datetime.now(timezone.utc)
         session.add(job)
         session.commit()
 
@@ -706,12 +733,12 @@ def processIngestionJob(
             if job:
                 job.status = JobStatus.failed
                 job.error = str(e)
-                job.updatedAt = datetime.utcnow()
+                job.updatedAt = datetime.now(timezone.utc)
                 session.add(job)
                 sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
                 if sr:
                     sr.status = SavedReelStatus.failed
-                    sr.updatedAt = datetime.utcnow()
+                    sr.updatedAt = datetime.now(timezone.utc)
                     session.add(sr)
                 session.commit()
         except Exception:
@@ -723,12 +750,12 @@ def processIngestionJob(
             if job:
                 job.status = JobStatus.failed
                 job.error = "Processing failed"
-                job.updatedAt = datetime.utcnow()
+                job.updatedAt = datetime.now(timezone.utc)
                 session.add(job)
                 sr = session.exec(select(SavedReelModel).where(SavedReelModel.jobId == job.id)).first()
                 if sr:
                     sr.status = SavedReelStatus.failed
-                    sr.updatedAt = datetime.utcnow()
+                    sr.updatedAt = datetime.now(timezone.utc)
                     session.add(sr)
                 session.commit()
         except Exception:

@@ -26,7 +26,10 @@ def _credentials() -> service_account.Credentials:
     if _CREDENTIALS is not None:
         return _CREDENTIALS
     info = json.loads(getGcsServiceAccountJson())
-    _CREDENTIALS = service_account.Credentials.from_service_account_info(info)
+    _CREDENTIALS = service_account.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
     return _CREDENTIALS
 
 

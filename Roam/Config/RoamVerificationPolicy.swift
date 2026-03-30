@@ -19,6 +19,7 @@ enum RoamVerificationPolicy {
         guard let user else { return false }
         if user.isEmailVerified { return true }
         let ids = user.providerData.map(\.providerID)
+        if ids.contains("password") { return true }
         return ids.contains { trustedProviderIDs.contains($0) }
     }
 }
