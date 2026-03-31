@@ -24,6 +24,4 @@ dist-ssr
 *.sln
 *.sw?
 
-cozy-corners-dates-52152f3a1c19.json
-
 supabase/config.toml
