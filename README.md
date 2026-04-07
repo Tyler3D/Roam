@@ -37,7 +37,7 @@ From repo root:
 python3.11 -m venv .venv311
 source .venv311/bin/activate
 python -m pip install -r backend/requirements.txt
-python -m uvicorn app.main:app --reload --app-dir backend
+./scripts/start-backend.sh
 ```
 
 Backend default URL: `http://127.0.0.1:8000`  
