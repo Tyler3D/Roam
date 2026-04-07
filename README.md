@@ -1,6 +1,7 @@
 # Roam (Full Stack)
 
 Roam is a full-stack app with:
+
 - `frontend/`: React + Vite web client (Firebase Auth)
 - `backend/`: FastAPI API server (Python)
 - `infra/` + `scripts/start-postgres.sh`: local Postgres in Docker
@@ -20,7 +21,7 @@ Roam is a full-stack app with:
 
 ### 1) Start Postgres (Docker)
 
-From repo root:
+Ensure Docker Desktop is running, then run the following from the repository root:
 
 ```bash
 ./scripts/start-postgres.sh
@@ -67,3 +68,4 @@ Frontend URL: `http://localhost:3000`
   - `frontend/.env` -> `VITE_API_BASE_URL=http://localhost:8001`
   - then restart `npm run dev`.
 - If `pip` is not available globally, use `python -m pip ...` inside the venv.
+
