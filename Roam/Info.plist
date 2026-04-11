@@ -24,55 +24,53 @@
 			</array>
 		</dict>
 	</array>
-	<key>ROAM_LOCAL_BASE_URL</key>
-	<string>http://localhost:8000</string>
-	<key>ROAM_STAGING_BASE_URL</key>
-	<string>https://roam-gateway-staging-cm0ahzq6.ue.gateway.dev</string>
-	<key>ROAM_PRODUCTION_BASE_URL</key>
-	<string>https://roam-gateway-cm0ahzq6.ue.gateway.dev</string>
-	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>
-	<string>google.com,password</string>
 	<key>GOOGLE_MAPS_IOS_API_KEY</key>
 	<string>AIzaSyDg8gZInjJA30BDRF0NqArLEzNwvTpm1Ew</string>
+	<key>ROAM_LOCAL_BASE_URL</key>
+	<string>http://localhost:8000</string>
+	<key>ROAM_PRODUCTION_BASE_URL</key>
+	<string>https://roam-gateway-cm0ahzq6.ue.gateway.dev</string>
 	<key>ROAM_PRODUCTION_FIREBASE</key>
 	<dict>
-		<key>CLIENT_ID</key>
-		<string>873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v.apps.googleusercontent.com</string>
-		<key>REVERSED_CLIENT_ID</key>
-		<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
 		<key>API_KEY</key>
 		<string>AIzaSyAj3K9PEONilPXF1DIF2gL3e3JP99pBfbU</string>
+		<key>BUNDLE_ID</key>
+		<string>com.columbiastartupstudio.Roam</string>
+		<key>CLIENT_ID</key>
+		<string>873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v.apps.googleusercontent.com</string>
 		<key>GCM_SENDER_ID</key>
 		<string>873018049069</string>
-		<key>BUNDLE_ID</key>
-		<string>com.columbiastartupstudio.Roam</string>
-		<key>PROJECT_ID</key>
-		<string>roam-alpha</string>
-		<key>STORAGE_BUCKET</key>
-		<string>roam-alpha.firebasestorage.app</string>
 		<key>GOOGLE_APP_ID</key>
 		<string>1:873018049069:ios:0eb1a203b56bf82e9baea4</string>
+		<key>PROJECT_ID</key>
+		<string>roam-alpha</string>
+		<key>REVERSED_CLIENT_ID</key>
+		<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
+		<key>STORAGE_BUCKET</key>
+		<string>roam-alpha.firebasestorage.app</string>
 	</dict>
+	<key>ROAM_STAGING_BASE_URL</key>
+	<string>https://roam-gateway-staging-cm0ahzq6.ue.gateway.dev</string>
 	<key>ROAM_STAGING_FIREBASE</key>
 	<dict>
-		<key>CLIENT_ID</key>
-		<string>63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46.apps.googleusercontent.com</string>
-		<key>REVERSED_CLIENT_ID</key>
-		<string>com.googleusercontent.apps.63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46</string>
 		<key>API_KEY</key>
 		<string>AIzaSyDhR_yhKiPjcCsmlj8vOsUPK10moousCr0</string>
-		<key>GCM_SENDER_ID</key>
-		<string>63421976809</string>
 		<key>BUNDLE_ID</key>
 		<string>com.columbiastartupstudio.Roam</string>
-		<key>PROJECT_ID</key>
-		<string>cozy-corners-dates</string>
-		<key>STORAGE_BUCKET</key>
-		<string>cozy-corners-dates.firebasestorage.app</string>
+		<key>CLIENT_ID</key>
+		<string>63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46.apps.googleusercontent.com</string>
+		<key>GCM_SENDER_ID</key>
+		<string>63421976809</string>
 		<key>GOOGLE_APP_ID</key>
 		<string>1:63421976809:ios:1098576ac418a31b80a078</string>
+		<key>PROJECT_ID</key>
+		<string>cozy-corners-dates</string>
+		<key>REVERSED_CLIENT_ID</key>
+		<string>com.googleusercontent.apps.63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46</string>
+		<key>STORAGE_BUCKET</key>
+		<string>cozy-corners-dates.firebasestorage.app</string>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Roam uses your location to show where you are on the collection map.</string>
+	<key>ROAM_TRUSTED_AUTH_PROVIDERS</key>
+	<string>google.com,password</string>
 </dict>
 </plist>
