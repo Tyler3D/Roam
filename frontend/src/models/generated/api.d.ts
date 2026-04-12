@@ -936,6 +936,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/device-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registerdevicetoken
+         * @description Register or update an FCM device token for push notifications.
+         */
+        post: operations["registerDeviceToken_api_device_tokens_post"];
+        /**
+         * Unregisterdevicetoken
+         * @description Remove an FCM device token (e.g. on sign-out).
+         */
+        delete: operations["unregisterDeviceToken_api_device_tokens_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1126,6 +1150,38 @@ export interface components {
              * @description Additional shared collections only. Personal default is always linked; do not send it.
              */
             collectionIds?: string[];
+        };
+        /** DeviceTokenCreate */
+        DeviceTokenCreate: {
+            /** Fcmtoken */
+            fcmToken: string;
+            /**
+             * Platform
+             * @default ios
+             */
+            platform: string;
+        };
+        /** DeviceTokenRead */
+        DeviceTokenRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Fcmtoken */
+            fcmToken: string;
+            /** Platform */
+            platform: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
         };
         /** FeatureFlagRead */
         FeatureFlagRead: {
@@ -1389,6 +1445,14 @@ export interface components {
             planId?: string | null;
             /** Collectionid */
             collectionId?: string | null;
+            /** Placeid */
+            placeId?: string | null;
+            /** Ideaid */
+            ideaId?: string | null;
+            /** Savedreelid */
+            savedReelId?: string | null;
+            /** Actoruserid */
+            actorUserId?: string | null;
             /** Title */
             title: string;
             /** Body */
@@ -3922,6 +3986,70 @@ export interface operations {
             };
         };
     };
+    registerDeviceToken_api_device_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceTokenRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unregisterDeviceToken_api_device_tokens_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
 }
 export enum FriendshipStatus {
     pending = "pending",
@@ -3950,7 +4078,17 @@ export enum NotificationType {
     plan_reminder = "plan_reminder",
     rate_prompt = "rate_prompt",
     friend_request = "friend_request",
-    added_to_collection = "added_to_collection"
+    added_to_collection = "added_to_collection",
+    reel_processed = "reel_processed",
+    reel_needs_review = "reel_needs_review",
+    coincidence_match = "coincidence_match",
+    same_reel_saved = "same_reel_saved",
+    trending_place = "trending_place",
+    friend_request_accepted = "friend_request_accepted",
+    proximity_save = "proximity_save",
+    collection_idea_added = "collection_idea_added",
+    weekly_digest = "weekly_digest",
+    monthly_stats = "monthly_stats"
 }
 export enum PlanStatus {
     draft = "draft",

@@ -10,6 +10,7 @@ from app.common.backendErrors import BadRequest, Conflict, Forbidden, NotFound
 from app.common.db import commitAndRefresh, getSession
 from app.models.friendships import FriendshipModel, FriendshipRead, FriendshipStatus
 from app.models.users import UserModel, UserRead
+from app.services.notifications import notifyFriendRequestAccepted, notifyFriendRequestReceived
 
 logger = logging.getLogger("roam.friends")
 friendsRouter = APIRouter()
@@ -129,6 +130,9 @@ def sendFriendRequest(
     session.add(friendship)
     commitAndRefresh(session, friendship)
 
+    notifyFriendRequestReceived(session, addresseeId=body.targetUserId, requester=user)
+    session.commit()
+
     read = FriendshipRead.model_validate(friendship)
     read.friendId = body.targetUserId
     read.friendFirstName = target.firstName
@@ -154,6 +158,9 @@ def acceptFriendRequest(
     friendship.status = FriendshipStatus.accepted
     session.add(friendship)
     commitAndRefresh(session, friendship)
+
+    notifyFriendRequestAccepted(session, requesterId=friendship.requesterId, accepter=user)
+    session.commit()
 
     read = FriendshipRead.model_validate(friendship)
     read.friendId = friendship.requesterId
