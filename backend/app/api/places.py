@@ -7,7 +7,7 @@ from app.common.db import getSession
 from app.common.idea_categories import normalize_category
 from app.models.places import PlaceModel, PlaceRead
 from app.models.users import UserModel
-from app.services.places import estimate_duration, search_google_places, search_google_places_many
+from app.services.places import estimateDuration, searchGooglePlaces, searchGooglePlacesMany
 
 logger = logging.getLogger("roam.places")
 placesRouter = APIRouter()
@@ -33,7 +33,7 @@ def _backfillPlace(session: Session, place: PlaceModel, data: dict) -> None:
         session.flush()
 
 
-def _get_or_create_place_read(session: Session, place_data: dict, fallback_name: str) -> PlaceRead:
+def _getOrCreatePlaceRead(session: Session, place_data: dict, fallback_name: str) -> PlaceRead:
     google_place_id = place_data.get("googlePlaceId")
     if google_place_id:
         existing = session.exec(
@@ -42,7 +42,7 @@ def _get_or_create_place_read(session: Session, place_data: dict, fallback_name:
         if existing:
             _backfillPlace(session, existing, place_data)
             read = PlaceRead.model_validate(existing)
-            read.estimatedMinutes = estimate_duration(
+            read.estimatedMinutes = estimateDuration(
                 existing.name, existing.placeTypes or []
             )
             return read
@@ -69,7 +69,7 @@ def _get_or_create_place_read(session: Session, place_data: dict, fallback_name:
     session.refresh(place)
 
     read = PlaceRead.model_validate(place)
-    read.estimatedMinutes = estimate_duration(
+    read.estimatedMinutes = estimateDuration(
         place.name, place.placeTypes or []
     )
     return read
@@ -81,10 +81,10 @@ def searchPlaces(
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> PlaceRead | None:
-    place_data = search_google_places(q)
+    place_data = searchGooglePlaces(q)
     if not place_data:
         return None
-    return _get_or_create_place_read(session, place_data, q)
+    return _getOrCreatePlaceRead(session, place_data, q)
 
 
 @placesRouter.get("/places/search-list", response_model=list[PlaceRead])
@@ -94,8 +94,8 @@ def searchPlacesList(
     user: UserModel = Depends(getCurrentUser),
     session: Session = Depends(getSession),
 ) -> list[PlaceRead]:
-    rows = search_google_places_many(q, limit=limit)
+    rows = searchGooglePlacesMany(q, limit=limit)
     out: list[PlaceRead] = []
     for place_data in rows:
-        out.append(_get_or_create_place_read(session, place_data, q))
+        out.append(_getOrCreatePlaceRead(session, place_data, q))
     return out

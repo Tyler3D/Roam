@@ -41,7 +41,7 @@ from app.models.friendships import FriendshipModel, FriendshipStatus
 from app.models.notifications import NotificationModel, NotificationType
 from app.services.interpret import get_scribble_prompt_version, interpret_idea
 from app.services.notifications import checkCoincidenceMatch, checkTrendingPlace
-from app.services.places import search_google_places
+from app.services.places import searchGooglePlaces
 from app.services.scheduling import suggest_time_slots
 
 logger = logging.getLogger("roam.ideas")
@@ -72,7 +72,7 @@ def _getLatestPipelineResult(session: Session, ideaId: UUID) -> PipelineResultRe
     return read
 
 
-def _collection_ids_for_idea_visible_to_user(
+def _collectionIdsForIdeaVisibleToUser(
     session: Session,
     idea_id: UUID,
     viewer_user_id: UUID,
@@ -88,7 +88,7 @@ def _collection_ids_for_idea_visible_to_user(
     return list(rows)
 
 
-def _collection_ids_for_ideas_visible_to_user_batch(
+def _collectionIdsForIdeasVisibleToUserBatch(
     session: Session,
     idea_ids: list[UUID],
     viewer_user_id: UUID,
@@ -117,14 +117,14 @@ def _collection_ids_for_ideas_visible_to_user_batch(
     return out
 
 
-def _encode_idea_cursor(created_at: datetime, idea_id: UUID) -> str:
+def _encodeIdeaCursor(created_at: datetime, idea_id: UUID) -> str:
     payload = {"c": created_at.isoformat(), "i": str(idea_id)}
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     b = base64.urlsafe_b64encode(raw).decode("ascii")
     return b.rstrip("=")
 
 
-def _decode_idea_cursor(cursor: str) -> tuple[datetime, UUID]:
+def _decodeIdeaCursor(cursor: str) -> tuple[datetime, UUID]:
     try:
         pad = "=" * (-len(cursor) % 4)
         raw = base64.urlsafe_b64decode(cursor + pad)
@@ -145,7 +145,7 @@ def _ideaReadWithExtrasBatch(
     if not rows:
         return []
     idea_ids = [r.id for r in rows]
-    coll_map = _collection_ids_for_ideas_visible_to_user_batch(session, idea_ids, viewer_user_id)
+    coll_map = _collectionIdsForIdeasVisibleToUserBatch(session, idea_ids, viewer_user_id)
 
     subq = (
         select(
@@ -232,7 +232,7 @@ def _ideaReadWithExtras(
     read = IdeaRead.model_validate(idea)
     read.planCount = getattr(idea, "planCount", 0) if planCount is None else planCount
     read.pipelineResult = _getLatestPipelineResult(session, idea.id)
-    read.collectionIds = _collection_ids_for_idea_visible_to_user(session, idea.id, viewer_user_id)
+    read.collectionIds = _collectionIdsForIdeaVisibleToUser(session, idea.id, viewer_user_id)
     if idea.placeId:
         place = session.get(PlaceModel, idea.placeId)
         if place:
@@ -253,7 +253,7 @@ def listIdeas(
 ) -> IdeaPageRead:
     q = select(IdeaWithPlanCountView).where(IdeaWithPlanCountView.userId == user.id)
     if cursor:
-        c_at, c_id = _decode_idea_cursor(cursor)
+        c_at, c_id = _decodeIdeaCursor(cursor)
         q = q.where(
             or_(
                 col(IdeaWithPlanCountView.createdAt) < c_at,
@@ -282,7 +282,7 @@ def listIdeas(
     next_cur: str | None = None
     if has_more and rows:
         last = rows[-1]
-        next_cur = _encode_idea_cursor(last.createdAt, last.id)
+        next_cur = _encodeIdeaCursor(last.createdAt, last.id)
     return IdeaPageRead(
         items=items,
         nextCursor=next_cur,
@@ -476,7 +476,7 @@ def interpretIdea(
     suggestions: list[tuple[PlaceSuggestionModel, float | None]] = []
     searchQuery = resultDict.get("searchQuery")
     if searchQuery:
-        placeData = search_google_places(searchQuery)
+        placeData = searchGooglePlaces(searchQuery)
         if placeData:
             _upsertPlace(session, idea, placeData)
             place = session.get(PlaceModel, idea.placeId) if idea.placeId else None

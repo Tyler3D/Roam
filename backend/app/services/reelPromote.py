@@ -23,7 +23,7 @@ from app.services.reelIngestion import (
     ReelCandidate,
     ReelInterpretOutput,
     createIdeaPipelineFromCandidate,
-    resolve_place_from_user_pick,
+    resolvePlaceFromUserPick,
     _refinedTitle,
 )
 
@@ -152,7 +152,7 @@ def promoteSavedReel(
                 or (pn or "").strip()
             )
             if has_user_hint:
-                user_place = resolve_place_from_user_pick(
+                user_place = resolvePlaceFromUserPick(
                     session,
                     name=pn,
                     address=pa,

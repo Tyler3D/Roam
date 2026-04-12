@@ -36,8 +36,8 @@ KEYWORD_DURATIONS: list[tuple[re.Pattern, int]] = [
 ]
 
 
-def estimate_duration(title: str, place_types: list[str] | None = None) -> int:
-    for t in place_types or []:
+def estimateDuration(title: str, placeTypes: list[str] | None = None) -> int:
+    for t in placeTypes or []:
         if t in TYPE_DURATIONS:
             return TYPE_DURATIONS[t]
     for pattern, minutes in KEYWORD_DURATIONS:
@@ -46,22 +46,22 @@ def estimate_duration(title: str, place_types: list[str] | None = None) -> int:
     return 60
 
 
-def _text_search_result_to_dict(top: dict[str, Any], query_fallback: str) -> dict[str, Any]:
+def _textSearchResultToDict(top: dict[str, Any], queryFallback: str) -> dict[str, Any]:
     location = top.get("geometry", {}).get("location", {})
     types = top.get("types", [])
-    opening_hours = top.get("opening_hours", {})
-    place_id = top.get("place_id")
-    formatted_address = top.get("formatted_address", "")
+    openingHoursRaw = top.get("opening_hours", {})
+    placeId = top.get("place_id")
+    formattedAddress = top.get("formatted_address", "")
     return {
-        "googlePlaceId": place_id,
-        "name": top.get("name", query_fallback),
-        "address": formatted_address,
-        "city": extractCity(place_id, formatted_address),
+        "googlePlaceId": placeId,
+        "name": top.get("name", queryFallback),
+        "address": formattedAddress,
+        "city": extractCity(placeId, formattedAddress),
         "latitude": location.get("lat"),
         "longitude": location.get("lng"),
-        "category": _classify_place_types(types),
+        "category": _classifyPlaceTypes(types),
         "placeTypes": types,
-        "openingHours": opening_hours.get("periods", []),
+        "openingHours": openingHoursRaw.get("periods", []),
     }
 
 
@@ -82,21 +82,21 @@ def _googleTextSearch(query: str) -> list[dict[str, Any]]:
     return list(data.get("results", []))
 
 
-def search_google_places(query: str) -> dict[str, Any] | None:
+def searchGooglePlaces(query: str) -> dict[str, Any] | None:
     results = _googleTextSearch(query)
     if not results:
         return None
-    return _text_search_result_to_dict(results[0], query)
+    return _textSearchResultToDict(results[0], query)
 
 
-def search_google_places_many(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
-    """Top Text Search hits as place dicts (same shape as search_google_places)."""
+def searchGooglePlacesMany(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    """Top Text Search hits as place dicts (same shape as searchGooglePlaces)."""
     raw = _googleTextSearch(query)
     if not raw:
         return []
     out: list[dict[str, Any]] = []
     for top in raw[: max(1, min(limit, 15))]:
-        out.append(_text_search_result_to_dict(top, query))
+        out.append(_textSearchResultToDict(top, query))
     return out
 
 
@@ -106,7 +106,7 @@ def resolveGoogleTextSearch(
     """Resolve a place via Google Text Search — returns the full place dict.
 
     Raises ProviderRateLimitError on 429.  Returns the same rich dict shape
-    as search_google_places (includes placeTypes, openingHours, city, etc.).
+    as searchGooglePlaces (includes placeTypes, openingHours, city, etc.).
     """
     query = placeName
     if placeAddress:
@@ -114,7 +114,7 @@ def resolveGoogleTextSearch(
     results = _googleTextSearch(query)
     if not results:
         return None
-    return _text_search_result_to_dict(results[0], placeName)
+    return _textSearchResultToDict(results[0], placeName)
 
 
 def _geocodePlaceId(placeId: str) -> list[dict[str, Any]]:
@@ -169,7 +169,7 @@ def extractCity(placeId: str | None, formattedAddress: str = "") -> str | None:
     return _extractCityHeuristic(formattedAddress)
 
 
-def _classify_place_types(types: list[str]) -> str:
+def _classifyPlaceTypes(types: list[str]) -> str:
     type_map = {
         "restaurant": "restaurant",
         "cafe": "cafe",

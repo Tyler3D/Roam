@@ -111,7 +111,7 @@ def _mapLegacyCategory(raw: str | None) -> str:
     return normalize_category(mapped)
 
 
-def _candidate_with_normalized_category(c: ReelCandidate) -> ReelCandidate:
+def _candidateWithNormalizedCategory(c: ReelCandidate) -> ReelCandidate:
     return c.model_copy(update={"category": normalize_category(c.category)})
 
 
@@ -272,7 +272,7 @@ def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
     return result
 
 
-def _reverse_geocode_lat_lng(latitude: float, longitude: float) -> dict | None:
+def _reverseGeocodeLatLng(latitude: float, longitude: float) -> dict | None:
     """Google Geocoding API: return googlePlaceId, placeAddress, latitude, longitude."""
     apiKey = getGoogleMapsApiKey()
     if not apiKey:
@@ -299,7 +299,7 @@ def _reverse_geocode_lat_lng(latitude: float, longitude: float) -> dict | None:
     }
 
 
-def resolve_place_from_user_pick(
+def resolvePlaceFromUserPick(
     session: Session,
     *,
     name: str | None,
@@ -317,7 +317,7 @@ def resolve_place_from_user_pick(
     addr_t = (address or "").strip()
     mq_t = (maps_query or "").strip()
 
-    def _create_from_resolved(
+    def _createFromResolved(
         resolved: dict,
         display_name: str,
         lat_fallback: float | None,
@@ -341,10 +341,10 @@ def resolve_place_from_user_pick(
         )
 
     if latitude is not None and longitude is not None:
-        geo = _reverse_geocode_lat_lng(latitude, longitude)
+        geo = _reverseGeocodeLatLng(latitude, longitude)
         if geo and geo.get("googlePlaceId"):
             label = name_t or mq_t or (geo.get("placeAddress") or "Place").split(",")[0].strip() or "Place"
-            return _create_from_resolved(geo, label, latitude, longitude)
+            return _createFromResolved(geo, label, latitude, longitude)
         return _createOrGetPlace(
             session,
             place_name=(name_t or mq_t or "Pinned location")[:500],
@@ -359,11 +359,11 @@ def resolve_place_from_user_pick(
     if query_key:
         resolved = _resolveGoogleMaps(query_key, addr_t or None) or {}
         if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
-            return _create_from_resolved(resolved, query_key, latitude, longitude)
+            return _createFromResolved(resolved, query_key, latitude, longitude)
     if addr_t:
         resolved = _resolveGoogleMaps(addr_t, None) or {}
         if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
-            return _create_from_resolved(resolved, addr_t, latitude, longitude)
+            return _createFromResolved(resolved, addr_t, latitude, longitude)
     return None
 
 
@@ -443,7 +443,7 @@ def createIdeaPipelineFromCandidate(
     When *override_place_id* is provided the place is attached directly and
     Google Maps resolution is skipped (the user already chose a place on the client).
     """
-    candidate = _candidate_with_normalized_category(candidate)
+    candidate = _candidateWithNormalizedCategory(candidate)
     estimated_minutes = 90
     prompt_version = getReelPromptVersion()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -629,7 +629,7 @@ def processIngestionJob(
         auto_promote = _isAutoPromoteEnabled(session, job.userId)
 
         if len(filtered_ordered) == 1 and auto_promote:
-            c = _candidate_with_normalized_category(filtered_ordered[0])
+            c = _candidateWithNormalizedCategory(filtered_ordered[0])
             raw_output = {
                 "candidate": c.model_dump(),
                 "fullStructured": parsed.model_dump(),
@@ -670,7 +670,7 @@ def processIngestionJob(
                 )
             else:
                 for idx, c in enumerate(filtered_ordered):
-                    c = _candidate_with_normalized_category(c)
+                    c = _candidateWithNormalizedCategory(c)
                     rp = _resolvedPlaceForCandidate(session, c)
                     llm_raw = {
                         "candidate": c.model_dump(),
