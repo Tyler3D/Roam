@@ -34,6 +34,7 @@ struct MainTabShell: View {
     let apiClient: APIClient
     @Binding var showDebugMenu: Bool
     @Environment(AppConfig.self) private var appConfig
+    @Environment(DeepLinkRouter.self) private var deepLinkRouter
     @EnvironmentObject private var shareIngress: ShareIngressCoordinator
     @Environment(\.scenePhase) private var scenePhase
     @State private var stores: RoamStores
@@ -215,6 +216,35 @@ struct MainTabShell: View {
             if newMode != .alphaHeavyDevelopmentUnsafe, tab == .drafts || tab == .plans {
                 tab = .ideas
             }
+        }
+        .onChange(of: deepLinkRouter.pending) { _, destination in
+            guard let destination else { return }
+            handleDeepLink(destination)
+            deepLinkRouter.pending = nil
+        }
+    }
+
+    private func handleDeepLink(_ destination: DeepLinkDestination) {
+        switch destination {
+        case .reels:
+            tab = .reels
+        case .ideaDetail(let ideaId):
+            navigationPathConsumerIdeas = NavigationPath()
+            navigationPathIdeas = NavigationPath()
+            tab = .ideas
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if showsDraftsAndPlansTabs {
+                    navigationPathIdeas.append(ideaId)
+                } else {
+                    navigationPathConsumerIdeas.append(ConsumerIdeaDetailRoute(ideaId: ideaId))
+                }
+            }
+        case .map:
+            tab = .map
+        case .profile:
+            showProfile = true
+        case .ideas:
+            tab = .ideas
         }
     }
 

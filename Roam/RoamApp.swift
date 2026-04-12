@@ -3,6 +3,8 @@ import SwiftUI
 
 @main
 struct RoamApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
         let env = AppConfig().networkEnv
         FirebaseEnvironment.configure(for: env)
@@ -21,6 +23,8 @@ private struct RootView: View {
     @State private var appConfig: AppConfig
     @State private var authManager: AuthManager
     @State private var apiClient: APIClient
+    @State private var pushManager = PushNotificationManager()
+    @State private var deepLinkRouter = DeepLinkRouter()
     @StateObject private var shareIngress = ShareIngressCoordinator()
 
     init() {
@@ -36,7 +40,13 @@ private struct RootView: View {
             .environment(appConfig)
             .environment(authManager)
             .environment(\.apiClient, apiClient)
+            .environment(pushManager)
+            .environment(deepLinkRouter)
             .environmentObject(shareIngress)
+            .onAppear {
+                pushManager.configure(apiClient: apiClient)
+                pushManager.requestPermission()
+            }
             .onOpenURL { url in
                 if url.scheme?.lowercased() == "roam", url.host?.lowercased() == "share" {
                     SharedStore.markPendingShareHandoff()
@@ -51,5 +61,12 @@ private struct RootView: View {
                 FirebaseEnvironment.reconfigure(to: appConfig.networkEnv)
                 authManager.forceSignOut()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .roamPushNotificationTapped)) { notification in
+                handlePushNotificationTap(userInfo: notification.userInfo)
+            }
+    }
+
+    private func handlePushNotificationTap(userInfo: [AnyHashable: Any]?) {
+        deepLinkRouter.pending = DeepLinkRouter.parse(userInfo: userInfo)
     }
 }

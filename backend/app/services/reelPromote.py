@@ -18,11 +18,12 @@ from app.models.savedReels import (
     SavedReelStatus,
 )
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
+from app.services.notifications import acceptedFriendIds, checkCoincidenceMatch, checkTrendingPlace
 from app.services.reelIngestion import (
     ReelCandidate,
     ReelInterpretOutput,
     createIdeaPipelineFromCandidate,
-    resolve_place_from_user_pick,
+    resolvePlaceFromUserPick,
     _refinedTitle,
 )
 
@@ -63,7 +64,7 @@ def promoteSavedReel(
 
         raw = dict(cand.llmRawOutput or {})
         meta = raw.get("metadata") or {}
-        reel_url = meta.get("reelUrl")
+        reel_url = saved.reelUrl
 
         if raw.get("synthetic"):
             structured = raw.get("structured") or {}
@@ -151,7 +152,7 @@ def promoteSavedReel(
                 or (pn or "").strip()
             )
             if has_user_hint:
-                user_place = resolve_place_from_user_pick(
+                user_place = resolvePlaceFromUserPick(
                     session,
                     name=pn,
                     address=pa,
@@ -228,5 +229,21 @@ def promoteSavedReel(
     saved.updatedAt = datetime.utcnow()
     session.add(saved)
     session.commit()
+
+    try:
+        from app.models.users import UserModel
+        user = session.get(UserModel, user_id)
+        if user:
+            friendIds = acceptedFriendIds(session, user_id)
+            for iid in idea_ids:
+                idea = session.get(IdeaModel, iid)
+                if idea:
+                    checkCoincidenceMatch(session, idea=idea, user=user, friendIds=friendIds)
+                    if idea.placeId:
+                        checkTrendingPlace(session, placeId=idea.placeId, triggeringUserId=user_id, friendIds=friendIds)
+            session.commit()
+    except Exception:
+        import logging
+        logging.getLogger("roam.reel_promote").exception("notification_check_failed_on_promote")
 
     return PromoteReelResponse(ideaIds=idea_ids, reelStatus=saved.status)

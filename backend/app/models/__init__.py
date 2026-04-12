@@ -37,6 +37,17 @@ from app.models.notifications import (  # noqa: F401
     NotificationModel,
     NotificationRead,
 )
+from app.models.deviceTokens import (  # noqa: F401
+    DeviceTokenModel,
+    DeviceTokenCreate,
+    DeviceTokenRead,
+)
+from app.models.trendingNotificationsSent import (  # noqa: F401
+    TrendingNotificationSentModel,
+)
+from app.models.coincidenceNotificationsSent import (  # noqa: F401
+    CoincidenceNotificationSentModel,
+)
 from app.models.oauth_tokens import UserOAuthTokenModel, OAuthTokenUpsert  # noqa: F401
 from app.models.savedReels import (  # noqa: F401
     SavedReelStatus,

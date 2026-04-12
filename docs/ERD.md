@@ -150,10 +150,37 @@ erDiagram
         notificationType type
         uuid planId FK "nullable"
         uuid collectionId FK "nullable"
+        uuid placeId FK "nullable"
+        uuid ideaId FK "nullable"
+        uuid savedReelId FK "nullable"
+        uuid actorUserId FK "nullable; who triggered"
         text title
         text body "nullable"
         boolean isRead
         timestamptz createdAt
+    }
+
+    device_tokens {
+        uuid id PK
+        uuid userId FK
+        text fcmToken UK
+        text platform "default ios"
+        timestamptz createdAt
+        timestamptz updatedAt
+    }
+
+    trending_notifications_sent {
+        uuid id PK
+        uuid userId FK
+        uuid placeId FK
+        timestamptz sentAt
+    }
+
+    coincidence_notifications_sent {
+        uuid id PK
+        uuid userId FK
+        uuid placeId FK
+        timestamptz sentAt
     }
 
     collections {
@@ -250,11 +277,21 @@ erDiagram
     users ||--o{ collections : "creates"
     users ||--o{ reel_candidate_user_places : "confirms"
     users ||--o{ user_feature_flags : "has"
+    users ||--o{ device_tokens : "registers"
+    users ||--o{ trending_notifications_sent : "received"
+    users ||--o{ coincidence_notifications_sent : "received"
 
     collections ||--o{ collection_members : "has"
     collections ||--o{ collection_ideas : "groups"
     ideas ||--o{ collection_ideas : "listed in"
     collections ||--o{ notifications : "optional ref"
+
+    notifications }o--o| places : "optional ref"
+    notifications }o--o| ideas : "optional ref"
+    notifications }o--o| saved_reels : "optional ref"
+
+    places ||--o{ trending_notifications_sent : "trending dedup"
+    places ||--o{ coincidence_notifications_sent : "coincidence dedup"
 
     reel_ingestion_jobs ||--|| saved_reels : "has"
     saved_reels ||--o{ reel_ingest_candidates : "stages"
@@ -291,7 +328,7 @@ erDiagram
 | `rsvpStatus` | `pending`, `accepted`, `declined` | `plan_members.rsvpStatus` |
 | `memberRole` | `organizer`, `member` | `plan_members.role` |
 | `friendshipStatus` | `pending`, `accepted` | `friendships.status` |
-| `notificationType` | `invite_received`, `rsvp_accepted`, `rsvp_declined`, `task_assigned`, `plan_reminder`, `rate_prompt`, `friend_request`, `added_to_collection` | `notifications.type` |
+| `notificationType` | `invite_received`, `rsvp_accepted`, `rsvp_declined`, `task_assigned`, `plan_reminder`, `rate_prompt`, `friend_request`, `added_to_collection`, `reel_processed`, `reel_needs_review`, `coincidence_match`, `same_reel_saved`, `trending_place`, `friend_request_accepted`, `proximity_save`, `collection_idea_added`, `weekly_digest`, `monthly_stats` | `notifications.type` |
 
 ## Relationships
 
@@ -318,6 +355,15 @@ erDiagram
 | `notifications.userId` | `users.id` | many-to-one | CASCADE |
 | `notifications.planId` | `plans.id` | many-to-one (nullable) | CASCADE |
 | `notifications.collectionId` | `collections.id` | many-to-one (nullable) | SET NULL |
+| `notifications.placeId` | `places.id` | many-to-one (nullable) | SET NULL |
+| `notifications.ideaId` | `ideas.id` | many-to-one (nullable) | SET NULL |
+| `notifications.savedReelId` | `saved_reels.id` | many-to-one (nullable) | SET NULL |
+| `notifications.actorUserId` | `users.id` | many-to-one (nullable) | SET NULL |
+| `device_tokens.userId` | `users.id` | many-to-one | CASCADE |
+| `trending_notifications_sent.userId` | `users.id` | many-to-one | CASCADE |
+| `trending_notifications_sent.placeId` | `places.id` | many-to-one | CASCADE |
+| `coincidence_notifications_sent.userId` | `users.id` | many-to-one | CASCADE |
+| `coincidence_notifications_sent.placeId` | `places.id` | many-to-one | CASCADE |
 | `collections.creatorId` | `users.id` | many-to-one | CASCADE |
 | `collection_members.collectionId` | `collections.id` | many-to-one | CASCADE |
 | `collection_members.userId` | `users.id` | many-to-one | CASCADE |
@@ -356,6 +402,9 @@ erDiagram
 | `collections` | **Partial unique:** at most one row per `creatorId` where `isPersonalDefault` (see `sql/schema.sql`) |
 | `collection_members` | `PRIMARY KEY ("collectionId", "userId")` |
 | `collection_ideas` | `PRIMARY KEY ("collectionId", "ideaId")` |
+| `device_tokens` | `UNIQUE ("fcmToken")` |
+| `trending_notifications_sent` | `UNIQUE ("userId", "placeId")` |
+| `coincidence_notifications_sent` | `UNIQUE ("userId", "placeId")` |
 
 ### Check constraints
 

@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 import httpx
 
+from app.common.backendErrors import ProviderRateLimitError
 from app.common.config import getGoogleMapsApiKey
 from app.common.idea_categories import normalize_category
 
@@ -35,8 +36,8 @@ KEYWORD_DURATIONS: list[tuple[re.Pattern, int]] = [
 ]
 
 
-def estimate_duration(title: str, place_types: list[str] | None = None) -> int:
-    for t in place_types or []:
+def estimateDuration(title: str, placeTypes: list[str] | None = None) -> int:
+    for t in placeTypes or []:
         if t in TYPE_DURATIONS:
             return TYPE_DURATIONS[t]
     for pattern, minutes in KEYWORD_DURATIONS:
@@ -45,61 +46,111 @@ def estimate_duration(title: str, place_types: list[str] | None = None) -> int:
     return 60
 
 
-def _text_search_result_to_dict(top: dict[str, Any], query_fallback: str) -> dict[str, Any]:
+def _textSearchResultToDict(top: dict[str, Any], queryFallback: str) -> dict[str, Any]:
     location = top.get("geometry", {}).get("location", {})
     types = top.get("types", [])
-    opening_hours = top.get("opening_hours", {})
+    openingHoursRaw = top.get("opening_hours", {})
+    placeId = top.get("place_id")
+    formattedAddress = top.get("formatted_address", "")
     return {
-        "googlePlaceId": top.get("place_id"),
-        "name": top.get("name", query_fallback),
-        "address": top.get("formatted_address"),
-        "city": _extract_city(top.get("formatted_address", "")),
+        "googlePlaceId": placeId,
+        "name": top.get("name", queryFallback),
+        "address": formattedAddress,
+        "city": extractCity(placeId, formattedAddress),
         "latitude": location.get("lat"),
         "longitude": location.get("lng"),
-        "category": _classify_place_types(types),
+        "category": _classifyPlaceTypes(types),
         "placeTypes": types,
-        "openingHours": opening_hours.get("periods", []),
+        "openingHours": openingHoursRaw.get("periods", []),
     }
 
 
-def _google_text_search(query: str) -> list[dict[str, Any]]:
-    api_key = getGoogleMapsApiKey()
-    if not api_key:
+def _googleTextSearch(query: str) -> list[dict[str, Any]]:
+    apiKey = getGoogleMapsApiKey()
+    if not apiKey:
         logger.warning("Google Maps API key not configured")
         return []
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                "https://maps.googleapis.com/maps/api/place/textsearch/json",
-                params={"query": query, "key": api_key},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        return list(data.get("results", []))
-    except Exception:
-        logger.exception("Google Places search failed", extra={"query": query})
-        return []
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(
+            "https://maps.googleapis.com/maps/api/place/textsearch/json",
+            params={"query": query, "key": apiKey},
+        )
+        if resp.status_code == 429:
+            raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
+        resp.raise_for_status()
+        data = resp.json()
+    return list(data.get("results", []))
 
 
-def search_google_places(query: str) -> dict[str, Any] | None:
-    results = _google_text_search(query)
+def searchGooglePlaces(query: str) -> dict[str, Any] | None:
+    results = _googleTextSearch(query)
     if not results:
         return None
-    return _text_search_result_to_dict(results[0], query)
+    return _textSearchResultToDict(results[0], query)
 
 
-def search_google_places_many(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
-    """Top Text Search hits as place dicts (same shape as search_google_places)."""
-    raw = _google_text_search(query)
+def searchGooglePlacesMany(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    """Top Text Search hits as place dicts (same shape as searchGooglePlaces)."""
+    raw = _googleTextSearch(query)
     if not raw:
         return []
     out: list[dict[str, Any]] = []
     for top in raw[: max(1, min(limit, 15))]:
-        out.append(_text_search_result_to_dict(top, query))
+        out.append(_textSearchResultToDict(top, query))
     return out
 
 
-def _extract_city(address: str) -> str | None:
+def resolveGoogleTextSearch(
+    placeName: str, placeAddress: str | None
+) -> dict[str, Any] | None:
+    """Resolve a place via Google Text Search — returns the full place dict.
+
+    Raises ProviderRateLimitError on 429.  Returns the same rich dict shape
+    as searchGooglePlaces (includes placeTypes, openingHours, city, etc.).
+    """
+    query = placeName
+    if placeAddress:
+        query = f"{placeName} {placeAddress}"
+    results = _googleTextSearch(query)
+    if not results:
+        return None
+    return _textSearchResultToDict(results[0], placeName)
+
+
+def _geocodePlaceId(placeId: str) -> list[dict[str, Any]]:
+    """Geocoding API lookup by placeId → address_components list."""
+    apiKey = getGoogleMapsApiKey()
+    if not apiKey:
+        return []
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"place_id": placeId, "key": apiKey},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    results = data.get("results", [])
+    if not results:
+        return []
+    return results[0].get("address_components", [])
+
+
+def _extractCityFromComponents(components: list[dict[str, Any]]) -> str | None:
+    """Pull the city from Google's structured address_components.
+
+    Tries 'locality' first, then common fallbacks for cities that Google
+    categorises differently (e.g. Tokyo → administrative_area_level_1).
+    """
+    for targetType in ("locality", "sublocality_level_1", "sublocality",
+                       "administrative_area_level_2", "administrative_area_level_1"):
+        for comp in components:
+            if targetType in comp.get("types", []):
+                return comp.get("long_name")
+    return None
+
+
+def _extractCityHeuristic(address: str) -> str | None:
+    """Best-effort city guess from a formatted address string."""
     parts = [p.strip() for p in address.split(",")]
     if len(parts) >= 3:
         return parts[-3]
@@ -108,7 +159,17 @@ def _extract_city(address: str) -> str | None:
     return None
 
 
-def _classify_place_types(types: list[str]) -> str:
+def extractCity(placeId: str | None, formattedAddress: str = "") -> str | None:
+    """Extract city for a place — structured components when possible, heuristic fallback."""
+    if placeId:
+        components = _geocodePlaceId(placeId)
+        city = _extractCityFromComponents(components)
+        if city:
+            return city
+    return _extractCityHeuristic(formattedAddress)
+
+
+def _classifyPlaceTypes(types: list[str]) -> str:
     type_map = {
         "restaurant": "restaurant",
         "cafe": "cafe",
