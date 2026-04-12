@@ -690,6 +690,7 @@ def _upsertPlace(session: Session, idea: IdeaModel, placeData: dict) -> None:
             select(PlaceModel).where(PlaceModel.googlePlaceId == googlePlaceId)
         ).first()
         if existing:
+            _backfillPlace(session, existing, placeData)
             idea.placeId = existing.id
             return
 
@@ -707,10 +708,32 @@ def _upsertPlace(session: Session, idea: IdeaModel, placeData: dict) -> None:
         latitude=placeData.get("latitude"),
         longitude=placeData.get("longitude"),
         category=place_category,
+        placeTypes=placeData.get("placeTypes", []),
+        openingHours=placeData.get("openingHours", []),
     )
     session.add(place)
     session.flush()
     idea.placeId = place.id
+
+
+def _backfillPlace(session: Session, place: PlaceModel, data: dict) -> None:
+    """Fill in null fields on an existing place from richer data."""
+    updated = False
+    if not place.city and data.get("city"):
+        place.city = data["city"]
+        updated = True
+    if not place.openingHours and data.get("openingHours"):
+        place.openingHours = data["openingHours"]
+        updated = True
+    if not place.placeTypes and data.get("placeTypes"):
+        place.placeTypes = data["placeTypes"]
+        updated = True
+    if not place.category and data.get("category"):
+        place.category = normalize_category(data["category"])
+        updated = True
+    if updated:
+        session.add(place)
+        session.flush()
 
 
 def _resolveInvitees(

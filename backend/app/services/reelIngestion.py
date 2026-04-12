@@ -15,6 +15,8 @@ from sqlmodel import Session, select
 from app.common.config import getGeminiApiKey, getGoogleMapsApiKey
 from app.common.idea_categories import normalize_category
 from app.common.db import getSession
+from app.common.backendErrors import ProviderRateLimitError
+from app.services.places import extractCity, resolveGoogleTextSearch
 from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
@@ -80,9 +82,6 @@ def _llmDetectedInLabelFromCandidate(c: ReelCandidate) -> str | None:
         return mq[:500]
     return None
 
-
-class ProviderRateLimitError(Exception):
-    """OpenAI or Google Maps returned 429 / rate limit; job should fail with clear message."""
 
 
 _LEGACY_CATEGORY_MAP: dict[str, str] = {
@@ -265,78 +264,39 @@ def _shouldResolveMaps(c: ReelCandidate) -> bool:
 
 
 def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
-    apiKey = getGoogleMapsApiKey()
-    if not apiKey:
+    """Resolve via shared Google Text Search. ProviderRateLimitError bubbles up."""
+    result = resolveGoogleTextSearch(placeName, placeAddress)
+    if not result:
         return None
-
-    query = placeName
-    if placeAddress:
-        query = f"{placeName} {placeAddress}"
-
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                "https://maps.googleapis.com/maps/api/place/textsearch/json",
-                params={"query": query, "key": apiKey},
-            )
-            if resp.status_code == 429:
-                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
-            resp.raise_for_status()
-            data = resp.json()
-
-        results = data.get("results", [])
-        if not results:
-            return None
-
-        top = results[0]
-        location = top.get("geometry", {}).get("location", {})
-        return {
-            "latitude": location.get("lat"),
-            "longitude": location.get("lng"),
-            "googlePlaceId": top.get("place_id"),
-            "placeAddress": top.get("formatted_address"),
-        }
-    except ProviderRateLimitError:
-        raise
-    except Exception:
-        logger.exception("Google Maps API call failed", extra={"query": query})
-        return None
+    result["placeAddress"] = result.pop("address", None)
+    return result
 
 
 def _reverse_geocode_lat_lng(latitude: float, longitude: float) -> dict | None:
     """Google Geocoding API: return googlePlaceId, placeAddress, latitude, longitude."""
-    api_key = getGoogleMapsApiKey()
-    if not api_key:
+    apiKey = getGoogleMapsApiKey()
+    if not apiKey:
         return None
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                "https://maps.googleapis.com/maps/api/geocode/json",
-                params={"latlng": f"{latitude},{longitude}", "key": api_key},
-            )
-            if resp.status_code == 429:
-                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
-            resp.raise_for_status()
-            data = resp.json()
-        results = data.get("results", [])
-        if not results:
-            return None
-        top = results[0]
-        loc = top.get("geometry", {}).get("location", {})
-        return {
-            "latitude": loc.get("lat"),
-            "longitude": loc.get("lng"),
-            "googlePlaceId": top.get("place_id"),
-            "placeAddress": top.get("formatted_address"),
-        }
-    except ProviderRateLimitError:
-        raise
-    except Exception:
-        logger.exception(
-            "Google Geocoding API call failed",
-            extra={"latitude": latitude, "longitude": longitude},
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"latlng": f"{latitude},{longitude}", "key": apiKey},
         )
+        if resp.status_code == 429:
+            raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
+        resp.raise_for_status()
+        data = resp.json()
+    results = data.get("results", [])
+    if not results:
         return None
+    top = results[0]
+    loc = top.get("geometry", {}).get("location", {})
+    return {
+        "latitude": loc.get("lat"),
+        "longitude": loc.get("lng"),
+        "googlePlaceId": top.get("place_id"),
+        "placeAddress": top.get("formatted_address"),
+    }
 
 
 def resolve_place_from_user_pick(
@@ -375,6 +335,9 @@ def resolve_place_from_user_pick(
             category=category,
             latitude=lat_r if lat_r is not None else lat_fallback,
             longitude=lng_r if lng_r is not None else lng_fallback,
+            city=resolved.get("city"),
+            placeTypes=resolved.get("placeTypes"),
+            openingHours=resolved.get("openingHours"),
         )
 
     if latitude is not None and longitude is not None:
@@ -404,6 +367,30 @@ def resolve_place_from_user_pick(
     return None
 
 
+def _backfillPlace(
+    session: Session,
+    place: PlaceModel,
+    *,
+    city: str | None = None,
+    placeTypes: list[str] | None = None,
+    openingHours: list | None = None,
+) -> None:
+    """Fill in null fields on an existing place from richer data."""
+    updated = False
+    if not place.city and city:
+        place.city = city
+        updated = True
+    if not place.openingHours and openingHours:
+        place.openingHours = openingHours
+        updated = True
+    if not place.placeTypes and placeTypes:
+        place.placeTypes = placeTypes
+        updated = True
+    if updated:
+        session.add(place)
+        session.flush()
+
+
 def _createOrGetPlace(
     session: Session,
     place_name: str,
@@ -412,22 +399,28 @@ def _createOrGetPlace(
     category: str | None,
     latitude: float | None,
     longitude: float | None,
+    city: str | None = None,
+    placeTypes: list[str] | None = None,
+    openingHours: list | None = None,
 ) -> PlaceModel | None:
     if google_place_id:
         existing = session.exec(
             select(PlaceModel).where(PlaceModel.googlePlaceId == google_place_id)
         ).first()
         if existing:
+            _backfillPlace(session, existing, city=city, placeTypes=placeTypes, openingHours=openingHours)
             return existing
 
     place = PlaceModel(
         googlePlaceId=google_place_id,
         name=place_name or "Unknown",
         address=address,
-        city=None,
+        city=city or extractCity(google_place_id, address or ""),
         latitude=latitude,
         longitude=longitude,
         category=category,
+        placeTypes=placeTypes or [],
+        openingHours=openingHours or [],
     )
     session.add(place)
     session.flush()
@@ -461,6 +454,7 @@ def createIdeaPipelineFromCandidate(
     idea = IdeaModel(
         userId=user_id,
         title=idea_title,
+        displayName=idea_title,
         notes=notes[:MAX_IDEA_NOTES_LEN],
         sourceUrl=reel_url or "",
         savedReelId=saved_reel_id,
@@ -508,9 +502,12 @@ def createIdeaPipelineFromCandidate(
                 place_name=candidate.title or query_key,
                 address=resolved.get("placeAddress", candidate.placeAddress),
                 google_place_id=resolved.get("googlePlaceId"),
-                category=candidate.category,
+                category=resolved.get("category") or candidate.category,
                 latitude=resolved.get("latitude"),
                 longitude=resolved.get("longitude"),
+                city=resolved.get("city"),
+                placeTypes=resolved.get("placeTypes"),
+                openingHours=resolved.get("openingHours"),
             )
             if place:
                 sugg = PlaceSuggestionModel(
@@ -582,9 +579,12 @@ def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | Non
         place_name=c.title or q,
         address=resolved.get("placeAddress", c.placeAddress),
         google_place_id=resolved.get("googlePlaceId"),
-        category=c.category,
+        category=resolved.get("category") or c.category,
         latitude=resolved.get("latitude"),
         longitude=resolved.get("longitude"),
+        city=resolved.get("city"),
+        placeTypes=resolved.get("placeTypes"),
+        openingHours=resolved.get("openingHours"),
     )
     return place.id if place else None
 
@@ -616,7 +616,7 @@ def processIngestionJob(
         parsed = _callVisionReel(framesData, thumbnailData, metadata)
         filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
         filtered_ordered = sorted(filtered, key=lambda c: c.confidence, reverse=True)
-        reel_url = metadata.get("reelUrl")
+        reel_url = saved.reelUrl
 
         saved.updatedAt = datetime.utcnow()
         if (metadata.get("reelTitle") or "").strip():

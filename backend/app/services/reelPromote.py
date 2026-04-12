@@ -64,7 +64,7 @@ def promoteSavedReel(
 
         raw = dict(cand.llmRawOutput or {})
         meta = raw.get("metadata") or {}
-        reel_url = meta.get("reelUrl")
+        reel_url = saved.reelUrl
 
         if raw.get("synthetic"):
             structured = raw.get("structured") or {}

@@ -511,6 +511,7 @@ def createIdeaOnReel(
     idea = IdeaModel(
         userId=user.id,
         title=title[:500],
+        displayName=title[:500],
         notes=(body.notes or "")[:4000],
         sourceUrl=r.reelUrl or "",
         savedReelId=r.id,

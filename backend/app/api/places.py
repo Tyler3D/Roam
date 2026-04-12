@@ -13,6 +13,26 @@ logger = logging.getLogger("roam.places")
 placesRouter = APIRouter()
 
 
+def _backfillPlace(session: Session, place: PlaceModel, data: dict) -> None:
+    """Fill in null fields on an existing place from richer data."""
+    updated = False
+    if not place.city and data.get("city"):
+        place.city = data["city"]
+        updated = True
+    if not place.openingHours and data.get("openingHours"):
+        place.openingHours = data["openingHours"]
+        updated = True
+    if not place.placeTypes and data.get("placeTypes"):
+        place.placeTypes = data["placeTypes"]
+        updated = True
+    if not place.category and data.get("category"):
+        place.category = normalize_category(data["category"])
+        updated = True
+    if updated:
+        session.add(place)
+        session.flush()
+
+
 def _get_or_create_place_read(session: Session, place_data: dict, fallback_name: str) -> PlaceRead:
     google_place_id = place_data.get("googlePlaceId")
     if google_place_id:
@@ -20,6 +40,7 @@ def _get_or_create_place_read(session: Session, place_data: dict, fallback_name:
             select(PlaceModel).where(PlaceModel.googlePlaceId == google_place_id)
         ).first()
         if existing:
+            _backfillPlace(session, existing, place_data)
             read = PlaceRead.model_validate(existing)
             read.estimatedMinutes = estimate_duration(
                 existing.name, existing.placeTypes or []
