@@ -68,3 +68,7 @@ class InternalServerError(RoamBackendError):
 
     def __init__(self, detail: str = "Internal server error"):
         super().__init__(detail=detail, status_code=500)
+
+
+class ProviderRateLimitError(Exception):
+    """Upstream provider (Google Maps, Gemini, etc.) returned 429."""

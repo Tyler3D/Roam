@@ -30,6 +30,44 @@ Each item in `candidates` must have exactly one `kind`:
 
 ---
 
+## Per-candidate reasoning order (important)
+
+For **each** candidate, work in this **order** so your rationale comes before concrete claims:
+
+1. **`evidence`** — First, one sentence: what in the **frames** and/or **caption/OG** actually supports this candidate. This is your ground truth; do not invent details you cannot support.
+2. **`confidence`** and optional **`confidenceReason`** — Next, score how well the evidence supports this candidate (see **Confidence** below). The score should follow from the evidence, not the other way around.
+3. **Structured fields** — Then set **`kind`**, **`title`**, **`mapsQuery`**, **`placeAddress`**, **`category`**, **`tags`**, and **`displayDescription`** so they are **consistent** with that evidence and score. Do not make `mapsQuery`, `title`, or `category` more specific than your evidence allows.
+
+If the JSON schema lists keys in a different order, still **think** in this order when you fill the object.
+
+---
+
+## Evidence (`evidence`)
+
+One concise sentence: what in the **frames** (signage, logo, architecture, dish, landscape) and/or **caption/OG** supports this candidate. Write this **first**; then `confidence`; then finalize `mapsQuery`, `tags`, `category`, and `displayDescription` (see **Per-candidate reasoning order** above).
+
+---
+
+## Confidence (`confidence` and optional `confidenceReason`)
+
+`confidence` is a **per-candidate** float from **0.0 to 1.0**. It measures how confident you are that this candidate is **actually** reflected in the reel (not whether the user should visit). **Set it after `evidence`**, grounded in what you stated there.
+
+**Do not self-filter** by confidence. Roam’s server applies its own threshold. Include **all** plausible candidates; use the full range.
+
+### Calibration
+
+- **0.90–1.0** — Name or address clearly visible, or explicitly named in caption/OG with a clear match to visuals.
+- **0.75–0.89** — Strong inference (distinctive interior, famous landmark silhouette, unique dish + cuisine context) without explicit name.
+- **0.60–0.74** — Reasonable inference (chain vibe, city from text, generic “Italian restaurant” in a named area).
+- **0.40–0.59** — Weak or speculative; still include if plausibly useful.
+- **Below 0.40** — Only if marginally useful; omit **pure hallucinations**.
+
+**Anti-bias:** Do not cluster everything in 0.7–0.8. Differentiate strong vs weak evidence.
+
+`confidenceReason` (optional): one short phrase explaining the score (e.g. “signage visible in frame 3”, “caption only, no visual match”).
+
+---
+
 ## Maps / search query (`mapsQuery`)
 
 Parallel to text-only “search query” rules in Roam:
@@ -69,35 +107,9 @@ Zero or more **short** descriptors (e.g. `outdoor seating`, `date night`, `famil
 
 ---
 
-## Evidence (`evidence`)
-
-One concise sentence: what in the **frames** (signage, logo, architecture, dish, landscape) and/or **caption/OG** supports this candidate.
-
----
-
 ## Display description (`displayDescription`)
 
 **1–2 short sentences**, playful and user-facing, for cards in the Roam app (why this place is exciting, date-night energy, “hidden gem” vibe). Marketing tone is fine; **do not** claim legal proof or verbatim quotes from the reel. This is **not** a substitute for safety review; keep factual support in `evidence`. Use an empty string only if you truly have nothing to say beyond `evidence`.
-
----
-
-## Confidence (`confidence` and optional `confidenceReason`)
-
-`confidence` is a **per-candidate** float from **0.0 to 1.0**. It measures how confident you are that this candidate is **actually** reflected in the reel (not whether the user should visit).
-
-**Do not self-filter** by confidence. Roam’s server applies its own threshold. Include **all** plausible candidates; use the full range.
-
-### Calibration
-
-- **0.90–1.0** — Name or address clearly visible, or explicitly named in caption/OG with a clear match to visuals.
-- **0.75–0.89** — Strong inference (distinctive interior, famous landmark silhouette, unique dish + cuisine context) without explicit name.
-- **0.60–0.74** — Reasonable inference (chain vibe, city from text, generic “Italian restaurant” in a named area).
-- **0.40–0.59** — Weak or speculative; still include if plausibly useful.
-- **Below 0.40** — Only if marginally useful; omit **pure hallucinations**.
-
-**Anti-bias:** Do not cluster everything in 0.7–0.8. Differentiate strong vs weak evidence.
-
-`confidenceReason` (optional): one short phrase explaining the score (e.g. “signage visible in frame 3”, “caption only, no visual match”).
 
 ---
 
@@ -196,40 +208,40 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
   "primaryActivity": "Brooklyn pizza crawl",
   "candidates": [
     {
+      "evidence": "Exterior signage and menu board match the caption naming Lucali.",
+      "confidenceReason": "Signage and caption agree on the business name.",
+      "confidence": 0.92,
       "kind": "location",
       "title": "Lucali",
       "mapsQuery": "Lucali pizza Carroll Gardens Brooklyn",
       "placeAddress": "Brooklyn, NY",
       "category": "restaurant",
       "tags": ["pizza", "date night", "BYOB"],
-      "confidence": 0.92,
-      "evidence": "Exterior signage and menu board match the caption naming Lucali.",
-      "displayDescription": "Iconic Brooklyn pizza—worth the line if you love a thin, charred crust.",
-      "confidenceReason": "Signage and caption agree on the business name."
+      "displayDescription": "Iconic Brooklyn pizza—worth the line if you love a thin, charred crust."
     },
     {
+      "evidence": "Second stop shows a red awning and counter slices but no readable name.",
+      "confidenceReason": "Neighborhood from caption; name not visible.",
+      "confidence": 0.58,
       "kind": "location",
       "title": "Unidentified slice shop (red awning)",
       "mapsQuery": "pizza slice shop Williamsburg Brooklyn",
       "placeAddress": "Williamsburg, Brooklyn",
       "category": "restaurant",
       "tags": ["pizza", "casual"],
-      "confidence": 0.58,
-      "evidence": "Second stop shows a red awning and counter slices but no readable name.",
-      "displayDescription": "Classic counter-slice energy in Williamsburg—great for a casual stop between spots.",
-      "confidenceReason": "Neighborhood from caption; name not visible."
+      "displayDescription": "Classic counter-slice energy in Williamsburg—great for a casual stop between spots."
     },
     {
+      "evidence": "B-roll of walking city streets between venues; activity is the journey, not one pin.",
+      "confidenceReason": "Clear activity, no single map POI.",
+      "confidence": 0.72,
       "kind": "experience",
       "title": "Walking between pizza spots",
       "mapsQuery": null,
       "placeAddress": null,
       "category": "travel",
       "tags": ["neighborhood walk"],
-      "confidence": 0.72,
-      "evidence": "B-roll of walking city streets between venues; activity is the journey, not one pin.",
-      "displayDescription": "Neighborhood wandering between pizza stops—more about the stroll than one pin.",
-      "confidenceReason": "Clear activity, no single map POI."
+      "displayDescription": "Neighborhood wandering between pizza stops—more about the stroll than one pin."
     }
   ]
 }
@@ -240,6 +252,7 @@ If you truly cannot narrow past “coffee shop in Austin” from caption only, u
 ## Output rules
 
 - Return **only** JSON matching the response schema (no markdown fences, no commentary).
+- For each candidate, follow **Per-candidate reasoning order**: ground in `evidence`, then `confidence` / `confidenceReason`, then the rest—so claims stay tied to what you actually saw.
 - `candidates` may be empty if there is nothing actionable.
 - Prefer **specific** business or landmark names when shown or clearly named; avoid vague labels unless unavoidable.
 - Never invent fake business names to sound specific.
