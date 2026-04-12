@@ -40,6 +40,7 @@ from app.models.users import UserModel
 from app.models.friendships import FriendshipModel, FriendshipStatus
 from app.models.notifications import NotificationModel, NotificationType
 from app.services.interpret import get_scribble_prompt_version, interpret_idea
+from app.services.notifications import checkCoincidenceMatch, checkTrendingPlace
 from app.services.places import search_google_places
 from app.services.scheduling import suggest_time_slots
 
@@ -316,6 +317,15 @@ def createIdea(
     )
     session.commit()
     session.refresh(idea)
+
+    try:
+        checkCoincidenceMatch(session, idea=idea, user=user)
+        if idea.placeId:
+            checkTrendingPlace(session, placeId=idea.placeId, triggeringUserId=user.id)
+        session.commit()
+    except Exception:
+        logger.exception("notification_check_failed_on_idea_create", extra={"ideaId": str(idea.id)})
+
     return _ideaReadWithExtras(session, idea, 0, viewer_user_id=user.id)
 
 

@@ -840,6 +840,31 @@ final class APIClient {
         )
     }
 
+    // MARK: - Device Tokens (Push Notifications)
+
+    private struct DeviceTokenPayload: Encodable {
+        let fcmToken: String
+        let platform: String
+    }
+
+    struct DeviceTokenResponse: Decodable {
+        let id: UUID
+        let userId: UUID
+        let fcmToken: String
+        let platform: String
+        let createdAt: Date
+    }
+
+    func registerDeviceToken(fcmToken: String, platform: String = "ios") async throws -> DeviceTokenResponse {
+        let body = try JSONEncoder.roam.encode(DeviceTokenPayload(fcmToken: fcmToken, platform: platform))
+        return try await apiFetch(path: "/api/device-tokens", method: "POST", body: body)
+    }
+
+    func unregisterDeviceToken(fcmToken: String, platform: String = "ios") async throws {
+        let body = try JSONEncoder.roam.encode(DeviceTokenPayload(fcmToken: fcmToken, platform: platform))
+        try await apiPerform(path: "/api/device-tokens", method: "DELETE", body: body)
+    }
+
     // MARK: - Feature Flags
 
     struct FeatureFlagDTO: Decodable {

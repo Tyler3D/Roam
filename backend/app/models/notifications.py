@@ -16,6 +16,16 @@ class NotificationType(str, Enum):
     rate_prompt = "rate_prompt"
     friend_request = "friend_request"
     added_to_collection = "added_to_collection"
+    reel_processed = "reel_processed"
+    reel_needs_review = "reel_needs_review"
+    coincidence_match = "coincidence_match"
+    same_reel_saved = "same_reel_saved"
+    trending_place = "trending_place"
+    friend_request_accepted = "friend_request_accepted"
+    proximity_save = "proximity_save"
+    collection_idea_added = "collection_idea_added"
+    weekly_digest = "weekly_digest"
+    monthly_stats = "monthly_stats"
 
 
 class NotificationModel(SQLModel, table=True):
@@ -31,6 +41,10 @@ class NotificationModel(SQLModel, table=True):
     )
     planId: Optional[UUID] = Field(default=None, foreign_key="plans.id")
     collectionId: Optional[UUID] = Field(default=None, foreign_key="collections.id")
+    placeId: Optional[UUID] = Field(default=None, foreign_key="places.id")
+    ideaId: Optional[UUID] = Field(default=None, foreign_key="ideas.id")
+    savedReelId: Optional[UUID] = Field(default=None, foreign_key="saved_reels.id")
+    actorUserId: Optional[UUID] = Field(default=None, foreign_key="users.id")
     title: str = Field(nullable=False)
     body: Optional[str] = None
     isRead: bool = Field(default=False)
@@ -43,6 +57,10 @@ class NotificationRead(SQLModel):
     type: NotificationType
     planId: Optional[UUID] = None
     collectionId: Optional[UUID] = None
+    placeId: Optional[UUID] = None
+    ideaId: Optional[UUID] = None
+    savedReelId: Optional[UUID] = None
+    actorUserId: Optional[UUID] = None
     title: str
     body: Optional[str] = None
     isRead: bool

@@ -2492,6 +2492,75 @@
           }
         }
       }
+    },
+    "/api/device-tokens": {
+      "post": {
+        "summary": "Registerdevicetoken",
+        "description": "Register or update an FCM device token for push notifications.",
+        "operationId": "registerDeviceToken_api_device_tokens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceTokenRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unregisterdevicetoken",
+        "description": "Remove an FCM device token (e.g. on sign-out).",
+        "operationId": "unregisterDeviceToken_api_device_tokens_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2989,6 +3058,60 @@
           "title"
         ],
         "title": "CreateIdeaOnReelBody"
+      },
+      "DeviceTokenCreate": {
+        "properties": {
+          "fcmToken": {
+            "type": "string",
+            "title": "Fcmtoken"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "ios"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fcmToken"
+        ],
+        "title": "DeviceTokenCreate"
+      },
+      "DeviceTokenRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Userid"
+          },
+          "fcmToken": {
+            "type": "string",
+            "title": "Fcmtoken"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "fcmToken",
+          "platform",
+          "createdAt"
+        ],
+        "title": "DeviceTokenRead"
       },
       "FeatureFlagRead": {
         "properties": {
@@ -3667,6 +3790,54 @@
             ],
             "title": "Collectionid"
           },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
+          },
+          "ideaId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ideaid"
+          },
+          "savedReelId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savedreelid"
+          },
+          "actorUserId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actoruserid"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -3713,7 +3884,17 @@
           "plan_reminder",
           "rate_prompt",
           "friend_request",
-          "added_to_collection"
+          "added_to_collection",
+          "reel_processed",
+          "reel_needs_review",
+          "coincidence_match",
+          "same_reel_saved",
+          "trending_place",
+          "friend_request_accepted",
+          "proximity_save",
+          "collection_idea_added",
+          "weekly_digest",
+          "monthly_stats"
         ],
         "title": "NotificationType"
       },

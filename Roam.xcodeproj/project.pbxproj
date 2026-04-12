@@ -16,6 +16,7 @@
 		4567DC842F4C0B99001700F7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4567DC822F4C0B98001700F7 /* GoogleService-Info.plist */; };
 		45C1D8602F746D210088002E /* GooglePlaces in Frameworks */ = {isa = PBXBuildFile; productRef = 45C1D85F2F746D210088002E /* GooglePlaces */; };
 		45C1D8622F746D210088002E /* GooglePlacesSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 45C1D8612F746D210088002E /* GooglePlacesSwift */; };
+		A1B2C3D42F9A0000001700F7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D32F9A0000001700F7 /* FirebaseMessaging */; };
 		F1E2D3C62F510000001700F7 /* RoamOpenAPI in Frameworks */ = {isa = PBXBuildFile; productRef = F1E2D3C52F510000001700F7 /* RoamOpenAPI */; };
 		F2E2B3A32F600001001700F7 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = F2E2B3A22F600001001700F7 /* GoogleMaps */; };
 /* End PBXBuildFile section */
@@ -110,6 +111,7 @@
 				45C1D8622F746D210088002E /* GooglePlacesSwift in Frameworks */,
 				4567DC7C2F4C09E9001700F7 /* FirebaseCore in Frameworks */,
 				4567DC7A2F4C09E9001700F7 /* FirebaseAuth in Frameworks */,
+				A1B2C3D42F9A0000001700F7 /* FirebaseMessaging in Frameworks */,
 				4567DC7F2F4C0A4B001700F7 /* GoogleSignIn in Frameworks */,
 				4567DC812F4C0A4B001700F7 /* GoogleSignInSwift in Frameworks */,
 			);
@@ -170,6 +172,7 @@
 				F2E2B3A22F600001001700F7 /* GoogleMaps */,
 				4567DC792F4C09E9001700F7 /* FirebaseAuth */,
 				4567DC7B2F4C09E9001700F7 /* FirebaseCore */,
+				A1B2C3D32F9A0000001700F7 /* FirebaseMessaging */,
 				4567DC7E2F4C0A4B001700F7 /* GoogleSignIn */,
 				4567DC802F4C0A4B001700F7 /* GoogleSignInSwift */,
 				45C1D85F2F746D210088002E /* GooglePlaces */,
@@ -650,6 +653,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 45C1D85E2F746D210088002E /* XCRemoteSwiftPackageReference "ios-places-sdk" */;
 			productName = GooglePlacesSwift;
+		};
+		A1B2C3D32F9A0000001700F7 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4567DC782F4C09E9001700F7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 		F1E2D3C52F510000001700F7 /* RoamOpenAPI */ = {
 			isa = XCSwiftPackageProductDependency;

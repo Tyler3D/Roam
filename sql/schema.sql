@@ -43,7 +43,17 @@ BEGIN
       'plan_reminder',
       'rate_prompt',
       'friend_request',
-      'added_to_collection'
+      'added_to_collection',
+      'reel_processed',
+      'reel_needs_review',
+      'coincidence_match',
+      'same_reel_saved',
+      'trending_place',
+      'friend_request_accepted',
+      'proximity_save',
+      'collection_idea_added',
+      'weekly_digest',
+      'monthly_stats'
     );
   END IF;
 
@@ -478,15 +488,92 @@ CREATE INDEX IF NOT EXISTS "idx_uff_user"
 CREATE INDEX IF NOT EXISTS "idx_uff_flag"
   ON "user_feature_flags" ("flag_name");
 
--- Add notification enum value on existing databases (no-op if already present)
+-- Add notification enum values on existing databases (no-op if already present)
 DO $enum_mig$
+DECLARE
+  val text;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON e.enumtypid = t.oid
-    WHERE t.typname = 'notificationType' AND e.enumlabel = 'added_to_collection'
-  ) THEN
-    ALTER TYPE "notificationType" ADD VALUE 'added_to_collection';
-  END IF;
+  FOREACH val IN ARRAY ARRAY[
+    'added_to_collection',
+    'reel_processed',
+    'reel_needs_review',
+    'coincidence_match',
+    'same_reel_saved',
+    'trending_place',
+    'friend_request_accepted',
+    'proximity_save',
+    'collection_idea_added',
+    'weekly_digest',
+    'monthly_stats'
+  ]
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_enum e
+      JOIN pg_type t ON e.enumtypid = t.oid
+      WHERE t.typname = 'notificationType' AND e.enumlabel = val
+    ) THEN
+      EXECUTE format('ALTER TYPE "notificationType" ADD VALUE %L', val);
+    END IF;
+  END LOOP;
 END
 $enum_mig$;
+
+-- ============================================================
+-- Device Tokens (FCM push notifications)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "device_tokens" (
+  "id"        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"    uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "fcmToken"  text NOT NULL,
+  "platform"  text NOT NULL DEFAULT 'ios',
+  "createdAt" timestamptz NOT NULL DEFAULT now(),
+  "updatedAt" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_device_token"
+  ON "device_tokens" ("fcmToken");
+
+CREATE INDEX IF NOT EXISTS "idx_device_tokens_userId"
+  ON "device_tokens" ("userId");
+
+-- ============================================================
+-- Trending Notifications Sent (one-shot dedup)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "trending_notifications_sent" (
+  "id"      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"  uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "placeId" uuid NOT NULL REFERENCES "places"("id") ON DELETE CASCADE,
+  "sentAt"  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_trending_user_place"
+  ON "trending_notifications_sent" ("userId", "placeId");
+
+-- ============================================================
+-- Coincidence Notifications Sent (one-shot dedup)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "coincidence_notifications_sent" (
+  "id"      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"  uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "placeId" uuid NOT NULL REFERENCES "places"("id") ON DELETE CASCADE,
+  "sentAt"  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_coincidence_user_place"
+  ON "coincidence_notifications_sent" ("userId", "placeId");
+
+-- Additional notification columns for richer deep linking
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "placeId"
+  uuid REFERENCES "places"("id") ON DELETE SET NULL;
+
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "ideaId"
+  uuid REFERENCES "ideas"("id") ON DELETE SET NULL;
+
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "savedReelId"
+  uuid REFERENCES "saved_reels"("id") ON DELETE SET NULL;
+
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "actorUserId"
+  uuid REFERENCES "users"("id") ON DELETE SET NULL;

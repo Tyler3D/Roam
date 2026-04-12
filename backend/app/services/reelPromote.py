@@ -18,6 +18,7 @@ from app.models.savedReels import (
     SavedReelStatus,
 )
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
+from app.services.notifications import acceptedFriendIds, checkCoincidenceMatch, checkTrendingPlace
 from app.services.reelIngestion import (
     ReelCandidate,
     ReelInterpretOutput,
@@ -228,5 +229,21 @@ def promoteSavedReel(
     saved.updatedAt = datetime.utcnow()
     session.add(saved)
     session.commit()
+
+    try:
+        from app.models.users import UserModel
+        user = session.get(UserModel, user_id)
+        if user:
+            friendIds = acceptedFriendIds(session, user_id)
+            for iid in idea_ids:
+                idea = session.get(IdeaModel, iid)
+                if idea:
+                    checkCoincidenceMatch(session, idea=idea, user=user, friendIds=friendIds)
+                    if idea.placeId:
+                        checkTrendingPlace(session, placeId=idea.placeId, triggeringUserId=user_id, friendIds=friendIds)
+            session.commit()
+    except Exception:
+        import logging
+        logging.getLogger("roam.reel_promote").exception("notification_check_failed_on_promote")
 
     return PromoteReelResponse(ideaIds=idea_ids, reelStatus=saved.status)

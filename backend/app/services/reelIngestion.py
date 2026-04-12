@@ -19,9 +19,17 @@ from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
+from app.models.users import UserModel
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.models.featureFlags import UserFeatureFlagModel
 from app.models.savedReels import ReelIngestCandidateModel, SavedReelModel, SavedReelStatus
+from app.services.notifications import (
+    acceptedFriendIds,
+    checkCoincidenceMatch,
+    checkSameReelSaved,
+    checkTrendingPlace,
+    notifyReelProcessed,
+)
 
 logger = logging.getLogger("roam.reel_ingestion")
 
@@ -699,6 +707,42 @@ def processIngestionJob(
                 "filteredCount": len(filtered),
             },
         )
+
+        try:
+            user = session.get(UserModel, job.userId)
+            placeName = None
+            firstIdeaId = idea_ids[0] if idea_ids else None
+            if firstIdeaId:
+                firstIdea = session.get(IdeaModel, firstIdeaId)
+                if firstIdea and firstIdea.placeId:
+                    place = session.get(PlaceModel, firstIdea.placeId)
+                    placeName = place.name if place else None
+
+            notifyReelProcessed(
+                session,
+                userId=job.userId,
+                savedReelId=saved.id,
+                status=saved.status.value,
+                ideaId=firstIdeaId,
+                placeName=placeName,
+                candidateCount=len(filtered),
+            )
+
+            if user and idea_ids:
+                friendIds = acceptedFriendIds(session, user.id)
+                for iid in idea_ids:
+                    ideaObj = session.get(IdeaModel, iid)
+                    if ideaObj:
+                        checkCoincidenceMatch(session, idea=ideaObj, user=user, friendIds=friendIds)
+                        if ideaObj.placeId:
+                            checkTrendingPlace(session, placeId=ideaObj.placeId, triggeringUserId=user.id, friendIds=friendIds)
+
+            if user:
+                checkSameReelSaved(session, savedReel=saved, user=user)
+
+            session.commit()
+        except Exception:
+            logger.exception("notification_dispatch_failed", extra={"jobId": jobId})
     except ProviderRateLimitError as e:
         logger.warning("reel_ingestion_rate_limited", extra={"jobId": jobId, "message": str(e)})
         try:
