@@ -15,13 +15,23 @@ from sqlmodel import Session, select
 from app.common.config import getGeminiApiKey, getGoogleMapsApiKey
 from app.common.idea_categories import normalize_category
 from app.common.db import getSession
+from app.common.backendErrors import ProviderRateLimitError
+from app.services.places import extractCity, resolveGoogleTextSearch
 from app.models.ideas import IdeaModel, IdeaStatus
 from app.models.ingestion import IngestionJobModel, JobStatus
 from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
 from app.models.places import PlaceModel
+from app.models.users import UserModel
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
 from app.models.featureFlags import UserFeatureFlagModel
 from app.models.savedReels import ReelIngestCandidateModel, SavedReelModel, SavedReelStatus
+from app.services.notifications import (
+    acceptedFriendIds,
+    checkCoincidenceMatch,
+    checkSameReelSaved,
+    checkTrendingPlace,
+    notifyReelProcessed,
+)
 
 logger = logging.getLogger("roam.reel_ingestion")
 
@@ -73,9 +83,6 @@ def _llmDetectedInLabelFromCandidate(c: ReelCandidate) -> str | None:
     return None
 
 
-class ProviderRateLimitError(Exception):
-    """OpenAI or Google Maps returned 429 / rate limit; job should fail with clear message."""
-
 
 _LEGACY_CATEGORY_MAP: dict[str, str] = {
     "restaurant": "restaurant",
@@ -104,7 +111,7 @@ def _mapLegacyCategory(raw: str | None) -> str:
     return normalize_category(mapped)
 
 
-def _candidate_with_normalized_category(c: ReelCandidate) -> ReelCandidate:
+def _candidateWithNormalizedCategory(c: ReelCandidate) -> ReelCandidate:
     return c.model_copy(update={"category": normalize_category(c.category)})
 
 
@@ -257,81 +264,42 @@ def _shouldResolveMaps(c: ReelCandidate) -> bool:
 
 
 def _resolveGoogleMaps(placeName: str, placeAddress: str | None) -> dict | None:
+    """Resolve via shared Google Text Search. ProviderRateLimitError bubbles up."""
+    result = resolveGoogleTextSearch(placeName, placeAddress)
+    if not result:
+        return None
+    result["placeAddress"] = result.pop("address", None)
+    return result
+
+
+def _reverseGeocodeLatLng(latitude: float, longitude: float) -> dict | None:
+    """Google Geocoding API: return googlePlaceId, placeAddress, latitude, longitude."""
     apiKey = getGoogleMapsApiKey()
     if not apiKey:
         return None
-
-    query = placeName
-    if placeAddress:
-        query = f"{placeName} {placeAddress}"
-
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                "https://maps.googleapis.com/maps/api/place/textsearch/json",
-                params={"query": query, "key": apiKey},
-            )
-            if resp.status_code == 429:
-                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
-            resp.raise_for_status()
-            data = resp.json()
-
-        results = data.get("results", [])
-        if not results:
-            return None
-
-        top = results[0]
-        location = top.get("geometry", {}).get("location", {})
-        return {
-            "latitude": location.get("lat"),
-            "longitude": location.get("lng"),
-            "googlePlaceId": top.get("place_id"),
-            "placeAddress": top.get("formatted_address"),
-        }
-    except ProviderRateLimitError:
-        raise
-    except Exception:
-        logger.exception("Google Maps API call failed", extra={"query": query})
-        return None
-
-
-def _reverse_geocode_lat_lng(latitude: float, longitude: float) -> dict | None:
-    """Google Geocoding API: return googlePlaceId, placeAddress, latitude, longitude."""
-    api_key = getGoogleMapsApiKey()
-    if not api_key:
-        return None
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                "https://maps.googleapis.com/maps/api/geocode/json",
-                params={"latlng": f"{latitude},{longitude}", "key": api_key},
-            )
-            if resp.status_code == 429:
-                raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
-            resp.raise_for_status()
-            data = resp.json()
-        results = data.get("results", [])
-        if not results:
-            return None
-        top = results[0]
-        loc = top.get("geometry", {}).get("location", {})
-        return {
-            "latitude": loc.get("lat"),
-            "longitude": loc.get("lng"),
-            "googlePlaceId": top.get("place_id"),
-            "placeAddress": top.get("formatted_address"),
-        }
-    except ProviderRateLimitError:
-        raise
-    except Exception:
-        logger.exception(
-            "Google Geocoding API call failed",
-            extra={"latitude": latitude, "longitude": longitude},
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"latlng": f"{latitude},{longitude}", "key": apiKey},
         )
+        if resp.status_code == 429:
+            raise ProviderRateLimitError("Google Maps rate limit exceeded; try again later.")
+        resp.raise_for_status()
+        data = resp.json()
+    results = data.get("results", [])
+    if not results:
         return None
+    top = results[0]
+    loc = top.get("geometry", {}).get("location", {})
+    return {
+        "latitude": loc.get("lat"),
+        "longitude": loc.get("lng"),
+        "googlePlaceId": top.get("place_id"),
+        "placeAddress": top.get("formatted_address"),
+    }
 
 
-def resolve_place_from_user_pick(
+def resolvePlaceFromUserPick(
     session: Session,
     *,
     name: str | None,
@@ -349,7 +317,7 @@ def resolve_place_from_user_pick(
     addr_t = (address or "").strip()
     mq_t = (maps_query or "").strip()
 
-    def _create_from_resolved(
+    def _createFromResolved(
         resolved: dict,
         display_name: str,
         lat_fallback: float | None,
@@ -367,13 +335,16 @@ def resolve_place_from_user_pick(
             category=category,
             latitude=lat_r if lat_r is not None else lat_fallback,
             longitude=lng_r if lng_r is not None else lng_fallback,
+            city=resolved.get("city"),
+            placeTypes=resolved.get("placeTypes"),
+            openingHours=resolved.get("openingHours"),
         )
 
     if latitude is not None and longitude is not None:
-        geo = _reverse_geocode_lat_lng(latitude, longitude)
+        geo = _reverseGeocodeLatLng(latitude, longitude)
         if geo and geo.get("googlePlaceId"):
             label = name_t or mq_t or (geo.get("placeAddress") or "Place").split(",")[0].strip() or "Place"
-            return _create_from_resolved(geo, label, latitude, longitude)
+            return _createFromResolved(geo, label, latitude, longitude)
         return _createOrGetPlace(
             session,
             place_name=(name_t or mq_t or "Pinned location")[:500],
@@ -388,12 +359,36 @@ def resolve_place_from_user_pick(
     if query_key:
         resolved = _resolveGoogleMaps(query_key, addr_t or None) or {}
         if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
-            return _create_from_resolved(resolved, query_key, latitude, longitude)
+            return _createFromResolved(resolved, query_key, latitude, longitude)
     if addr_t:
         resolved = _resolveGoogleMaps(addr_t, None) or {}
         if resolved.get("googlePlaceId") or resolved.get("latitude") is not None:
-            return _create_from_resolved(resolved, addr_t, latitude, longitude)
+            return _createFromResolved(resolved, addr_t, latitude, longitude)
     return None
+
+
+def _backfillPlace(
+    session: Session,
+    place: PlaceModel,
+    *,
+    city: str | None = None,
+    placeTypes: list[str] | None = None,
+    openingHours: list | None = None,
+) -> None:
+    """Fill in null fields on an existing place from richer data."""
+    updated = False
+    if not place.city and city:
+        place.city = city
+        updated = True
+    if not place.openingHours and openingHours:
+        place.openingHours = openingHours
+        updated = True
+    if not place.placeTypes and placeTypes:
+        place.placeTypes = placeTypes
+        updated = True
+    if updated:
+        session.add(place)
+        session.flush()
 
 
 def _createOrGetPlace(
@@ -404,22 +399,28 @@ def _createOrGetPlace(
     category: str | None,
     latitude: float | None,
     longitude: float | None,
+    city: str | None = None,
+    placeTypes: list[str] | None = None,
+    openingHours: list | None = None,
 ) -> PlaceModel | None:
     if google_place_id:
         existing = session.exec(
             select(PlaceModel).where(PlaceModel.googlePlaceId == google_place_id)
         ).first()
         if existing:
+            _backfillPlace(session, existing, city=city, placeTypes=placeTypes, openingHours=openingHours)
             return existing
 
     place = PlaceModel(
         googlePlaceId=google_place_id,
         name=place_name or "Unknown",
         address=address,
-        city=None,
+        city=city or extractCity(google_place_id, address or ""),
         latitude=latitude,
         longitude=longitude,
         category=category,
+        placeTypes=placeTypes or [],
+        openingHours=openingHours or [],
     )
     session.add(place)
     session.flush()
@@ -442,7 +443,7 @@ def createIdeaPipelineFromCandidate(
     When *override_place_id* is provided the place is attached directly and
     Google Maps resolution is skipped (the user already chose a place on the client).
     """
-    candidate = _candidate_with_normalized_category(candidate)
+    candidate = _candidateWithNormalizedCategory(candidate)
     estimated_minutes = 90
     prompt_version = getReelPromptVersion()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -453,6 +454,7 @@ def createIdeaPipelineFromCandidate(
     idea = IdeaModel(
         userId=user_id,
         title=idea_title,
+        displayName=idea_title,
         notes=notes[:MAX_IDEA_NOTES_LEN],
         sourceUrl=reel_url or "",
         savedReelId=saved_reel_id,
@@ -500,9 +502,12 @@ def createIdeaPipelineFromCandidate(
                 place_name=candidate.title or query_key,
                 address=resolved.get("placeAddress", candidate.placeAddress),
                 google_place_id=resolved.get("googlePlaceId"),
-                category=candidate.category,
+                category=resolved.get("category") or candidate.category,
                 latitude=resolved.get("latitude"),
                 longitude=resolved.get("longitude"),
+                city=resolved.get("city"),
+                placeTypes=resolved.get("placeTypes"),
+                openingHours=resolved.get("openingHours"),
             )
             if place:
                 sugg = PlaceSuggestionModel(
@@ -574,9 +579,12 @@ def _resolvedPlaceForCandidate(session: Session, c: ReelCandidate) -> UUID | Non
         place_name=c.title or q,
         address=resolved.get("placeAddress", c.placeAddress),
         google_place_id=resolved.get("googlePlaceId"),
-        category=c.category,
+        category=resolved.get("category") or c.category,
         latitude=resolved.get("latitude"),
         longitude=resolved.get("longitude"),
+        city=resolved.get("city"),
+        placeTypes=resolved.get("placeTypes"),
+        openingHours=resolved.get("openingHours"),
     )
     return place.id if place else None
 
@@ -608,7 +616,7 @@ def processIngestionJob(
         parsed = _callVisionReel(framesData, thumbnailData, metadata)
         filtered = [c for c in parsed.candidates if c.confidence >= CONFIDENCE_THRESHOLD]
         filtered_ordered = sorted(filtered, key=lambda c: c.confidence, reverse=True)
-        reel_url = metadata.get("reelUrl")
+        reel_url = saved.reelUrl
 
         saved.updatedAt = datetime.utcnow()
         if (metadata.get("reelTitle") or "").strip():
@@ -621,7 +629,7 @@ def processIngestionJob(
         auto_promote = _isAutoPromoteEnabled(session, job.userId)
 
         if len(filtered_ordered) == 1 and auto_promote:
-            c = _candidate_with_normalized_category(filtered_ordered[0])
+            c = _candidateWithNormalizedCategory(filtered_ordered[0])
             raw_output = {
                 "candidate": c.model_dump(),
                 "fullStructured": parsed.model_dump(),
@@ -662,7 +670,7 @@ def processIngestionJob(
                 )
             else:
                 for idx, c in enumerate(filtered_ordered):
-                    c = _candidate_with_normalized_category(c)
+                    c = _candidateWithNormalizedCategory(c)
                     rp = _resolvedPlaceForCandidate(session, c)
                     llm_raw = {
                         "candidate": c.model_dump(),
@@ -699,6 +707,42 @@ def processIngestionJob(
                 "filteredCount": len(filtered),
             },
         )
+
+        try:
+            user = session.get(UserModel, job.userId)
+            placeName = None
+            firstIdeaId = idea_ids[0] if idea_ids else None
+            if firstIdeaId:
+                firstIdea = session.get(IdeaModel, firstIdeaId)
+                if firstIdea and firstIdea.placeId:
+                    place = session.get(PlaceModel, firstIdea.placeId)
+                    placeName = place.name if place else None
+
+            notifyReelProcessed(
+                session,
+                userId=job.userId,
+                savedReelId=saved.id,
+                status=saved.status.value,
+                ideaId=firstIdeaId,
+                placeName=placeName,
+                candidateCount=len(filtered),
+            )
+
+            if user and idea_ids:
+                friendIds = acceptedFriendIds(session, user.id)
+                for iid in idea_ids:
+                    ideaObj = session.get(IdeaModel, iid)
+                    if ideaObj:
+                        checkCoincidenceMatch(session, idea=ideaObj, user=user, friendIds=friendIds)
+                        if ideaObj.placeId:
+                            checkTrendingPlace(session, placeId=ideaObj.placeId, triggeringUserId=user.id, friendIds=friendIds)
+
+            if user:
+                checkSameReelSaved(session, savedReel=saved, user=user)
+
+            session.commit()
+        except Exception:
+            logger.exception("notification_dispatch_failed", extra={"jobId": jobId})
     except ProviderRateLimitError as e:
         logger.warning("reel_ingestion_rate_limited", extra={"jobId": jobId, "message": str(e)})
         try:

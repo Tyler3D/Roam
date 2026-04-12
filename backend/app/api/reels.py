@@ -36,7 +36,7 @@ from app.models.savedReels import (
 from app.models.users import UserModel
 from app.services.gcsReels import signedUrlForObject, uploadReelThumbnail
 from app.services.collectionLinks import linkIdeaToPersonalAndShared
-from app.services.reelIngestion import processIngestionJob, resolve_place_from_user_pick
+from app.services.reelIngestion import processIngestionJob, resolvePlaceFromUserPick
 from app.services.reelPromote import promoteSavedReel
 
 
@@ -511,6 +511,7 @@ def createIdeaOnReel(
     idea = IdeaModel(
         userId=user.id,
         title=title[:500],
+        displayName=title[:500],
         notes=(body.notes or "")[:4000],
         sourceUrl=r.reelUrl or "",
         savedReelId=r.id,
@@ -590,7 +591,7 @@ def updateCandidatePlace(
         pmq = body.mapsQuery
 
     cat = _category_from_ingest_candidate(cand)
-    resolved = resolve_place_from_user_pick(
+    resolved = resolvePlaceFromUserPick(
         session,
         name=pn,
         address=pa,
