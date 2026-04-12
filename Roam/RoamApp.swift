@@ -24,6 +24,7 @@ private struct RootView: View {
     @State private var authManager: AuthManager
     @State private var apiClient: APIClient
     @State private var pushManager = PushNotificationManager()
+    @State private var deepLinkRouter = DeepLinkRouter()
     @StateObject private var shareIngress = ShareIngressCoordinator()
 
     init() {
@@ -40,6 +41,7 @@ private struct RootView: View {
             .environment(authManager)
             .environment(\.apiClient, apiClient)
             .environment(pushManager)
+            .environment(deepLinkRouter)
             .environmentObject(shareIngress)
             .onAppear {
                 pushManager.configure(apiClient: apiClient)
@@ -65,10 +67,6 @@ private struct RootView: View {
     }
 
     private func handlePushNotificationTap(userInfo: [AnyHashable: Any]?) {
-        guard let info = userInfo else { return }
-        // Deep link routing based on notification type.
-        // The client can navigate to the appropriate screen based on the data payload.
-        let type = info["type"] as? String ?? ""
-        _ = type  // routing handled by ContentView / tab navigation state
+        deepLinkRouter.pending = DeepLinkRouter.parse(userInfo: userInfo)
     }
 }
