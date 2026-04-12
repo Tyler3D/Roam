@@ -17,6 +17,7 @@ from app.api.notifications import notificationsRouter
 from app.api.collections import collectionsRouter
 from app.api.tasks import tasksRouter
 from app.api.featureFlags import featureFlagsRouter
+from app.api.deviceTokens import deviceTokensRouter
 from app.common.config import getCorsAllowOrigins
 from app.middleware.utils import (
     addCorsHeaders,
@@ -91,7 +92,15 @@ app.middleware("http")(rateLimiterMiddleware)
 
 @app.on_event("startup")
 def startup():
+    from app.services.digest import startScheduler
+    startScheduler()
     logger.info("Roam API started")
+
+
+@app.on_event("shutdown")
+def shutdown():
+    from app.services.digest import stopScheduler
+    stopScheduler()
 
 
 @app.get("/health")
@@ -111,3 +120,4 @@ app.include_router(shareRouter, prefix="/api")
 app.include_router(notificationsRouter, prefix="/api")
 app.include_router(collectionsRouter, prefix="/api")
 app.include_router(featureFlagsRouter, prefix="/api")
+app.include_router(deviceTokensRouter, prefix="/api")

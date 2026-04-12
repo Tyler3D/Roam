@@ -1,12 +1,18 @@
 """Personal default collection + linking ideas to collections (server invariants)."""
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from sqlmodel import Session, col, select
 
 from app.common.backendErrors import BadRequest
 from app.models.collections import CollectionIdeaModel, CollectionMemberModel, CollectionModel
+from app.models.ideas import IdeaModel
+from app.models.places import PlaceModel
+from app.models.users import UserModel
+
+logger = logging.getLogger("roam.collection_links")
 
 
 def userColorIndex(userId: UUID) -> int:
@@ -90,3 +96,41 @@ def linkIdeaToPersonalAndShared(
         if not isCollectionMember(session, sharedCollectionId, ownerUserId):
             raise BadRequest("Not a member of one or more collections")
         _ensureCollectionIdeaRow(session, sharedCollectionId, ideaId)
+        _notifyCollectionIdeaAdded(session, sharedCollectionId, ideaId, ownerUserId)
+
+
+def _notifyCollectionIdeaAdded(
+    session: Session, collectionId: UUID, ideaId: UUID, adderUserId: UUID
+) -> None:
+    """Send push to all collection members when an idea is added to a shared collection."""
+    try:
+        from app.services.notifications import notifyCollectionIdeaAdded
+
+        coll = session.get(CollectionModel, collectionId)
+        if not coll or coll.isPersonalDefault:
+            return
+        idea = session.get(IdeaModel, ideaId)
+        adder = session.get(UserModel, adderUserId)
+        placeName = None
+        if idea and idea.placeId:
+            place = session.get(PlaceModel, idea.placeId)
+            placeName = place.name if place else None
+
+        members = session.exec(
+            select(CollectionMemberModel.userId).where(
+                CollectionMemberModel.collectionId == collectionId
+            )
+        ).all()
+
+        notifyCollectionIdeaAdded(
+            session,
+            collectionId=collectionId,
+            ideaId=ideaId,
+            placeName=placeName,
+            adderUserId=adderUserId,
+            adderFirstName=adder.firstName if adder else "",
+            collectionName=coll.name,
+            memberUserIds=list(members),
+        )
+    except Exception:
+        logger.exception("collection_idea_notification_failed")
