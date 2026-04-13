@@ -48,7 +48,7 @@ def _ensureFirebaseUserOrRaise(
 
 def _applyUserUpdates(existingUser: UserModel, request: UserCreate, email: str) -> None:
     if request.username:
-        existingUser.username = request.username
+        existingUser.username = request.username.strip().lower()
     existingUser.email = email
     existingUser.firstName = request.firstName
     existingUser.lastName = request.lastName
@@ -73,6 +73,8 @@ def updateMe(
 ) -> UserRead:
     user = auth.user
     update_data = body.model_dump(exclude_unset=True)
+    if "username" in update_data and update_data["username"]:
+        update_data["username"] = update_data["username"].strip().lower()
     for key, value in update_data.items():
         setattr(user, key, value)
     session.add(user)
@@ -139,7 +141,7 @@ def createUser(
     )
     newUser = UserModel(
         firebaseUid=firebaseUid,
-        username=request.username,
+        username=request.username.strip().lower() if request.username else None,
         email=email,
         firstName=request.firstName,
         lastName=request.lastName,
@@ -198,7 +200,7 @@ def checkUsername(
     """Check if username is available. No auth required — used during onboarding."""
     exists = (
         session.exec(
-            select(UserModel).where(UserModel.username == username.strip())
+            select(UserModel).where(col(UserModel.username).ilike(username.strip()))
         ).first()
         is not None
     )
