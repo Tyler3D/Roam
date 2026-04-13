@@ -90,6 +90,14 @@ final class APIClient {
 
     // MARK: - User / auth sync
 
+    func checkUsernameAvailable(username: String) async throws -> Bool {
+        struct CheckResponse: Decodable { let available: Bool }
+        let resp: CheckResponse = try await apiFetch(
+            path: "/api/users/check-username?username=\(username)"
+        )
+        return resp.available
+    }
+
     func ensureBackendUser(username: String) async throws {
         let dn = authManager.user?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let parts = dn.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
