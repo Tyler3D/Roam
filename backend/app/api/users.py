@@ -7,8 +7,10 @@ from sqlmodel import Session, select, col, or_
 
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser
-from app.common.backendErrors import BadRequest, InternalServerError, NotFound
-from app.common.db import commitAndRefresh, getSession
+from sqlalchemy.exc import IntegrityError
+
+from app.common.backendErrors import BadRequest, Conflict, InternalServerError, NotFound
+from app.common.db import commitAndRefresh, getSession, getUniqueConstraintName
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
 from app.services.collectionLinks import ensurePersonalDefaultCollection
 from app.services.oauth_tokens import upsert_token
@@ -118,7 +120,13 @@ def createUser(
             _setActivationFromToken(existingUser, tokenEmailVerified)
         _applyUserUpdates(existingUser, request, email)
         session.add(existingUser)
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            constraintName = getUniqueConstraintName(exc)
+            detail = USER_CONSTRAINT_MESSAGES.get(constraintName, "Resource already exists") if constraintName else "Resource already exists"
+            raise Conflict(detail) from exc
         ensurePersonalDefaultCollection(session, existingUser.id)
         commitAndRefresh(session, existingUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
         return UserRead.model_validate(existingUser)
@@ -141,7 +149,13 @@ def createUser(
         emailVerified=tokenEmailVerified,
     )
     session.add(newUser)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        constraintName = getUniqueConstraintName(exc)
+        detail = USER_CONSTRAINT_MESSAGES.get(constraintName, "Resource already exists") if constraintName else "Resource already exists"
+        raise Conflict(detail) from exc
     ensurePersonalDefaultCollection(session, newUser.id)
     commitAndRefresh(session, newUser, constraintMessages=USER_CONSTRAINT_MESSAGES)
     logger.info(
