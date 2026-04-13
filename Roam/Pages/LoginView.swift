@@ -1,9 +1,11 @@
+import AuthenticationServices
 import SwiftUI
 import GoogleSignInSwift
 
 struct LoginView: View {
     @Environment(AuthManager.self) private var authManager
     @State private var isLoading = false
+    @State private var appleRawNonce: String?
     #if DEBUG
     @State private var showDebugMenu = false
     #endif
@@ -97,6 +99,34 @@ struct LoginView: View {
             )
             .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 4)
             .disabled(isLoading)
+
+            SignInWithAppleButton(.signIn) { request in
+                let raw = AuthManager.makeAppleSignInRawNonce()
+                appleRawNonce = raw
+                request.nonce = AuthManager.appleSignInHashedNonce(rawNonce: raw)
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { result in
+                switch result {
+                case .success(let authorization):
+                    Task { await completeAppleSignIn(authorization: authorization) }
+                case .failure(let error):
+                    if let authErr = error as? ASAuthorizationError, authErr.code == .canceled {
+                        return
+                    }
+                    logError("Apple sign in failed", error)
+                    authManager.errorMessage = errorMessage(for: error)
+                }
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(RoamColors.reviewBorder, lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 4)
+            .disabled(isLoading)
         }
     }
 
@@ -163,6 +193,37 @@ struct LoginView: View {
             try await authManager.signInWithGoogle()
         } catch {
             logError("Google sign in failed", error)
+            authManager.errorMessage = errorMessage(for: error)
+        }
+    }
+
+    private func completeAppleSignIn(authorization: ASAuthorization) async {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            authManager.errorMessage = AuthError.missingAppleIDToken.localizedDescription
+            return
+        }
+        guard let tokenData = credential.identityToken,
+              let idToken = String(data: tokenData, encoding: .utf8) else {
+            authManager.errorMessage = AuthError.missingAppleIDToken.localizedDescription
+            return
+        }
+        guard let rawNonce = appleRawNonce else {
+            authManager.errorMessage = AuthError.missingAppleIDToken.localizedDescription
+            return
+        }
+        isLoading = true
+        defer {
+            isLoading = false
+            appleRawNonce = nil
+        }
+        do {
+            try await authManager.signInWithApple(
+                idToken: idToken,
+                rawNonce: rawNonce,
+                fullName: credential.fullName
+            )
+        } catch {
+            logError("Apple sign in failed", error)
             authManager.errorMessage = errorMessage(for: error)
         }
     }
