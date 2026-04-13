@@ -40,7 +40,7 @@ def getCorsAllowOrigins() -> list[str]:
     return ["https://roam-alpha.web.app", "https://roam-alpha.firebaseapp.com"]
 
 def getTrustedAuthProviders() -> set[str]:
-    rawProviders = os.getenv("TRUSTED_AUTH_PROVIDERS") or "google.com,password"
+    rawProviders = os.getenv("TRUSTED_AUTH_PROVIDERS") or "google.com,password,apple.com"
     providers = {value.strip() for value in rawProviders.split(",") if value.strip()}
     return providers
 
