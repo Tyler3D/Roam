@@ -8,6 +8,9 @@ struct ChooseUsernameView: View {
     @State private var username = ""
     @State private var isLoading = false
     @State private var errorText: String?
+    @State private var isAvailable: Bool?
+    @State private var isCheckingAvailability = false
+    @State private var checkTask: Task<Void, Never>?
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
@@ -27,6 +30,28 @@ struct ChooseUsernameView: View {
             .background(RoamColors.background)
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.light)
+            .onChange(of: username) { _, _ in
+                isAvailable = nil
+                errorText = nil
+                checkTask?.cancel()
+                guard usernameLooksValid else {
+                    isCheckingAvailability = false
+                    return
+                }
+                isCheckingAvailability = true
+                checkTask = Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard !Task.isCancelled else { return }
+                    do {
+                        let available = try await apiClient.checkUsernameAvailable(username: trimmedUsername)
+                        guard !Task.isCancelled else { return }
+                        isAvailable = available
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                    }
+                    isCheckingAvailability = false
+                }
+            }
         }
     }
 
@@ -147,10 +172,24 @@ struct ChooseUsernameView: View {
                 Text(errorText)
                     .font(.system(size: 11))
                     .foregroundStyle(RoamColors.error)
-            } else if usernameLooksValid {
-                Text("@\(username.trimmingCharacters(in: .whitespaces)) looks good")
-                    .font(.system(size: 11))
-                    .foregroundStyle(RoamColors.reviewSuccess)
+            } else if isCheckingAvailability {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                    Text("Checking availability...")
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.textMid)
+                }
+            } else if usernameLooksValid, let isAvailable {
+                if isAvailable {
+                    Text("@\(trimmedUsername) is available")
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.reviewSuccess)
+                } else {
+                    Text("@\(trimmedUsername) is already taken")
+                        .font(.system(size: 11))
+                        .foregroundStyle(RoamColors.error)
+                }
             }
         }
         .padding(.bottom, 20)
@@ -204,7 +243,7 @@ struct ChooseUsernameView: View {
     }
 
     private var canSubmit: Bool {
-        usernameLooksValid && !isLoading
+        usernameLooksValid && !isLoading && isAvailable == true && !isCheckingAvailability
     }
 
     private var welcomeDisplayName: String {
