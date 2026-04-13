@@ -1,9 +1,11 @@
+import CryptoKit
 import FirebaseAuth
 import FirebaseCore
 import Foundation
 import GoogleSignIn
 import GoogleSignInSwift
 import Observation
+import Security
 
 @Observable
 final class AuthManager {
@@ -85,6 +87,34 @@ final class AuthManager {
         user = authResult.user
     }
 
+    // MARK: - Sign In with Apple
+
+    /// Random nonce for the Apple request; store the return value and pass the same string to `signInWithApple`.
+    static func makeAppleSignInRawNonce() -> String {
+        randomNonceString(length: 32)
+    }
+
+    /// SHA256 (hex) of `rawNonce` for `ASAuthorizationAppleIDRequest.nonce`.
+    static func appleSignInHashedNonce(rawNonce: String) -> String {
+        sha256Hex(rawNonce)
+    }
+
+    @MainActor
+    func signInWithApple(
+        idToken: String,
+        rawNonce: String,
+        fullName: PersonNameComponents?
+    ) async throws {
+        errorMessage = nil
+        let credential = OAuthProvider.appleCredential(
+            withIDToken: idToken,
+            rawNonce: rawNonce,
+            fullName: fullName
+        )
+        let authResult = try await Auth.auth().signIn(with: credential)
+        user = authResult.user
+    }
+
     // MARK: - Sign Out
 
     @MainActor
@@ -144,6 +174,7 @@ enum AuthError: LocalizedError {
     case missingClientID
     case noRootViewController
     case missingGoogleIDToken
+    case missingAppleIDToken
 
     var errorDescription: String? {
         switch self {
@@ -151,6 +182,46 @@ enum AuthError: LocalizedError {
         case .missingClientID: return "Missing Firebase client ID"
         case .noRootViewController: return "Cannot find root view controller"
         case .missingGoogleIDToken: return "Missing Google ID token"
+        case .missingAppleIDToken: return "Missing Apple identity token"
         }
     }
+}
+
+// MARK: - Apple sign-in nonce (Firebase docs pattern)
+
+private func randomNonceString(length: Int = 32) -> String {
+    precondition(length > 0)
+    let charset: [Character] =
+        Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+    var result = ""
+    var remainingLength = length
+
+    while remainingLength > 0 {
+        let randoms: [UInt8] = (0 ..< 16).map { _ in
+            var random: UInt8 = 0
+            let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+            if errorCode != errSecSuccess {
+                fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+            }
+            return random
+        }
+
+        for random in randoms {
+            if remainingLength == 0 {
+                break
+            }
+            if random < charset.count {
+                result.append(charset[Int(random)])
+                remainingLength -= 1
+            }
+        }
+    }
+
+    return result
+}
+
+private func sha256Hex(_ input: String) -> String {
+    let inputData = Data(input.utf8)
+    let hashed = SHA256.hash(data: inputData)
+    return hashed.map { String(format: "%02x", $0) }.joined()
 }

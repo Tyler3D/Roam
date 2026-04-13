@@ -5,6 +5,9 @@ import Foundation
 
 /// Manages Firebase configuration switching between production and staging.
 ///
+/// Sign in with Apple: enable **Authentication → Sign-in method → Apple** in each Firebase project
+/// (same projects as Google). Apple Developer: enable Sign In with Apple on the app ID.
+///
 /// Both environments read config values from `Info.plist` dictionaries:
 /// - Production / Local: `ROAM_PRODUCTION_FIREBASE`
 /// - Staging: `ROAM_STAGING_FIREBASE`
