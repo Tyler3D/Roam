@@ -9,15 +9,15 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
-				<string>com.googleusercontent.apps.63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46</string>
+				<string>com.googleusercontent.apps.873018049069-4daou0po98dt4vhoq2pomptbef7ftkf6</string>
+				<string>com.googleusercontent.apps.63421976809-gs73naa7ah26cbk21bldvk4ned3ki5o7</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.columbiastartupstudio.roam.share</string>
+			<string>com.manrique.roam.share</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>roam</string>
@@ -35,17 +35,17 @@
 		<key>API_KEY</key>
 		<string>AIzaSyAj3K9PEONilPXF1DIF2gL3e3JP99pBfbU</string>
 		<key>BUNDLE_ID</key>
-		<string>com.columbiastartupstudio.Roam</string>
+		<string>com.manrique.Roam</string>
 		<key>CLIENT_ID</key>
-		<string>873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v.apps.googleusercontent.com</string>
+		<string>873018049069-4daou0po98dt4vhoq2pomptbef7ftkf6.apps.googleusercontent.com</string>
 		<key>GCM_SENDER_ID</key>
 		<string>873018049069</string>
 		<key>GOOGLE_APP_ID</key>
-		<string>1:873018049069:ios:0eb1a203b56bf82e9baea4</string>
+		<string>1:873018049069:ios:a3c66077afc367409baea4</string>
 		<key>PROJECT_ID</key>
 		<string>roam-alpha</string>
 		<key>REVERSED_CLIENT_ID</key>
-		<string>com.googleusercontent.apps.873018049069-hetrpuasdeiq88hcrvj7diqf76k5d55v</string>
+		<string>com.googleusercontent.apps.873018049069-4daou0po98dt4vhoq2pomptbef7ftkf6</string>
 		<key>STORAGE_BUCKET</key>
 		<string>roam-alpha.firebasestorage.app</string>
 	</dict>
@@ -56,17 +56,17 @@
 		<key>API_KEY</key>
 		<string>AIzaSyDhR_yhKiPjcCsmlj8vOsUPK10moousCr0</string>
 		<key>BUNDLE_ID</key>
-		<string>com.columbiastartupstudio.Roam</string>
+		<string>com.manrique.Roam</string>
 		<key>CLIENT_ID</key>
-		<string>63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46.apps.googleusercontent.com</string>
+		<string>63421976809-gs73naa7ah26cbk21bldvk4ned3ki5o7.apps.googleusercontent.com</string>
 		<key>GCM_SENDER_ID</key>
 		<string>63421976809</string>
 		<key>GOOGLE_APP_ID</key>
-		<string>1:63421976809:ios:1098576ac418a31b80a078</string>
+		<string>1:63421976809:ios:8bcc1b364d55b89080a078</string>
 		<key>PROJECT_ID</key>
 		<string>cozy-corners-dates</string>
 		<key>REVERSED_CLIENT_ID</key>
-		<string>com.googleusercontent.apps.63421976809-uf0qbeqe6jalp5t265tc4oqj0mrc7r46</string>
+		<string>com.googleusercontent.apps.63421976809-gs73naa7ah26cbk21bldvk4ned3ki5o7</string>
 		<key>STORAGE_BUCKET</key>
 		<string>cozy-corners-dates.firebasestorage.app</string>
 	</dict>
