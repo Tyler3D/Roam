@@ -2,7 +2,7 @@ import Foundation
 
 enum SharedStore {
     /// This must match the App Group ID you configure in Xcode (instructions below).
-    static let appGroupID = "group.columbiastartupstudio.Roam"
+    static let appGroupID = "group.manrique.Roam"
 
     private static let pendingShareHandoffKey = "pendingShareHandoff"
     private static let shareExtensionShowConfirmationKey = "roam_share_extension_show_confirmation_ui"
@@ -12,11 +12,19 @@ enum SharedStore {
     }
 
     /// When `true`, the share extension shows the “Reel saved” confirmation card; when `false`, it dismisses after saving metadata. Default `true` if unset (existing behavior).
+    private static var shareExtensionShowConfirmationDefault: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     static var shareExtensionShowsConfirmationUI: Bool {
         get {
-            guard let defaults else { return true }
+            guard let defaults else { return shareExtensionShowConfirmationDefault }
             if defaults.object(forKey: shareExtensionShowConfirmationKey) == nil {
-                return true
+                return shareExtensionShowConfirmationDefault
             }
             return defaults.bool(forKey: shareExtensionShowConfirmationKey)
         }
