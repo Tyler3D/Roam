@@ -81,11 +81,7 @@ struct IdeasPage: View {
                 }
 
                 if stores.ideas.ideas.isEmpty && !stores.ideas.isLoading && stores.ideas.lastError == nil {
-                    RoamEmptyState(
-                        icon: "◌",
-                        title: "no ideas yet",
-                        subtitle: "capture something you want to do below"
-                    )
+                    IdeasReelOnboardingEmptyState()
                 }
 
                 if let submitError {
