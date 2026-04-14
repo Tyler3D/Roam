@@ -47,6 +47,12 @@ private struct RootView: View {
                 pushManager.configure(apiClient: apiClient)
                 pushManager.requestPermission()
             }
+            .onChange(of: authManager.user) { _, newUser in
+                if newUser != nil {
+                    pushManager.registerTokenWithBackend()
+                    pushManager.deliverMissedNotifications(from: apiClient)
+                }
+            }
             .onOpenURL { url in
                 if url.scheme?.lowercased() == "roam", url.host?.lowercased() == "share" {
                     SharedStore.markPendingShareHandoff()

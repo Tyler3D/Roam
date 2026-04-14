@@ -144,6 +144,10 @@ final class APIClient {
         try await apiFetch(path: "/api/me")
     }
 
+    func deleteAccount() async throws {
+        try await apiPerform(path: "/api/me", method: "DELETE")
+    }
+
     // MARK: - Ideas
 
     /// Paginated ideas (`IdeaPageRead`). Pass `includeTotal: true` on the first page for profile counts.

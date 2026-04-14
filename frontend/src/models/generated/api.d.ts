@@ -33,7 +33,12 @@ export interface paths {
         /** Updateme */
         put: operations["updateMe_api_me_put"];
         post?: never;
-        delete?: never;
+        /**
+         * Deleteme
+         * @description Permanently delete the authenticated user and all their data.
+         *     Firebase Auth account is deleted server-side after the DB commit.
+         */
+        delete: operations["deleteMe_api_me_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2185,6 +2190,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    deleteMe_api_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

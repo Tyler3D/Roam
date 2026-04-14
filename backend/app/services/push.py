@@ -42,7 +42,7 @@ def _sendFcm(token: str, title: str, body: str | None, data: dict[str, str] | No
         return False
     except messaging.SenderIdMismatchError:
         logger.warning("fcm_sender_id_mismatch", extra={"token": token[:20]})
-        return False
+        return True
     except Exception:
         logger.exception("fcm_send_failed", extra={"token": token[:20]})
         return True
