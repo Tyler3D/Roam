@@ -4,13 +4,28 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select, col, or_
+from sqlalchemy import delete as sa_delete, update as sa_update
 
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
-from app.auth.firebase import ensureFirebaseUser
+from app.auth.firebase import ensureFirebaseUser, getFirebaseApp
+from firebase_admin import auth as firebaseAuth
 from sqlalchemy.exc import IntegrityError
 
 from app.common.backendErrors import BadRequest, Conflict, InternalServerError, NotFound
 from app.common.db import commitAndRefresh, getSession, getUniqueConstraintName
+from app.models.collections import CollectionIdeaModel, CollectionMemberModel, CollectionModel
+from app.models.coincidenceNotificationsSent import CoincidenceNotificationSentModel
+from app.models.deviceTokens import DeviceTokenModel
+from app.models.featureFlags import UserFeatureFlagModel
+from app.models.friendships import FriendshipModel
+from app.models.ideas import IdeaModel
+from app.models.ingestion import IngestionJobModel
+from app.models.notifications import NotificationModel
+from app.models.oauth_tokens import UserOAuthTokenModel
+from app.models.pipeline import PipelineResultModel, PlaceSuggestionModel
+from app.models.plans import PlanMemberModel, PlanModel
+from app.models.savedReels import ReelCandidateUserPlaceModel, ReelIngestCandidateModel, SavedReelModel
+from app.models.trendingNotificationsSent import TrendingNotificationSentModel
 from app.models.users import UserCreate, UserModel, UserRead, UserUpdate
 from app.services.collectionLinks import ensurePersonalDefaultCollection
 from app.services.oauth_tokens import upsert_token
@@ -205,6 +220,103 @@ def checkUsername(
         is not None
     )
     return {"available": not exists}
+
+
+@usersRouter.delete("/me", status_code=204)
+def deleteMe(
+    auth: CurrentAuth = Depends(getCurrentAuth),
+    session: Session = Depends(getSession),
+) -> None:
+    """
+    Permanently delete the authenticated user and all their data.
+    Firebase Auth account is deleted server-side after the DB commit.
+    """
+    user = auth.user
+    uid = user.firebaseUid
+
+    # Deletion order respects all FK constraints — children before parents throughout.
+
+    # ── Reel pipeline ────────────────────────────────────────────────────────────
+    # reel_candidate_user_places → reel_ingest_candidates → saved_reels → reel_ingestion_jobs
+
+    session.exec(sa_delete(ReelCandidateUserPlaceModel).where(ReelCandidateUserPlaceModel.user_id == user.id))
+
+    reel_ids_subq = select(SavedReelModel.id).where(SavedReelModel.userId == user.id)
+    session.exec(sa_delete(ReelIngestCandidateModel).where(col(ReelIngestCandidateModel.savedReelId).in_(reel_ids_subq)))
+
+    # ── Pipeline results ──────────────────────────────────────────────────────────
+    # place_suggestions → pipeline_results (which references ideas AND reel_ingestion_jobs)
+    # Must be deleted before ideas and ingestion_jobs.
+
+    job_ids_subq = select(IngestionJobModel.id).where(IngestionJobModel.userId == user.id)
+    idea_ids_subq = select(IdeaModel.id).where(IdeaModel.userId == user.id)
+    pipeline_ids_subq = select(PipelineResultModel.id).where(
+        or_(
+            col(PipelineResultModel.jobId).in_(job_ids_subq),
+            col(PipelineResultModel.ideaId).in_(idea_ids_subq),
+        )
+    )
+    session.exec(sa_delete(PlaceSuggestionModel).where(col(PlaceSuggestionModel.resultId).in_(pipeline_ids_subq)))
+    session.exec(sa_delete(PipelineResultModel).where(
+        or_(
+            col(PipelineResultModel.jobId).in_(job_ids_subq),
+            col(PipelineResultModel.ideaId).in_(idea_ids_subq),
+        )
+    ))
+
+    # ── Ideas ─────────────────────────────────────────────────────────────────────
+    # ideas.savedReelId → saved_reels, so ideas must go before saved_reels.
+    # Other users' plans may have ideaId pointing here — null those out first.
+
+    session.exec(sa_update(PlanModel).where(col(PlanModel.ideaId).in_(idea_ids_subq)).values(ideaId=None))
+    session.exec(sa_delete(CollectionIdeaModel).where(col(CollectionIdeaModel.ideaId).in_(idea_ids_subq)))
+    session.exec(sa_delete(IdeaModel).where(IdeaModel.userId == user.id))
+
+    # ── Saved reels + ingestion jobs ──────────────────────────────────────────────
+    session.exec(sa_delete(SavedReelModel).where(SavedReelModel.userId == user.id))
+    session.exec(sa_delete(IngestionJobModel).where(IngestionJobModel.userId == user.id))
+
+    # ── Plans ─────────────────────────────────────────────────────────────────────
+    session.exec(sa_delete(PlanMemberModel).where(PlanMemberModel.userId == user.id))
+    plan_ids_subq = select(PlanModel.id).where(PlanModel.creatorId == user.id)
+    session.exec(sa_delete(PlanMemberModel).where(col(PlanMemberModel.planId).in_(plan_ids_subq)))
+    session.exec(sa_delete(PlanModel).where(PlanModel.creatorId == user.id))
+
+    # ── Collections ───────────────────────────────────────────────────────────────
+    coll_ids_subq = select(CollectionModel.id).where(CollectionModel.creatorId == user.id)
+    session.exec(sa_delete(CollectionIdeaModel).where(col(CollectionIdeaModel.collectionId).in_(coll_ids_subq)))
+    session.exec(sa_delete(CollectionMemberModel).where(col(CollectionMemberModel.collectionId).in_(coll_ids_subq)))
+    session.exec(sa_delete(CollectionModel).where(CollectionModel.creatorId == user.id))
+    session.exec(sa_delete(CollectionMemberModel).where(CollectionMemberModel.userId == user.id))
+
+    # ── Social + notifications ────────────────────────────────────────────────────
+    session.exec(sa_delete(FriendshipModel).where(
+        or_(FriendshipModel.requesterId == user.id, FriendshipModel.addresseeId == user.id)
+    ))
+    session.exec(sa_delete(NotificationModel).where(
+        or_(NotificationModel.userId == user.id, NotificationModel.actorUserId == user.id)
+    ))
+    session.exec(sa_delete(CoincidenceNotificationSentModel).where(CoincidenceNotificationSentModel.userId == user.id))
+    session.exec(sa_delete(TrendingNotificationSentModel).where(TrendingNotificationSentModel.userId == user.id))
+
+    # ── Device tokens, feature flags, oauth tokens ────────────────────────────────
+    session.exec(sa_delete(DeviceTokenModel).where(DeviceTokenModel.userId == user.id))
+    session.exec(sa_delete(UserFeatureFlagModel).where(UserFeatureFlagModel.user_id == user.id))
+    session.exec(sa_delete(UserOAuthTokenModel).where(UserOAuthTokenModel.userId == user.id))
+
+    # finally the user row itself
+    session.delete(user)
+    session.commit()
+
+    logger.info("user_deleted", extra={"firebaseUid": uid, "userId": str(user.id)})
+
+    # Delete from Firebase Auth after DB commit so the token remains valid during the request.
+    if uid:
+        try:
+            getFirebaseApp()
+            firebaseAuth.delete_user(uid)
+        except Exception:
+            logger.warning("deleteMe_firebase_failed", extra={"firebaseUid": uid})
 
 
 @usersRouter.get("/users/search", response_model=list[UserRead])

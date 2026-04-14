@@ -157,6 +157,7 @@
 				4567DC3C2F4792A0001700F7 /* Frameworks */,
 				4567DC3D2F4792A0001700F7 /* Resources */,
 				4567DC672F4A9AB4001700F7 /* Embed Foundation Extensions */,
+				BB22CC332F9C0000001700F7 /* Strip Staging Config */,
 			);
 			buildRules = (
 			);
@@ -284,6 +285,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		BB22CC332F9C0000001700F7 /* Strip Staging Config */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Strip Staging Config";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n    PLIST=\"$BUILT_PRODUCTS_DIR/$INFOPLIST_PATH\"\n    echo \"Stripping staging config from $PLIST\"\n    /usr/libexec/PlistBuddy -c \"Delete :ROAM_STAGING_FIREBASE\" \"$PLIST\" 2>/dev/null || true\n    /usr/libexec/PlistBuddy -c \"Delete :ROAM_STAGING_BASE_URL\" \"$PLIST\" 2>/dev/null || true\n    /usr/libexec/PlistBuddy -c \"Delete :ROAM_LOCAL_BASE_URL\" \"$PLIST\" 2>/dev/null || true\n    echo \"Done stripping staging config\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		4567DC612F4A9AB4001700F7 /* PBXTargetDependency */ = {

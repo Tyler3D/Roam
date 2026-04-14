@@ -45,6 +45,38 @@ final class PushNotificationManager: NSObject {
             try? await api.unregisterDeviceToken(fcmToken: token)
         }
     }
+
+    /// Deliver any unread notifications as local banners so the user sees
+    /// what they missed while signed out.
+    func deliverMissedNotifications(from api: APIClient) {
+        Task {
+            guard let notifications = try? await api.listNotifications() else { return }
+            let unread = notifications.filter { !$0.isRead }
+            guard !unread.isEmpty else { return }
+
+            let center = UNUserNotificationCenter.current()
+            for (index, notification) in unread.prefix(5).enumerated() {
+                let content = UNMutableNotificationContent()
+                content.title = notification.title
+                if let body = notification.body {
+                    content.body = body
+                }
+                content.sound = .default
+
+                // Stagger slightly so they don't collapse
+                let trigger = UNTimeIntervalNotificationTrigger(
+                    timeInterval: TimeInterval(1 + index),
+                    repeats: false
+                )
+                let request = UNNotificationRequest(
+                    identifier: "missed-\(notification.id)",
+                    content: content,
+                    trigger: trigger
+                )
+                try? await center.add(request)
+            }
+        }
+    }
 }
 
 extension PushNotificationManager: @preconcurrency MessagingDelegate {

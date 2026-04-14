@@ -77,6 +77,16 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "Deleteme",
+        "description": "Permanently delete the authenticated user and all their data.\nFirebase Auth account is deleted server-side after the DB commit.",
+        "operationId": "deleteMe_api_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
       }
     },
     "/api/users/verify": {
