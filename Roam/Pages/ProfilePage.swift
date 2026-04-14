@@ -1,3 +1,4 @@
+import SafariServices
 import SwiftUI
 
 struct ProfilePage: View {
@@ -21,6 +22,7 @@ struct ProfilePage: View {
     @State private var showDeleteConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteError: String? = nil
+    @State private var showPrivacyPolicy = false
 
     private var sortedCollections: [APIClient.CollectionReadDTO] {
         stores.mapCollections.collections.sorted { lhs, rhs in
@@ -106,6 +108,10 @@ struct ProfilePage: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(deleteError ?? "An error occurred. Please try again.")
+            }
+            .sheet(isPresented: $showPrivacyPolicy) {
+                SafariView(url: URL(string: "https://roam-alpha.web.app/privacy")!)
+                    .ignoresSafeArea()
             }
             .task {
                 await stores.user.refresh()
@@ -413,6 +419,23 @@ struct ProfilePage: View {
 
             VStack(spacing: 0) {
                 Button {
+                    showPrivacyPolicy = true
+                } label: {
+                    menuRow(
+                        icon: "hand.raised",
+                        title: "Privacy Policy",
+                        subtitle: nil,
+                        trailing: .chevron
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(RoamColors.lavDeep.opacity(0.35))
+                    .frame(height: 1)
+                    .padding(.leading, 60)
+
+                Button {
                     pushManager.unregisterTokenFromBackend()
                     authManager.signOut()
                     onDismiss?()
@@ -575,6 +598,16 @@ struct ProfilePage: View {
             .joined(separator: " ")
         return s.isEmpty ? "Friend" : s
     }
+}
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 struct AccountSettingsPlaceholderPage: View {
