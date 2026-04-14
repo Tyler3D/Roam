@@ -24,6 +24,8 @@ import ChooseUsername from "@/pages/ChooseUsername";
 import IdeaOverview from "@/pages/IdeaOverview";
 import PlanOverview from "@/pages/PlanOverview";
 import NotFound from "@/pages/NotFound";
+import Privacy from "@/pages/Privacy";
+import Landing from "@/pages/Landing";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +49,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -102,6 +104,7 @@ const App = () => (
             />
             <Route path="/share/schedule" element={<Schedule />} />
             <Route path="/share/:shareCode" element={<Share />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

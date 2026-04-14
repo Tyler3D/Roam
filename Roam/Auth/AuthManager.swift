@@ -115,6 +115,16 @@ final class AuthManager {
         user = authResult.user
     }
 
+    // MARK: - Account Deletion
+
+    /// Deletes all backend data then clears local state.
+    /// Firebase Auth account is deleted server-side by the backend endpoint.
+    @MainActor
+    func deleteAccount(api: APIClient) async throws {
+        try await api.deleteAccount()
+        forceSignOut()
+    }
+
     // MARK: - Sign Out
 
     @MainActor

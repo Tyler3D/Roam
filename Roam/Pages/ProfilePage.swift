@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfilePage: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(AppConfig.self) private var appConfig
+    @Environment(PushNotificationManager.self) private var pushManager
     @Environment(\.apiClient) private var api
     @Environment(\.roamStores) private var stores
     var onDismiss: (() -> Void)?
@@ -17,6 +18,9 @@ struct ProfilePage: View {
     @State private var ideaCounts: [UUID: Int] = [:]
     @State private var showEditStub = false
     @State private var showCalendarStub = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String? = nil
 
     private var sortedCollections: [APIClient.CollectionReadDTO] {
         stores.mapCollections.collections.sorted { lhs, rhs in
@@ -86,6 +90,22 @@ struct ProfilePage: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Calendar connection isn’t available yet.")
+            }
+            .alert("Delete account?", isPresented: $showDeleteConfirm) {
+                Button("Delete", role: .destructive) {
+                    Task { await performDeleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete your account, all your ideas, collections, and saved reels. This cannot be undone.")
+            }
+            .alert("Couldn’t delete account", isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "An error occurred. Please try again.")
             }
             .task {
                 await stores.user.refresh()
@@ -393,6 +413,7 @@ struct ProfilePage: View {
 
             VStack(spacing: 0) {
                 Button {
+                    pushManager.unregisterTokenFromBackend()
                     authManager.signOut()
                     onDismiss?()
                 } label: {
@@ -405,6 +426,25 @@ struct ProfilePage: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(RoamColors.lavDeep.opacity(0.35))
+                    .frame(height: 1)
+                    .padding(.leading, 60)
+
+                Button {
+                    showDeleteConfirm = true
+                } label: {
+                    menuRow(
+                        icon: "trash",
+                        title: isDeletingAccount ? "Deleting…" : "Delete account",
+                        subtitle: "Permanently removes your account and all data",
+                        trailing: .none,
+                        danger: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isDeletingAccount)
             }
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -477,6 +517,18 @@ struct ProfilePage: View {
     }
 
     // MARK: - Data
+
+    private func performDeleteAccount() async {
+        isDeletingAccount = true
+        do {
+            try await authManager.deleteAccount(api: api)
+            onDismiss?()
+            return
+        } catch {
+            deleteError = error.localizedDescription
+        }
+        isDeletingAccount = false
+    }
 
     private func loadSocial() async {
         do {
