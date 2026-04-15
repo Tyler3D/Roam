@@ -6,6 +6,7 @@ struct LoginView: View {
     @Environment(AuthManager.self) private var authManager
     @State private var isLoading = false
     @State private var appleRawNonce: String?
+    @State private var showPrivacyPolicy = false
     #if DEBUG
     @State private var showDebugMenu = false
     #endif
@@ -20,6 +21,7 @@ struct LoginView: View {
                     googleSection
                     dividerSection
                     featuresSection
+                    privacyFooter
                 }
                 .padding(.horizontal, 32)
                 .padding(.top, 40)
@@ -46,6 +48,10 @@ struct LoginView: View {
             }
             #endif
             .preferredColorScheme(.light)
+            .sheet(isPresented: $showPrivacyPolicy) {
+                SafariView(url: URL(string: "https://roam-alpha.web.app/privacy")!)
+                    .ignoresSafeArea()
+            }
         }
     }
 
@@ -184,6 +190,18 @@ struct LoginView: View {
                 .font(.system(size: 13))
                 .multilineTextAlignment(.leading)
         }
+    }
+
+    private var privacyFooter: some View {
+        Button {
+            showPrivacyPolicy = true
+        } label: {
+            Text("Privacy Policy")
+                .font(RoamFont.mono(11))
+                .foregroundStyle(RoamColors.textMuted)
+                .underline()
+        }
+        .padding(.top, 28)
     }
 
     private func signInWithGoogle() async {
