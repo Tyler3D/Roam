@@ -26,6 +26,7 @@ import PlanOverview from "@/pages/PlanOverview";
 import NotFound from "@/pages/NotFound";
 import Privacy from "@/pages/Privacy";
 import Landing from "@/pages/Landing";
+import UserCount from "@/pages/UserCount";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +106,7 @@ const App = () => (
             <Route path="/share/schedule" element={<Schedule />} />
             <Route path="/share/:shareCode" element={<Share />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/user-count" element={<UserCount />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
