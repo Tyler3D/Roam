@@ -54,9 +54,19 @@ private struct RootView: View {
                 }
             }
             .onOpenURL { url in
-                if url.scheme?.lowercased() == "roam", url.host?.lowercased() == "share" {
+                guard url.scheme?.lowercased() == "roam" else { return }
+                switch url.host?.lowercased() {
+                case "share":
                     SharedStore.markPendingShareHandoff()
                     shareIngress.prioritizeReelsTabForShareHandoff()
+                case "invite":
+                    let username = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?
+                        .first(where: { $0.name == "user" })?
+                        .value
+                    deepLinkRouter.pending = .friends(prefilledUsername: username)
+                default:
+                    break
                 }
             }
             .onChange(of: appConfig.pendingEnvironmentSwitch) { _, isPending in

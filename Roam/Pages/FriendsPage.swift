@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 enum FriendsNavTab: Hashable {
     case myFriends
@@ -11,6 +10,7 @@ struct FriendsPage: View {
     @Environment(\.roamStores) private var stores
 
     let initialTab: FriendsNavTab
+    let prefilledUsername: String?
 
     @State private var tab: FriendsNavTab
     @State private var friends: [APIClient.FriendshipReadDTO] = []
@@ -23,10 +23,10 @@ struct FriendsPage: View {
     @State private var usernameSearchTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var actionError: String?
-    @State private var inviteCopied = false
 
-    init(initialTab: FriendsNavTab = .myFriends) {
+    init(initialTab: FriendsNavTab = .myFriends, prefilledUsername: String? = nil) {
         self.initialTab = initialTab
+        self.prefilledUsername = prefilledUsername
         _tab = State(initialValue: initialTab)
     }
 
@@ -75,13 +75,12 @@ struct FriendsPage: View {
         } message: {
             Text(actionError ?? "")
         }
-        .alert("Invite link copied", isPresented: $inviteCopied) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Share it anywhere you chat with friends.")
-        }
         .task {
             await reload()
+            if let username = prefilledUsername, !username.isEmpty {
+                usernameQuery = username
+                await runUsernameSearch(username)
+            }
         }
     }
 
@@ -269,23 +268,23 @@ struct FriendsPage: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 4)
                 .padding(.bottom, 12)
-            Button {
-                copyInviteLink()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Share invite link")
-                        .font(.system(size: 13, weight: .semibold))
+            if let url = inviteURL {
+                ShareLink(item: url) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Share invite link")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(RoamColors.reviewAccent)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: RoamColors.reviewAccent.opacity(0.25), radius: 8, x: 0, y: 2)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(RoamColors.reviewAccent)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .shadow(color: RoamColors.reviewAccent.opacity(0.25), radius: 8, x: 0, y: 2)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(16)
         .frame(maxWidth: .infinity)
@@ -656,11 +655,10 @@ struct FriendsPage: View {
         }
     }
 
-    private func copyInviteLink() {
-        let raw = stores.user.me?.username ?? "friend"
-        let enc = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-        UIPasteboard.general.string = "roam://invite?user=\(enc)"
-        inviteCopied = true
+    private var inviteURL: URL? {
+        guard let username = stores.user.me?.username, !username.isEmpty else { return nil }
+        let enc = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        return URL(string: "roam://invite?user=\(enc)")
     }
 
     private func displayName(first: String?, last: String?) -> String {

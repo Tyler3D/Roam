@@ -42,6 +42,8 @@ struct MainTabShell: View {
     @State private var tab: MainTab = .ideas
     @State private var showInbox = false
     @State private var showProfile = false
+    @State private var showFriendsFromInvite = false
+    @State private var invitePrefilledUsername: String?
     @State private var navigationPathIdeas = NavigationPath()
     @State private var navigationPathConsumerIdeas = NavigationPath()
 
@@ -180,6 +182,17 @@ struct MainTabShell: View {
             ProfilePage(onDismiss: { showProfile = false })
                 .environment(\.roamStores, stores)
         }
+        .sheet(isPresented: $showFriendsFromInvite) {
+            NavigationStack {
+                FriendsPage(initialTab: .myFriends, prefilledUsername: invitePrefilledUsername)
+                    .environment(\.roamStores, stores)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { showFriendsFromInvite = false }
+                        }
+                    }
+            }
+        }
         .onChange(of: tab) { oldTab, newTab in
             if oldTab == .ideas && newTab != .ideas {
                 navigationPathIdeas = NavigationPath()
@@ -245,6 +258,9 @@ struct MainTabShell: View {
             showProfile = true
         case .ideas:
             tab = .ideas
+        case .friends(let username):
+            invitePrefilledUsername = username
+            showFriendsFromInvite = true
         }
     }
 
