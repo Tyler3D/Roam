@@ -6,6 +6,7 @@ enum DeepLinkDestination: Equatable {
     case map
     case profile
     case ideas
+    case friends(prefilledUsername: String?)
 }
 
 @MainActor

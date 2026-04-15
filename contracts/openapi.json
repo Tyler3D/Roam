@@ -273,6 +273,27 @@
         }
       }
     },
+    "/api/user-count": {
+      "get": {
+        "summary": "Getusercount",
+        "description": "Public endpoint \u2014 returns the total number of Roam users plus 15.",
+        "operationId": "getUserCount_api_user_count_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Getusercount Api User Count Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ingest": {
       "post": {
         "summary": "Createingestionjob",
