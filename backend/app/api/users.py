@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select, col, or_
-from sqlalchemy import delete as sa_delete, update as sa_update
+from sqlalchemy import delete as sa_delete, func, update as sa_update
 
 from app.auth.auth import CurrentAuth, OptionalAuth, getCurrentAuth, getCurrentUser, getOptionalAuth
 from app.auth.firebase import ensureFirebaseUser, getFirebaseApp
@@ -337,3 +337,10 @@ def searchUsers(
         ).limit(10)
     ).all()
     return [UserRead.model_validate(u) for u in results]
+
+
+@usersRouter.get("/user-count")
+def getUserCount(session: Session = Depends(getSession)) -> dict:
+    """Public endpoint — returns the total number of Roam users plus 15."""
+    count = session.exec(select(func.count(UserModel.id))).one()
+    return {"count": count + 15}
